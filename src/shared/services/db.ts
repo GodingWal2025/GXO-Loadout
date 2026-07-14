@@ -90,6 +90,18 @@ export async function dbSaveInspection(inspection: Inspection): Promise<void> {
   }).catch(e => console.error("dbEnqueueSync error", e));
 }
 
+// Same as dbSaveInspection, but doesn't enqueue a sync back to the server
+export async function upsertDownloadedInspection(inspection: Inspection): Promise<void> {
+  const db = await getDB();
+  const existing = await db.get('inspections', inspection.id);
+  // Simple conflict resolution: if we have local changes, don't overwrite
+  // (In a real app, you might compare lastEditedAt timestamps or use a sync status flag)
+  if (existing && new Date(existing.lastEditedAt || 0) >= new Date(inspection.lastEditedAt || 0)) {
+    return;
+  }
+  await db.put('inspections', inspection);
+}
+
 export async function dbGetInspection(id: string): Promise<Inspection | undefined> {
   const db = await getDB();
   return db.get('inspections', id);

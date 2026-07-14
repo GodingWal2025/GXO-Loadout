@@ -4,6 +4,7 @@ import {
   dbGetInspection,
   dbGetPhotoBlob,
   dbMarkPhotoUploaded,
+  upsertDownloadedInspection,
   getDB,
 } from './db';
 
@@ -141,12 +142,37 @@ export async function processSyncQueue(): Promise<void> {
   }
 }
 
+export async function pullInspectionsFromServer(): Promise<void> {
+  if (!navigator.onLine) return;
+  const reachable = await isServerReachable();
+  if (!reachable) return;
+
+  try {
+    const response = await fetch(`/api/inspections`);
+    if (!response.ok) throw new Error(`Failed to fetch inspections: ${response.status}`);
+    
+    const { resources } = await response.json();
+    if (Array.isArray(resources)) {
+      console.log(`[loadout-sync] Pulled ${resources.length} inspections from server.`);
+      for (const inspection of resources) {
+        await upsertDownloadedInspection(inspection);
+      }
+    }
+  } catch (error) {
+    console.error('[loadout-sync] Error pulling inspections:', error);
+  }
+}
+
 export function startBackgroundSync(): void {
+  // First, try to pull down any existing data for this device
+  pullInspectionsFromServer();
+
   processSyncQueue();
   setInterval(processSyncQueue, 10000);
   
   window.addEventListener('online', () => {
     console.log('[loadout-sync] Browser went online. Triggering sync...');
+    pullInspectionsFromServer();
     processSyncQueue();
   });
 }

@@ -74,6 +74,25 @@ export async function photoUploadToken(request: HttpRequest, context: Invocation
     }
 }
 
+export async function getInspections(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    context.log(`Fetching inspections. URL: "${request.url}"`);
+    try {
+        // Query all items from Cosmos DB (In production, you'd likely filter by date or status)
+        const { resources } = await container.items.query("SELECT * from c").fetchAll();
+        
+        return { 
+            status: 200, 
+            jsonBody: { success: true, resources } 
+        };
+    } catch (error) {
+        context.log("Error fetching inspections:", error);
+        return { 
+            status: 500, 
+            jsonBody: { error: "Error fetching inspections" } 
+        };
+    }
+}
+
 // Register the Azure Functions endpoints (v4 Model)
 app.http('sync-inspection', {
     methods: ['POST'],
@@ -85,4 +104,10 @@ app.http('photo-upload-token', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: photoUploadToken
+});
+
+app.http('inspections', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    handler: getInspections
 });
