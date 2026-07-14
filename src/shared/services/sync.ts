@@ -61,7 +61,7 @@ export async function processSyncQueue(): Promise<void> {
             continue;
           }
           
-          const response = await fetch(`${apiUrl}/api/inspections`, {
+          const response = await fetch(`${apiUrl}/api/sync-inspection`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(inspection),
@@ -91,14 +91,19 @@ export async function processSyncQueue(): Promise<void> {
             continue;
           }
           
-          const formData = new FormData();
-          formData.append('file', blob, 'photo.jpg');
-          formData.append('photoId', entry.photoId);
-          formData.append('inspectionId', entry.inspectionId);
+          // 1. Get SAS token from Azure Function
+          const tokenRes = await fetch(`${apiUrl}/api/photo-upload-token?photoId=${entry.photoId}`);
+          if (!tokenRes.ok) throw new Error(`Failed to get SAS token: ${tokenRes.status}`);
+          const { sasUrl } = await tokenRes.json();
           
-          const response = await fetch(`${apiUrl}/api/photo-upload`, {
-            method: 'POST',
-            body: formData,
+          // 2. Upload directly to Azure Blob Storage using the SAS URL
+          const response = await fetch(sasUrl, {
+            method: 'PUT',
+            headers: {
+              'x-ms-blob-type': 'BlockBlob',
+              'Content-Type': 'image/jpeg',
+            },
+            body: blob,
           });
           
           if (response.ok) {
