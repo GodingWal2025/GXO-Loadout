@@ -78,7 +78,7 @@ export async function getInspections(request: HttpRequest, context: InvocationCo
     context.log(`Fetching inspections. URL: "${request.url}"`);
     try {
         // Query all items from Cosmos DB (In production, you'd likely filter by date or status)
-        const { resources } = await container.items.query("SELECT * from c").fetchAll();
+        const { resources } = await container.items.query("SELECT * from c", { enableCrossPartitionQuery: true }).fetchAll();
         
         return { 
             status: 200, 

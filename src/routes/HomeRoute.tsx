@@ -20,15 +20,23 @@ export function HomeRoute() {
       navigate('/setup');
       return;
     }
-    Promise.all([
-      dbListInProgressForSite(config.siteId),
-      dbListCompletedForSite(config.siteId),
-    ])
-      .then(([ip, c]) => {
-        setInProgress(ip);
-        setCompleted(c);
-      })
-      .finally(() => setLoading(false));
+
+    const fetchInspections = () => {
+      Promise.all([
+        dbListInProgressForSite(config.siteId),
+        dbListCompletedForSite(config.siteId),
+      ])
+        .then(([inProgress, completed]) => {
+          setInProgress(inProgress);
+          setCompleted(completed);
+        })
+        .finally(() => setLoading(false));
+    };
+
+    fetchInspections();
+
+    window.addEventListener('loadout-sync-updated', fetchInspections);
+    return () => window.removeEventListener('loadout-sync-updated', fetchInspections);
   }, [config, navigate]);
 
   if (!config) return null;

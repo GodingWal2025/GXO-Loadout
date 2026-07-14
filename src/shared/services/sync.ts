@@ -157,6 +157,8 @@ export async function pullInspectionsFromServer(): Promise<void> {
       for (const inspection of resources) {
         await upsertDownloadedInspection(inspection);
       }
+      // Notify the UI that data has been updated
+      window.dispatchEvent(new CustomEvent('loadout-sync-updated'));
     }
   } catch (error) {
     console.error('[loadout-sync] Error pulling inspections:', error);
