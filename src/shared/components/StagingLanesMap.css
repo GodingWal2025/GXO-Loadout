@@ -1,0 +1,323 @@
+.staging-lanes-container {
+  display: flex;
+  flex-direction: column;
+  background-color: white;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 16px;
+  overflow-x: auto;
+  font-family: 'Inter', sans-serif;
+}
+
+.warehouse-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.warehouse-tab {
+  padding: 10px 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.warehouse-tab.active {
+  background: #f9fafb;
+  border-color: #d1d5db;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+.warehouse-tab-icon {
+  font-size: 16px;
+}
+
+.warehouse-layout {
+  position: relative;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 40px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.warehouse-title {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.watermark-address {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  text-align: right;
+  font-size: 10px;
+  color: #4b5563;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+/* West Warehouse Specifics */
+.west-layout .dock-doors-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 40px;
+  margin-bottom: 30px;
+}
+
+.dock-door {
+  width: 45px;
+  height: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #4b5563;
+  background: white;
+  font-size: 14px;
+  font-weight: 600;
+  position: relative;
+}
+
+.west-layout .staging-lanes-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.vertical-separator {
+  width: 4px;
+  height: 180px;
+  background-color: #4b5563;
+  border-radius: 2px;
+}
+
+.lanes-group {
+  display: flex;
+  border: 1px solid #9ca3af;
+  padding: 2px;
+}
+
+/* East Warehouse Specifics */
+.east-layout {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-left: 60px;
+  padding-top: 60px;
+}
+
+.east-left-column {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 120px;
+  margin-right: 40px;
+}
+
+.east-dock-door {
+  width: 45px;
+  height: 35px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #4b5563;
+  background: white;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 2px;
+}
+
+.east-main-content {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.east-top-lanes {
+  display: flex;
+  gap: 20px;
+  width: 810px; /* 27 vertical lanes (28px + 2px border) */
+}
+
+.top-lane-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1; /* Stretch to fill half of the 810px width each */
+}
+
+.horizontal-lane {
+  width: 100%;
+  height: 24px;
+  border: 1px solid #9ca3af;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+}
+
+/* Staging Lane Card (Vertical) */
+.staging-lane-card {
+  width: 28px;
+  height: 160px;
+  border: 1px solid #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.staging-lane-card .lane-name-text {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 9px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+/* Color Coding for Docks and Lanes */
+/* Default / Empty */
+.status-empty {
+  background: white !important;
+  color: #6b7280 !important;
+  border-color: #d1d5db !important;
+}
+
+/* Error States */
+.status-error {
+  background: #111827 !important;
+  color: #ef4444 !important;
+  border-color: #ef4444 !important;
+  border-style: dashed !important;
+}
+
+.status-error::after {
+  content: 'ERROR\AOut of Service';
+  white-space: pre;
+  position: absolute;
+  bottom: -24px;
+  font-size: 8px;
+  line-height: 1.1;
+  text-align: center;
+  width: 60px;
+  color: #ef4444;
+}
+
+/* Load Types */
+.type-inbound {
+  background: #3b82f6 !important; /* Blue */
+  color: white !important;
+  border-color: #2563eb !important;
+}
+
+.type-outbound {
+  background: #10b981 !important; /* Green */
+  color: white !important;
+  border-color: #059669 !important;
+}
+
+.type-return {
+  background: #8b5cf6 !important; /* Purple */
+  color: white !important;
+  border-color: #7c3aed !important;
+}
+
+
+/* Modal Overlay */
+.lane-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.lane-modal-content {
+  background: white;
+  border-radius: 8px;
+  padding: 24px;
+  width: 400px;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lane-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 12px;
+}
+
+.lane-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+  margin: 0;
+}
+
+.lane-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #6b7280;
+}
+
+.lane-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.modal-detail-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+}
+
+.modal-detail-label {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.modal-detail-value {
+  color: #111827;
+  font-weight: 600;
+}
+
+.modal-badge {
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  color: white;
+  font-weight: 600;
+}
