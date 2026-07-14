@@ -16,13 +16,13 @@ export function setApiUrl(url: string): void {
 
 // Ping helper to verify the server is actually reachable
 async function isServerReachable(): Promise<boolean> {
-  if (!apiUrl) return false;
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 3000);
-    const res = await fetch(`${apiUrl}/api/health`, { method: 'GET', signal: controller.signal });
+    // Ping the root of the site (or API) to ensure connectivity beyond navigator.onLine
+    const res = await fetch(`/`, { method: 'HEAD', signal: controller.signal });
     clearTimeout(timeoutId);
-    return res.status === 200;
+    return res.ok;
   } catch {
     return false;
   }
@@ -31,7 +31,6 @@ async function isServerReachable(): Promise<boolean> {
 export async function processSyncQueue(): Promise<void> {
   if (isSyncing) return;
   if (!navigator.onLine) return;
-  if (!apiUrl) return; // No backend configured — skip sync silently
   
   // Verify server is actually reachable
   const reachable = await isServerReachable();
@@ -143,12 +142,6 @@ export async function processSyncQueue(): Promise<void> {
 }
 
 export function startBackgroundSync(): void {
-  // Only sync if a backend URL is configured
-  if (!apiUrl) {
-    console.log('[loadout-sync] No API URL configured. Running in offline-only mode.');
-    return;
-  }
-
   processSyncQueue();
   setInterval(processSyncQueue, 10000);
   
