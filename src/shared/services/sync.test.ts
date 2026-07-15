@@ -106,4 +106,37 @@ describe('processSyncQueue end-to-end', () => {
     expect(await dbGetPendingSync()).toHaveLength(0);
     expect(await db.getAll('syncQueue')).toHaveLength(0);
   });
+
+  it('does NOT burn a retry attempt on a connectivity failure (offline)', async () => {
+    const db = await getDB();
+    await db.put('inspections', { id: 'insp-net', siteId: 'S', status: 'IN_PROGRESS', lastEditedAt: '2026-07-15T00:00:00.000Z' } as any);
+    await dbEnqueueSync({ type: 'inspection-save', inspectionId: 'insp-net' });
+
+    // fetch rejects with TypeError, exactly how the browser signals offline.
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Load failed'); }));
+    vi.stubGlobal('navigator', { onLine: true });
+
+    setApiUrl('');
+    await processSyncQueue();
+
+    const entry = (await db.getAll('syncQueue')).find((e) => e.inspectionId === 'insp-net')!;
+    expect(entry.status).toBe('failed');
+    expect(entry.attempts).toBe(0); // connectivity failure must not count toward the cap
+  });
+
+  it('DOES burn a retry attempt on a server rejection', async () => {
+    const db = await getDB();
+    await db.put('inspections', { id: 'insp-srv', siteId: 'S', status: 'IN_PROGRESS', lastEditedAt: '2026-07-15T00:00:00.000Z' } as any);
+    await dbEnqueueSync({ type: 'inspection-save', inspectionId: 'insp-srv' });
+
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({}) } as any)));
+    vi.stubGlobal('navigator', { onLine: true });
+
+    setApiUrl('');
+    await processSyncQueue();
+
+    const entry = (await db.getAll('syncQueue')).find((e) => e.inspectionId === 'insp-srv')!;
+    expect(entry.status).toBe('failed');
+    expect(entry.attempts).toBe(1); // server rejection counts toward the cap
+  });
 });

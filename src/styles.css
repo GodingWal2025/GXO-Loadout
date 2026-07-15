@@ -33,6 +33,13 @@
   --topbar-h: 64px;
   --max-w: 1440px;
 
+  /* iOS/iPadOS safe-area insets (0 on devices without notch/home indicator).
+     Used so the translucent status bar and home indicator don't overlap the UI. */
+  --safe-top:    env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left:   env(safe-area-inset-left, 0px);
+  --safe-right:  env(safe-area-inset-right, 0px);
+
   --radius:      12px;    /* Premium rounded corners */
   --radius-sm:   8px;     /* Smaller elements rounded */
   --shadow-card: 0 2px 8px rgba(28,25,23,0.03), 0 1px 2px rgba(28,25,23,0.02);
@@ -122,6 +129,7 @@ h4, h5, h6 {
   min-height: 100%;
   display: flex;
   flex-direction: column;
+  padding-bottom: var(--safe-bottom);
 }
 
 /* ===== Dark industrial topbar ===== */
@@ -131,12 +139,14 @@ h4, h5, h6 {
   border-bottom: none;
   box-shadow: 0 2px 8px rgba(28,25,23,.18);
   position: sticky; top: 0; z-index: 30;
+  /* Extend the dark bar up into the status-bar area so content clears it. */
+  padding-top: var(--safe-top);
 }
 .topbar__inner {
   max-width: var(--max-w);
   margin: 0 auto;
   height: var(--topbar-h);
-  padding: 0 24px;
+  padding: 0 max(24px, var(--safe-right)) 0 max(24px, var(--safe-left));
   display: flex;
   align-items: center;
   gap: 24px;
@@ -1021,7 +1031,8 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
   background: var(--surface);
   border-bottom: 1px solid var(--rule);
   position: sticky;
-  top: 64px;
+  /* Sit just below the topbar, accounting for the status-bar inset. */
+  top: calc(var(--topbar-h) + var(--safe-top));
   z-index: 20;
 }
 .tally__inner {

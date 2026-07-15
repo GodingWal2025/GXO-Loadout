@@ -10,37 +10,23 @@ import {
 } from './db';
 
 let isSyncing = false;
+let isPulling = false;
 let apiUrl = '';
+
+const PUSH_INTERVAL_MS = 10_000;
+const PULL_INTERVAL_MS = 30_000;
 
 export function setApiUrl(url: string): void {
   apiUrl = url;
 }
 
-// Ping helper to verify the server is actually reachable
-async function isServerReachable(): Promise<boolean> {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-    // Ping the root of the site (or API) to ensure connectivity beyond navigator.onLine
-    const res = await fetch(`/`, { method: 'HEAD', signal: controller.signal });
-    clearTimeout(timeoutId);
-    return res.ok;
-  } catch {
-    return false;
-  }
-}
-
+// NOTE: we deliberately do NOT gate sync on navigator.onLine or a HEAD "is the
+// server reachable" probe. Both are unreliable in iOS/iPadOS standalone PWAs
+// (navigator.onLine can be stuck false; the probe can time out on a cold
+// launch), and when they misfired the app never synced. Instead we just attempt
+// the real request — if it fails, the retry queue picks it up next cycle.
 export async function processSyncQueue(): Promise<void> {
   if (isSyncing) return;
-  if (!navigator.onLine) return;
-  
-  // Verify server is actually reachable
-  const reachable = await isServerReachable();
-  if (!reachable) {
-    console.log('[loadout-sync] Server is unreachable. Postponing sync.');
-    return;
-  }
-
   isSyncing = true;
 
   try {
@@ -129,9 +115,15 @@ export async function processSyncQueue(): Promise<void> {
           }
         }
       } catch (err) {
-        console.error(`[loadout-sync] Failed to process sync entry ${entry.id}:`, err);
+        // A rejected fetch (connectivity failure) throws a TypeError; a server
+        // that responded with a bad status throws a plain Error above. Only
+        // count server-side rejections toward the retry cap — an offline field
+        // device must keep retrying indefinitely, not strand its data after a
+        // few failed cycles.
+        const isNetworkError = err instanceof TypeError;
+        console.error(`[loadout-sync] Failed to process sync entry ${entry.id}${isNetworkError ? ' (offline?)' : ''}:`, err);
         entry.status = 'failed';
-        entry.attempts += 1;
+        if (!isNetworkError) entry.attempts += 1;
         entry.lastAttemptAt = new Date().toISOString();
         entry.lastError = err instanceof Error ? err.message : String(err);
         await dbUpdateSyncEntry(entry);
@@ -157,14 +149,15 @@ export async function processSyncQueue(): Promise<void> {
 }
 
 export async function pullInspectionsFromServer(): Promise<void> {
-  if (!navigator.onLine) return;
-  const reachable = await isServerReachable();
-  if (!reachable) return;
+  if (isPulling) return;
+  isPulling = true;
 
   try {
-    const response = await fetch(`/api/inspections`);
+    // cache: 'no-store' matters on iOS/iPadOS Safari, which otherwise happily
+    // serves a stale cached GET so the device never sees newly-synced data.
+    const response = await fetch(`${apiUrl}/api/inspections`, { cache: 'no-store' });
     if (!response.ok) throw new Error(`Failed to fetch inspections: ${response.status}`);
-    
+
     const { resources } = await response.json();
     if (Array.isArray(resources)) {
       for (const inspection of resources) {
@@ -179,19 +172,31 @@ export async function pullInspectionsFromServer(): Promise<void> {
     }
   } catch (error) {
     console.error('[loadout-sync] Error pulling inspections:', error);
+  } finally {
+    isPulling = false;
   }
 }
 
 export function startBackgroundSync(): void {
-  // First, try to pull down any existing data for this device
-  pullInspectionsFromServer();
-
-  processSyncQueue();
-  setInterval(processSyncQueue, 10000);
-  
-  window.addEventListener('online', () => {
-    console.log('[loadout-sync] Browser went online. Triggering sync...');
+  const fullSync = () => {
     pullInspectionsFromServer();
     processSyncQueue();
+  };
+
+  // Initial sync on load.
+  fullSync();
+
+  // Push often; pull on a slower cadence so the device still recovers even if
+  // the one-shot startup pull was missed (e.g. launched before the network was
+  // ready) — the previous one-shot-only pull is exactly why iPads started fresh.
+  setInterval(processSyncQueue, PUSH_INTERVAL_MS);
+  setInterval(pullInspectionsFromServer, PULL_INTERVAL_MS);
+
+  // Re-sync when connectivity returns or the app is brought back to the
+  // foreground. The visibility handler is essential on iOS/iPadOS, where
+  // background timers are suspended and the 'online' event often never fires.
+  window.addEventListener('online', fullSync);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') fullSync();
   });
 }
