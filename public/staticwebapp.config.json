@@ -6,11 +6,5 @@
       "/assets/*",
       "/*.{js,css,map,ico,png,jpg,jpeg,gif,svg,webp,woff,woff2,ttf,webmanifest}"
     ]
-  },
-  "responseOverrides": {
-    "404": {
-      "rewrite": "/index.html",
-      "statusCode": 200
-    }
   }
 }
