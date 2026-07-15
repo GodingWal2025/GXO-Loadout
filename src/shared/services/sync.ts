@@ -42,19 +42,24 @@ export async function processSyncQueue(): Promise<void> {
   }
 
   isSyncing = true;
-  console.log('[loadout-sync] Starting background sync process...');
 
   try {
     // Bring previously-failed and orphaned in-progress entries back into the
     // queue. Without this, anything enqueued while the API was unreachable
     // (e.g. before the backend was deployed) would never be retried.
     const requeued = await dbRequeueStalledSync();
-    if (requeued > 0) {
-      console.log(`[loadout-sync] Re-queued ${requeued} previously-failed/stalled entr${requeued === 1 ? 'y' : 'ies'}.`);
-    }
 
     const pendingEntries = await dbGetPendingSync();
-    
+
+    // Only announce a sync cycle when there's actually work to do, so an idle
+    // app doesn't log every 10s.
+    if (pendingEntries.length > 0) {
+      console.log(
+        `[loadout-sync] Syncing ${pendingEntries.length} item(s)` +
+        (requeued > 0 ? ` (${requeued} re-queued)` : '') + '...'
+      );
+    }
+
     for (const entry of pendingEntries) {
       if (entry.status === 'done') continue;
       
@@ -162,12 +167,15 @@ export async function pullInspectionsFromServer(): Promise<void> {
     
     const { resources } = await response.json();
     if (Array.isArray(resources)) {
-      console.log(`[loadout-sync] Pulled ${resources.length} inspections from server.`);
       for (const inspection of resources) {
         await upsertDownloadedInspection(inspection);
       }
-      // Notify the UI that data has been updated
-      window.dispatchEvent(new CustomEvent('loadout-sync-updated'));
+      // Only log and nudge the UI when the server actually returned data, so an
+      // empty server doesn't spam the console or trigger needless re-renders.
+      if (resources.length > 0) {
+        console.log(`[loadout-sync] Pulled ${resources.length} inspection(s) from server.`);
+        window.dispatchEvent(new CustomEvent('loadout-sync-updated'));
+      }
     }
   } catch (error) {
     console.error('[loadout-sync] Error pulling inspections:', error);
