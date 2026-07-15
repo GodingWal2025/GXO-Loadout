@@ -23,10 +23,12 @@ import { InvestigationRoute } from './routes/InvestigationRoute';
 import { CaptureReturnsStagingRoute } from './routes/CaptureReturnsStagingRoute';
 
 import { startBackgroundSync } from './shared';
+import { startSitesSync } from './services/sites';
 
 export default function App() {
   useEffect(() => {
     startBackgroundSync();
+    startSitesSync();
   }, []);
 
   return (

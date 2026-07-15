@@ -1,5 +1,5 @@
 import { useNavigate, Link } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { setDeviceConfig } from '../lib/deviceConfig';
 import { listActiveSites, addSite } from '../services/sites';
 import type { Site } from '../shared';
@@ -9,6 +9,14 @@ export function SetupRoute() {
   const [sites, setSites] = useState<Site[]>(() => listActiveSites());
   const [siteId, setSiteId] = useState('');
   const [name, setName] = useState('');
+
+  // Sites arrive asynchronously from the cloud on a fresh device — refresh the
+  // list when they land so the user can pick their existing site.
+  useEffect(() => {
+    const refresh = () => setSites(listActiveSites());
+    window.addEventListener('loadout-sites-updated', refresh);
+    return () => window.removeEventListener('loadout-sites-updated', refresh);
+  }, []);
 
   // Inline new-site form, used when there are no sites yet
   const [newSiteName, setNewSiteName] = useState('');

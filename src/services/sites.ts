@@ -59,6 +59,7 @@ export function addSite(name: string, address?: string): Site {
   };
   sites.push(site);
   saveAll(sites);
+  void pushSiteToServer(site);
   return site;
 }
 
@@ -68,6 +69,7 @@ export function updateSite(id: string, patch: Partial<Site>): void {
   if (idx !== -1) {
     sites[idx] = { ...sites[idx], ...patch };
     saveAll(sites);
+    void pushSiteToServer(sites[idx]);
   }
 }
 
@@ -94,4 +96,86 @@ export function deleteSite(id: string): { ok: boolean; reason?: string } {
 
   saveAll(sites.filter((s) => s.id !== id));
   return { ok: true };
+}
+
+// ── Cloud sync ─────────────────────────────────────────────
+// Sites are shared reference data. They live in localStorage (admin-editable),
+// but must also propagate across devices — otherwise a freshly-configured iPad
+// has no sites and can't display the inspections that were synced for them.
+
+async function pushSiteToServer(site: Site): Promise<void> {
+  try {
+    await fetch('/api/sync-site', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(site),
+    });
+  } catch {
+    // Best-effort; startSitesSync() re-pushes local sites on a later cycle.
+  }
+}
+
+/** Upsert every locally-known site to the cloud (idempotent). Lets a device
+ *  that created sites before sync existed seed them for everyone else. */
+export async function pushAllLocalSitesToServer(): Promise<void> {
+  for (const site of loadAll()) {
+    await pushSiteToServer(site);
+  }
+}
+
+/** Merge the cloud site list into localStorage. Cloud entries win on conflict;
+ *  local-only sites are kept (and get pushed up by pushAllLocalSitesToServer). */
+export async function pullSitesFromServer(): Promise<void> {
+  try {
+    // no-store: iOS Safari otherwise serves a stale cached GET.
+    const res = await fetch('/api/sites', { cache: 'no-store' });
+    if (!res.ok) return;
+    const { resources } = await res.json();
+    if (!Array.isArray(resources)) return;
+
+    const byId = new Map<string, Site>(loadAll().map((s) => [s.id, s]));
+    let changed = false;
+    for (const r of resources) {
+      if (!r || typeof r.id !== 'string') continue;
+      const merged: Site = {
+        id: r.id,
+        name: typeof r.name === 'string' ? r.name : r.id,
+        address: r.address || undefined,
+        active: r.active !== false,
+        createdAt: r.createdAt || new Date().toISOString(),
+      };
+      if (JSON.stringify(byId.get(r.id)) !== JSON.stringify(merged)) {
+        byId.set(r.id, merged);
+        changed = true;
+      }
+    }
+    if (changed) {
+      saveAll([...byId.values()]);
+      // Let the setup screen / admin site list refresh live.
+      window.dispatchEvent(new CustomEvent('loadout-sites-updated'));
+    }
+  } catch {
+    // ignore; retried on the next cycle
+  }
+}
+
+let sitesSyncStarted = false;
+
+/** Start syncing the site list. Safe to call more than once. */
+export function startSitesSync(): void {
+  if (sitesSyncStarted) return;
+  sitesSyncStarted = true;
+
+  const sync = () => {
+    // Seed the cloud with anything only this device knows, then learn about
+    // sites created on other devices.
+    void pushAllLocalSitesToServer().finally(() => void pullSitesFromServer());
+  };
+
+  sync();
+  setInterval(() => void pullSitesFromServer(), 30_000);
+  window.addEventListener('online', sync);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') sync();
+  });
 }

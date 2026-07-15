@@ -7,6 +7,19 @@ const cosmosClient = new CosmosClient(process.env.COSMOS_DB_CONNECTION_STRING ||
 const database = cosmosClient.database("loadout-db");
 const container = database.container("inspections");
 
+// Sites are shared reference data (which sites exist), synced across devices so
+// a freshly-set-up device sees the same site list instead of starting empty.
+// The container is created on first use so no manual portal step is required.
+let sitesContainerPromise: Promise<import("@azure/cosmos").Container> | null = null;
+function getSitesContainer() {
+    if (!sitesContainerPromise) {
+        sitesContainerPromise = database.containers
+            .createIfNotExists({ id: "sites", partitionKey: { paths: ["/id"] } })
+            .then((res) => res.container);
+    }
+    return sitesContainerPromise;
+}
+
 // Initialize Blob Storage Client
 const storageAccountName = process.env.STORAGE_ACCOUNT_NAME || "devstoreaccount1";
 const storageAccountKey = process.env.STORAGE_ACCOUNT_KEY || "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
@@ -86,10 +99,35 @@ export async function getInspections(request: HttpRequest, context: InvocationCo
         };
     } catch (error) {
         context.log("Error fetching inspections:", error);
-        return { 
-            status: 500, 
-            jsonBody: { error: "Error fetching inspections" } 
+        return {
+            status: 500,
+            jsonBody: { error: "Error fetching inspections" }
         };
+    }
+}
+
+export async function syncSite(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    context.log(`Syncing site. URL: "${request.url}"`);
+    try {
+        const site = await request.json();
+        const sites = await getSitesContainer();
+        const { resource } = await sites.items.upsert(site);
+        return { status: 200, jsonBody: { success: true, resource } };
+    } catch (error) {
+        context.log("Error syncing site:", error);
+        return { status: 500, jsonBody: { error: "Error syncing site" } };
+    }
+}
+
+export async function getSites(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    context.log(`Fetching sites. URL: "${request.url}"`);
+    try {
+        const sites = await getSitesContainer();
+        const { resources } = await sites.items.query("SELECT * from c").fetchAll();
+        return { status: 200, jsonBody: { success: true, resources } };
+    } catch (error) {
+        context.log("Error fetching sites:", error);
+        return { status: 500, jsonBody: { error: "Error fetching sites" } };
     }
 }
 
@@ -110,4 +148,16 @@ app.http('inspections', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: getInspections
+});
+
+app.http('sync-site', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: syncSite
+});
+
+app.http('sites', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    handler: getSites
 });
