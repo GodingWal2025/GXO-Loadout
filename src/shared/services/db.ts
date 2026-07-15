@@ -52,6 +52,10 @@ export interface SyncQueueEntry {
 const DB_NAME = 'loadout';
 const DB_VERSION = 2;
 
+// Cap on automatic retries so a permanently-bad record eventually stops
+// hammering the server instead of being retried forever.
+export const MAX_SYNC_ATTEMPTS = 5;
+
 let dbPromise: Promise<IDBPDatabase<InspectionDB>> | null = null;
 
 export function getDB(): Promise<IDBPDatabase<InspectionDB>> {
@@ -218,6 +222,38 @@ export async function dbEnqueueSync(entry: Omit<SyncQueueEntry, 'id' | 'createdA
 export async function dbGetPendingSync(): Promise<SyncQueueEntry[]> {
   const db = await getDB();
   return db.getAllFromIndex('syncQueue', 'by-status', 'pending');
+}
+
+/**
+ * Resurrect entries that would otherwise be stranded so the sync loop can
+ * retry them:
+ *   - 'failed'      — a previous push errored (e.g. the API was down). These
+ *                     were never retried because the queue only processed
+ *                     'pending' entries, so any inspection created while the
+ *                     backend was unavailable stayed local forever.
+ *   - 'in-progress' — orphaned when a tab closed mid-sync; also never retried.
+ *
+ * Entries that have already burned through MAX_SYNC_ATTEMPTS are left as
+ * 'failed' so a genuinely bad record stops retrying. Returns the number of
+ * entries moved back to 'pending'.
+ */
+export async function dbRequeueStalledSync(): Promise<number> {
+  const db = await getDB();
+  const tx = db.transaction('syncQueue', 'readwrite');
+  const all = await tx.store.getAll();
+  let requeued = 0;
+  for (const entry of all) {
+    if (entry.id === undefined) continue;
+    const isRetriableFailure = entry.status === 'failed' && entry.attempts < MAX_SYNC_ATTEMPTS;
+    const isOrphanedInProgress = entry.status === 'in-progress';
+    if (isRetriableFailure || isOrphanedInProgress) {
+      entry.status = 'pending';
+      await tx.store.put(entry);
+      requeued++;
+    }
+  }
+  await tx.done;
+  return requeued;
 }
 
 export async function dbUpdateSyncEntry(entry: SyncQueueEntry): Promise<void> {

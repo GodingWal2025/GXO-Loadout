@@ -26,9 +26,11 @@ export {
   dbMarkPhotoUploaded,
   dbEnqueueSync,
   dbGetPendingSync,
+  dbRequeueStalledSync,
   dbUpdateSyncEntry,
   dbGetPendingSyncCount,
   dbGetUnuploadedPhotoCount,
+  MAX_SYNC_ATTEMPTS,
 } from './services/db';
 export type { SyncQueueEntry } from './services/db';
 

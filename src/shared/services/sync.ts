@@ -1,5 +1,6 @@
 import {
   dbGetPendingSync,
+  dbRequeueStalledSync,
   dbUpdateSyncEntry,
   dbGetInspection,
   dbGetPhotoBlob,
@@ -44,6 +45,14 @@ export async function processSyncQueue(): Promise<void> {
   console.log('[loadout-sync] Starting background sync process...');
 
   try {
+    // Bring previously-failed and orphaned in-progress entries back into the
+    // queue. Without this, anything enqueued while the API was unreachable
+    // (e.g. before the backend was deployed) would never be retried.
+    const requeued = await dbRequeueStalledSync();
+    if (requeued > 0) {
+      console.log(`[loadout-sync] Re-queued ${requeued} previously-failed/stalled entr${requeued === 1 ? 'y' : 'ies'}.`);
+    }
+
     const pendingEntries = await dbGetPendingSync();
     
     for (const entry of pendingEntries) {
