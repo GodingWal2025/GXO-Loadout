@@ -21,7 +21,11 @@ function getSitesContainer() {
 }
 
 // Initialize Blob Storage Client
-const storageAccountName = process.env.STORAGE_ACCOUNT_NAME || "devstoreaccount1";
+// Storage account names are ALWAYS lowercase. The app setting in the portal
+// was entered uppercase ("GXOLOADOUTB"), which made every SAS signature invalid
+// (signed canonical resource /blob/GXOLOADOUTB/... vs the service's
+// /blob/gxoloadoutb/...) — photo uploads failed with OutOfRangeInput/403.
+const storageAccountName = (process.env.STORAGE_ACCOUNT_NAME || "devstoreaccount1").trim().toLowerCase();
 const storageAccountKey = process.env.STORAGE_ACCOUNT_KEY || "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
 const sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
 // Note: In production, the blob endpoint might differ depending on region/suffix. This is standard Azure Blob URL.
