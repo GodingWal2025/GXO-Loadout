@@ -48,8 +48,15 @@ export {
   deactivateInspector,
 } from './services/inspectors';
 
+export {
+  resolvePhotoUrl,
+  resolvePhotoUrls,
+  normalizeCloudPhotoUrl,
+} from './services/resolvePhotoUrls';
+
 // Hooks
 export { useInspection, emptyInspection } from './hooks/useInspection';
+export { usePhotoUrl } from './hooks/usePhotoUrl';
 export type { Action } from './hooks/useInspection';
 
 // State machines
@@ -92,6 +99,7 @@ export { InspectorPicker } from './components/InspectorPicker';
 export { SuggestableField } from './components/SuggestableField';
 export { QualityFlagButton } from './components/QualityFlagButton';
 export { ImageQualityModal } from './components/ImageQualityModal';
+export { PhotoLightbox } from './components/PhotoLightbox';
 export { StagingLanesMap } from './components/StagingLanesMap';
 export { DashboardKPIBoxes } from './components/DashboardKPIBoxes';
 export type { DashboardKPI } from './components/DashboardKPIBoxes';

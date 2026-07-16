@@ -3,11 +3,13 @@
 // Browser-based detection of common photo issues. These run on every captured
 // image before it's saved.
 
-export type QualityIssueType = 'blurry' | 'too_dark' | 'too_bright' | 'low_contrast';
+export type QualityIssueType = 'blurry' | 'too_dark' | 'too_bright' | 'low_contrast' | 'sideways';
 
 export interface QualityIssue {
   type: QualityIssueType;
   severity: 'mild' | 'severe';
+  /** Blocking issues cannot be kept — the photo MUST be retaken. */
+  blocking?: boolean;
   message: string;
   score: number;
 }
@@ -57,6 +59,21 @@ export async function checkImageQuality(blob: Blob): Promise<QualityCheckResult>
   const { mean, stdDev } = computeBrightnessStats(imageData);
 
   const issues: QualityIssue[] = [];
+
+  // Photos must be taken with the device held upright (portrait). The capture
+  // pipeline already applies EXIF rotation, so by the time we get here the
+  // pixel dimensions reflect the true orientation: wider than tall = the
+  // device was held sideways. (Upside-down shots are auto-corrected by the
+  // EXIF normalization step, so they never reach this check inverted.)
+  if (bitmap.width > bitmap.height) {
+    issues.push({
+      type: 'sideways',
+      severity: 'severe',
+      blocking: true,
+      message: 'Photo was taken sideways. Hold the device upright (portrait) and retake.',
+      score: bitmap.width / bitmap.height,
+    });
+  }
 
   if (blurScore < 25) {
     issues.push({

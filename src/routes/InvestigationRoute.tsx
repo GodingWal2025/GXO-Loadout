@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { listActiveSites } from '../services/sites';
 import { getDeviceConfig } from '../lib/deviceConfig';
 import { dbListAllInspections } from '../shared';
+import { resolvePhotoUrl } from '../shared/services/resolvePhotoUrls';
+import type { InspectionPhoto } from '../shared';
 
 
 export function InvestigationRoute() {
@@ -14,6 +16,7 @@ export function InvestigationRoute() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
+  const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map());
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Default to device site if not already set and sites list is loaded
@@ -58,6 +61,23 @@ export function InvestigationRoute() {
       }));
       
       setResults(mapped);
+
+      // Resolve photo URLs for display (from cloud URL or local IndexedDB)
+      const allPhotos: InspectionPhoto[] = [];
+      for (const ins of mapped) {
+        for (const p of (ins.pallets || [])) {
+          allPhotos.push(...(p.photos || []));
+        }
+        allPhotos.push(...(ins.staging?.finalLanePhotos || []));
+      }
+      const urls = new Map<string, string>();
+      await Promise.all(
+        allPhotos.map(async (photo) => {
+          const url = await resolvePhotoUrl(photo);
+          if (url) urls.set(photo.id, url);
+        })
+      );
+      setPhotoUrls(urls);
     } catch (err) {
       console.error('Search error:', err);
     } finally {
@@ -283,7 +303,7 @@ export function InvestigationRoute() {
                                 background: 'var(--surface-tint)',
                                 cursor: 'pointer' 
                               }}
-                              onClick={() => navigate(`/inspection/${item.id}/pallet/${p.palletNumber - 1}`)}
+                              onClick={() => navigate(`/inspection/${item.id}/pallet/${p.palletNumber - 1}`, { state: { from: 'investigation' } })}
                             >
                               <div className="row-between" style={{ marginBottom: '6px' }}>
                                 <span className="fw-500">Pallet #{p.palletNumber} · <span className="soft" style={{ fontSize: '13px' }}>{p.palletType}</span></span>
@@ -304,12 +324,14 @@ export function InvestigationRoute() {
                               {/* Pallet photos */}
                               {p.photos && p.photos.length > 0 && (
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(70px, 1fr))', gap: '6px', marginTop: '8px' }}>
-                                  {p.photos.map((ph: any) => (
+                                  {p.photos.map((ph: any) => {
+                                    const photoSrc = photoUrls.get(ph.id) || ph.sharePointUrl || ph.localBlobUrl;
+                                    return (
                                     <div key={ph.id} style={{ position: 'relative' }}>
-                                      {ph.blobUrl ? (
-                                        <a href={ph.blobUrl} target="_blank" rel="noopener noreferrer">
+                                      {photoSrc ? (
+                                        <a href={photoSrc} target="_blank" rel="noopener noreferrer">
                                           <img
-                                            src={ph.blobUrl}
+                                            src={photoSrc}
                                             alt={ph.category}
                                             style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)' }}
                                           />
@@ -323,7 +345,8 @@ export function InvestigationRoute() {
                                         {ph.slotKey || ph.category}
                                       </div>
                                     </div>
-                                  ))}
+                                    );
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -365,12 +388,14 @@ export function InvestigationRoute() {
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
                                   {item.photos
                                     .filter((ph: any) => ph.category === 'Staging_Final_Lane')
-                                    .map((ph: any) => (
+                                    .map((ph: any) => {
+                                      const photoSrc = photoUrls.get(ph.id) || ph.sharePointUrl || ph.localBlobUrl;
+                                      return (
                                       <div key={ph.id}>
-                                        {ph.blobUrl ? (
-                                          <a href={ph.blobUrl} target="_blank" rel="noopener noreferrer">
+                                        {photoSrc ? (
+                                          <a href={photoSrc} target="_blank" rel="noopener noreferrer">
                                             <img
-                                              src={ph.blobUrl}
+                                              src={photoSrc}
                                               alt="Staging lane"
                                               style={{ width: '100%', aspectRatio: '1.33', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)' }}
                                             />
@@ -381,7 +406,8 @@ export function InvestigationRoute() {
                                           </div>
                                         )}
                                       </div>
-                                    ))}
+                                      );
+                                    })}
                                 </div>
                               </div>
                             )}

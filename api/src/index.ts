@@ -87,6 +87,49 @@ export async function photoUploadToken(request: HttpRequest, context: Invocation
     }
 }
 
+// Serves a photo blob through the API. The "photos" blob container is private,
+// so the raw blob.core.windows.net URL written onto InspectionPhoto records is
+// not viewable from other devices. This endpoint proxies the read using the
+// storage account key so any device (same origin) can display any photo.
+export async function getPhoto(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const photoId = request.query.get("photoId");
+    if (!photoId || !/^[A-Za-z0-9_-]+$/.test(photoId)) {
+        return { status: 400, jsonBody: { error: "Missing or invalid photoId parameter" } };
+    }
+
+    try {
+        const containerClient = blobServiceClient.getContainerClient(photoContainerName);
+        const blobClient = containerClient.getBlobClient(photoId);
+        const download = await blobClient.download();
+        const body = await streamToBuffer(download.readableStreamBody);
+
+        return {
+            status: 200,
+            headers: {
+                "Content-Type": download.contentType || "image/jpeg",
+                // Photo IDs are immutable — cache aggressively so repeat views are free.
+                "Cache-Control": "public, max-age=31536000, immutable",
+            },
+            body,
+        };
+    } catch (error: any) {
+        if (error?.statusCode === 404) {
+            return { status: 404, jsonBody: { error: "Photo not found" } };
+        }
+        context.log("Error fetching photo:", error);
+        return { status: 500, jsonBody: { error: "Error fetching photo" } };
+    }
+}
+
+async function streamToBuffer(stream: NodeJS.ReadableStream | undefined): Promise<Buffer> {
+    if (!stream) return Buffer.alloc(0);
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+}
+
 export async function getInspections(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Fetching inspections. URL: "${request.url}"`);
     try {
@@ -142,6 +185,12 @@ app.http('photo-upload-token', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: photoUploadToken
+});
+
+app.http('photo', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    handler: getPhoto
 });
 
 app.http('inspections', {

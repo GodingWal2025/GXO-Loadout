@@ -5,9 +5,11 @@ import {
   dbGetInspection,
   dbGetPhotoBlob,
   dbMarkPhotoUploaded,
+  dbSaveInspection,
   upsertDownloadedInspection,
   getDB,
 } from './db';
+import type { InspectionPhoto } from '../types/inspection';
 
 let isSyncing = false;
 let isPulling = false;
@@ -108,6 +110,15 @@ export async function processSyncQueue(): Promise<void> {
           
           if (response.ok) {
             await dbMarkPhotoUploaded(entry.photoId);
+
+            // 3. Write a permanent URL back onto the InspectionPhoto record so
+            //    other devices (and the Investigation page) can display it.
+            //    We use the /api/photo proxy URL, NOT the raw blob URL: the
+            //    "photos" container is private, so blob.core.windows.net URLs
+            //    return 403/404 on any device without a SAS token.
+            const permanentUrl = `${apiUrl}/api/photo?photoId=${entry.photoId}`;
+            await writeBlobUrlToInspectionPhoto(entry.inspectionId, entry.photoId, permanentUrl);
+
             entry.status = 'done';
             await dbUpdateSyncEntry(entry);
           } else {
@@ -199,4 +210,53 @@ export function startBackgroundSync(): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') fullSync();
   });
+}
+
+/**
+ * After a photo blob is uploaded to Azure Blob Storage, write the permanent
+ * blob URL onto the matching InspectionPhoto record so it can be displayed on
+ * any device (not just the one that captured it).
+ */
+async function writeBlobUrlToInspectionPhoto(
+  inspectionId: string,
+  photoId: string,
+  blobUrl: string
+): Promise<void> {
+  const inspection = await dbGetInspection(inspectionId);
+  if (!inspection) return;
+
+  let found = false;
+
+  const patchPhoto = (photo: InspectionPhoto): InspectionPhoto => {
+    if (photo.id === photoId) {
+      found = true;
+      return { ...photo, sharePointUrl: blobUrl };
+    }
+    return photo;
+  };
+
+  // Search pallet photos
+  inspection.pallets = inspection.pallets.map((p) => ({
+    ...p,
+    photos: p.photos.map(patchPhoto),
+  }));
+
+  // Search staging photos
+  inspection.staging.overviewPhotos = inspection.staging.overviewPhotos.map(patchPhoto);
+  inspection.staging.coverSheetPhotos = inspection.staging.coverSheetPhotos.map(patchPhoto);
+  if (inspection.staging.finalLanePhotos) {
+    inspection.staging.finalLanePhotos = inspection.staging.finalLanePhotos.map(patchPhoto);
+  }
+
+  if (found) {
+    // Bump lastEditedAt — without this, other devices' pull-side conflict check
+    // (existing.lastEditedAt >= incoming.lastEditedAt) rejects the update and
+    // the photo URL never reaches them. This was why photos only showed on the
+    // device that captured them.
+    inspection.lastEditedAt = new Date().toISOString();
+    // Save back to IndexedDB — this also enqueues a sync so the inspection
+    // record (now with the photo URL) gets pushed to Cosmos DB.
+    await dbSaveInspection(inspection);
+    console.log(`[loadout-sync] Wrote blob URL for photo ${photoId} on inspection ${inspectionId}`);
+  }
 }

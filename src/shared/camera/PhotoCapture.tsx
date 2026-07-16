@@ -12,6 +12,8 @@ import { compressPhoto } from './compressPhoto';
 import { checkImageQuality, type QualityIssue } from './imageQuality';
 import { QualityFlagButton } from '../components/QualityFlagButton';
 import { ImageQualityModal } from '../components/ImageQualityModal';
+import { PhotoLightbox } from '../components/PhotoLightbox';
+import { usePhotoUrl } from '../hooks/usePhotoUrl';
 
 // ---- Pending capture (image quality review) ----
 
@@ -50,6 +52,8 @@ export function SlotPhotoCapture({
   currentUser,
 }: SlotPhotoCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const displayUrl = usePhotoUrl(existingPhoto);
 
   const capture = useCameraCapture(async (blob) => {
     const quality = await checkImageQuality(blob);
@@ -138,11 +142,9 @@ export function SlotPhotoCapture({
 
   return (
     <>
-      <div className={tileClass} onClick={capture}>
-        <img
-          src={existingPhoto.localBlobUrl || existingPhoto.sharePointUrl}
-          alt={slotLabel}
-        />
+      {/* Tapping a filled slot ENLARGES the photo; retake is a button inside the viewer */}
+      <div className={tileClass} onClick={() => setViewing(true)}>
+        <img src={displayUrl} alt={slotLabel} />
 
         <QualityFlagButton
           flag={existingPhoto.qualityFlag}
@@ -154,6 +156,14 @@ export function SlotPhotoCapture({
 
         <div className="photo-slot__label-overlay">{slotLabel}</div>
       </div>
+      {viewing && (
+        <PhotoLightbox
+          url={displayUrl}
+          label={slotLabel}
+          onClose={() => setViewing(false)}
+          onRetake={capture}
+        />
+      )}
       {pending && (
         <ImageQualityModal
           previewUrl={pending.previewUrl}
@@ -190,6 +200,8 @@ export function MultiPhotoCapture({
   currentUser,
 }: MultiCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<InspectionPhoto | null>(null);
+  const viewingUrl = usePhotoUrl(viewingPhoto || undefined);
 
   const capture = useCameraCapture(async (blob) => {
     const quality = await checkImageQuality(blob);
@@ -256,26 +268,24 @@ export function MultiPhotoCapture({
         {existingPhotos.length > 0 && (
           <div className="photo-grid">
             {existingPhotos.map((p) => (
-              <div
+              <MultiPhotoTile
                 key={p.id}
-                className={[
-                  'photo-tile',
-                  p.qualityFlag ? 'photo-tile--quality-flagged' : '',
-                ].filter(Boolean).join(' ')}
-              >
-                <img src={p.localBlobUrl || p.sharePointUrl} alt={p.category} />
-                <QualityFlagButton
-                  flag={p.qualityFlag}
-                  level="photo"
-                  onFlag={(f) => onPhotoQualityFlag(p.id, f)}
-                  onUnflag={() => onPhotoQualityFlag(p.id, undefined)}
-                  currentUser={currentUser}
-                />
-              </div>
+                photo={p}
+                onView={() => setViewingPhoto(p)}
+                onQualityFlag={onPhotoQualityFlag}
+                currentUser={currentUser}
+              />
             ))}
           </div>
         )}
       </div>
+      {viewingPhoto && (
+        <PhotoLightbox
+          url={viewingUrl}
+          label={viewingPhoto.category.replace(/_/g, ' ')}
+          onClose={() => setViewingPhoto(null)}
+        />
+      )}
       {pending && (
         <ImageQualityModal
           previewUrl={pending.previewUrl}
@@ -285,5 +295,38 @@ export function MultiPhotoCapture({
         />
       )}
     </>
+  );
+}
+
+function MultiPhotoTile({
+  photo,
+  onView,
+  onQualityFlag,
+  currentUser,
+}: {
+  photo: InspectionPhoto;
+  onView: () => void;
+  onQualityFlag: (photoId: string, flag?: QualityFlag) => void;
+  currentUser: string;
+}) {
+  const url = usePhotoUrl(photo);
+  return (
+    <div
+      className={[
+        'photo-tile',
+        photo.qualityFlag ? 'photo-tile--quality-flagged' : '',
+      ].filter(Boolean).join(' ')}
+      onClick={onView}
+      style={{ cursor: 'pointer' }}
+    >
+      <img src={url} alt={photo.category} />
+      <QualityFlagButton
+        flag={photo.qualityFlag}
+        level="photo"
+        onFlag={(f) => onQualityFlag(photo.id, f)}
+        onUnflag={() => onQualityFlag(photo.id, undefined)}
+        currentUser={currentUser}
+      />
+    </div>
   );
 }

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import type { Inspection } from '../shared';
 import { INSPECTION_TYPE_LABELS } from '../shared';
+import { downloadInspectionPdf } from '../lib/inspectionPdf';
 
 interface Props {
   inspection: Inspection;
@@ -34,11 +35,28 @@ export function InspectionListCard({ inspection }: Props) {
             Started by {startedBy} · {lastEdited}
           </div>
         </div>
-        {inspection.flaggedItemsCount > 0 ? (
-          <span className="pill pill--danger">⚑ {inspection.flaggedItemsCount} flagged</span>
-        ) : (
-          <span className="pill pill--info">In progress</span>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {(inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED') && (
+            <button
+              className="btn btn--outline btn--sm"
+              title="Download batch summary as PDF"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                downloadInspectionPdf(inspection);
+              }}
+            >
+              ⤓ PDF
+            </button>
+          )}
+          {inspection.flaggedItemsCount > 0 ? (
+            <span className="pill pill--danger">⚑ {inspection.flaggedItemsCount} flagged</span>
+          ) : inspection.status === 'COMPLETED' ? (
+            <span className="pill pill--success">✓ Completed</span>
+          ) : (
+            <span className="pill pill--info">In progress</span>
+          )}
+        </div>
       </div>
 
       {totalExpected > 0 && (

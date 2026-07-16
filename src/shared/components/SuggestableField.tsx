@@ -9,6 +9,8 @@ interface Props<T extends string | number> {
   placeholder?: string;
   mono?: boolean;
   hideCamera?: boolean;
+  /** Force typed letters to uppercase (batch codes are always uppercase). */
+  uppercase?: boolean;
   onChange: (next: Suggestable<T>) => void;
 }
 
@@ -19,11 +21,13 @@ export function SuggestableField<T extends string | number>({
   placeholder,
   mono,
   hideCamera = false,
+  uppercase = false,
   onChange,
 }: Props<T>) {
   const [scanning, setScanning] = useState(false);
 
-  const handleChange = (raw: string) => {
+  const handleChange = (rawInput: string) => {
+    const raw = uppercase && type === 'text' ? rawInput.toUpperCase() : rawInput;
     const next: T | null =
       raw === '' ? null : (type === 'number' ? (Number(raw) as T) : (raw as T));
 
@@ -68,7 +72,8 @@ export function SuggestableField<T extends string | number>({
           onChange={(e) => handleChange(e.target.value)}
           placeholder={placeholder}
           className={mono ? 'mono' : ''}
-          style={{ flex: 1 }}
+          autoCapitalize={uppercase ? 'characters' : undefined}
+          style={{ flex: 1, ...(uppercase ? { textTransform: 'uppercase' as const } : {}) }}
         />
         {!hideCamera && (
           <button 

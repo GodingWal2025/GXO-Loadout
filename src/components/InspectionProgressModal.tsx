@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { Inspection } from '../shared';
+import { downloadInspectionPdf } from '../lib/inspectionPdf';
 
 interface Props {
   inspection: Inspection;
@@ -113,9 +114,18 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
           <h2 className="modal__title">
             Inspection <em>progress</em>
           </h2>
-          <button className="btn btn--ghost btn--sm" onClick={onClose}>
-            ✕
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn--outline btn--sm"
+              onClick={() => downloadInspectionPdf(inspection)}
+              title="Download batch summary as PDF"
+            >
+              ⤓ Download PDF
+            </button>
+            <button className="btn btn--ghost btn--sm" onClick={onClose}>
+              ✕
+            </button>
+          </div>
         </div>
 
         {/* Summary pills */}

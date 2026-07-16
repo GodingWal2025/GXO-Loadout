@@ -6,6 +6,15 @@ import { useCameraCapture } from '../shared';
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
 import type { Inspection, InspectionPhoto } from '../shared';
+import { normalizeCloudPhotoUrl } from '../shared/services/resolvePhotoUrls';
+
+// Prefer the in-session object URL (fresh capture), then the cloud URL
+// (normalized to /api/photo so it works on any device).
+function photoSrc(p: InspectionPhoto): string | undefined {
+  if (p.localBlobUrl) return p.localBlobUrl;
+  if (p.sharePointUrl) return normalizeCloudPhotoUrl(p.sharePointUrl, p.id);
+  return undefined;
+}
 
 export function CaptureReturnsStagingRoute() {
   const { id } = useParams<{ id: string }>();
@@ -142,7 +151,7 @@ export function CaptureReturnsStagingRoute() {
       {latestPhoto ? (
         <div style={{ position: 'relative', marginBottom: 20 }}>
           <img
-            src={latestPhoto.localBlobUrl || latestPhoto.sharePointUrl}
+            src={photoSrc(latestPhoto)}
             alt="Latest staging lane"
             style={{
               width: '100%',
@@ -204,7 +213,7 @@ export function CaptureReturnsStagingRoute() {
             {existingPhotos.map((p, idx) => (
               <div key={p.id} style={{ position: 'relative' }}>
                 <img
-                  src={p.localBlobUrl || p.sharePointUrl}
+                  src={photoSrc(p)}
                   alt={`Staging ${idx + 1}`}
                   style={{
                     width: '100%',

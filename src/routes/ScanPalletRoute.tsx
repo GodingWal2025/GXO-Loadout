@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { dbGetInspection, SlotPhotoCapture } from '../shared';
 import { useInspection } from '../shared';
 import { SuggestableField } from '../shared';
@@ -51,6 +51,8 @@ export function ScanPalletRoute() {
 function PalletInner({ initial, palletIndex }: { initial: Inspection; palletIndex: number }) {
   const { inspection, dispatch } = useInspection(initial);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isFromInvestigation = location.state?.from === 'investigation';
   const pallet = inspection.pallets[palletIndex];
 
   const currentFindings = useMemo(() => {
@@ -71,7 +73,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       return;
     }
     setValidationError('');
-    navigate(`/inspection/${inspection.id}`);
+    navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`);
   };
 
   const toggleFinding = (finding: string) => {
@@ -204,7 +206,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           />
           <button
             className="btn btn--ghost btn--sm"
-            onClick={() => navigate(`/inspection/${inspection.id}`)}
+            onClick={() => navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`)}
           >
             ← Back
           </button>
@@ -560,6 +562,7 @@ function BatchSectionRow({
           label="Batch code"
           field={section.batchCode}
           mono
+          uppercase
           hideCamera={true}
           placeholder="P18GY43M8"
           onChange={(field) => onUpdate({ batchCode: field })}
