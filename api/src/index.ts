@@ -32,6 +32,24 @@ const sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, s
 const blobServiceClient = new BlobServiceClient(`https://${storageAccountName}.blob.core.windows.net`, sharedKeyCredential);
 const photoContainerName = "photos";
 
+// The container is created on first use — it never existed in the storage
+// account, so every SAS upload 404'd with ContainerNotFound.
+let photoContainerPromise: Promise<void> | null = null;
+function ensurePhotoContainer(): Promise<void> {
+    if (!photoContainerPromise) {
+        photoContainerPromise = blobServiceClient
+            .getContainerClient(photoContainerName)
+            .createIfNotExists()
+            .then(() => undefined)
+            .catch((err) => {
+                // Reset so the next request retries instead of caching the failure.
+                photoContainerPromise = null;
+                throw err;
+            });
+    }
+    return photoContainerPromise;
+}
+
 export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Syncing inspection. URL: "${request.url}"`);
     try {
@@ -63,6 +81,7 @@ export async function photoUploadToken(request: HttpRequest, context: Invocation
     }
 
     try {
+        await ensurePhotoContainer();
         const startsOn = new Date();
         const expiresOn = new Date(new Date().valueOf() + 3600 * 1000); // Token valid for 1 hour
 
