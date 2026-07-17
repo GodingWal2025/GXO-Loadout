@@ -3,24 +3,22 @@ import { generateId } from '../utils/uuid';
 //
 // Per-site, admin-editable list. Starts empty — managers must add at least
 // one inspector per site before any load can be started.
+//
+// Synced across devices through Cosmos DB (see refSync.ts): every write is
+// stamped with updatedAt and pushed; a 30s background loop pulls records
+// created on other devices.
 
 import type { Inspector } from '../types/inspection';
+import { createRefSync } from './refSync';
 
-const KEY = 'loadout.inspectors';
+const refSync = createRefSync<Inspector>({
+  storageKey: 'loadout.inspectors',
+  listPath: '/api/inspectors',
+  syncPath: '/api/sync-inspector',
+  eventName: 'loadout-inspectors-updated',
+});
 
-function loadAll(): Inspector[] {
-  const raw = localStorage.getItem(KEY);
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function saveAll(inspectors: Inspector[]): void {
-  localStorage.setItem(KEY, JSON.stringify(inspectors));
-}
+const { loadAll, saveAll } = refSync;
 
 export function listInspectorsForSite(siteId: string): Inspector[] {
   return loadAll()
@@ -41,9 +39,11 @@ export function addInspector(name: string, siteId: string): Inspector {
     name: name.trim(),
     siteId,
     active: true,
+    updatedAt: new Date().toISOString(),
   };
   inspectors.push(newInspector);
   saveAll(inspectors);
+  refSync.pushRecord(newInspector);
   return newInspector;
 }
 
@@ -51,11 +51,17 @@ export function updateInspector(id: string, patch: Partial<Inspector>): void {
   const inspectors = loadAll();
   const idx = inspectors.findIndex((i) => i.id === id);
   if (idx !== -1) {
-    inspectors[idx] = { ...inspectors[idx], ...patch };
+    inspectors[idx] = { ...inspectors[idx], ...patch, updatedAt: new Date().toISOString() };
     saveAll(inspectors);
+    refSync.pushRecord(inspectors[idx]);
   }
 }
 
 export function deactivateInspector(id: string): void {
   updateInspector(id, { active: false });
+}
+
+/** Start the inspectors background sync loop. Safe to call more than once. */
+export function startInspectorsSync(): void {
+  refSync.start();
 }

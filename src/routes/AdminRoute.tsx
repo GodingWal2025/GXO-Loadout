@@ -154,7 +154,12 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
 
   const refresh = () => setInspectors(listAllInspectorsForSite(siteId));
 
-  useEffect(() => { refresh(); }, [siteId]);
+  useEffect(() => {
+    refresh();
+    // Refresh live when the background sync pulls inspectors from other devices
+    window.addEventListener('loadout-inspectors-updated', refresh);
+    return () => window.removeEventListener('loadout-inspectors-updated', refresh);
+  }, [siteId]);
 
   const add = () => {
     if (!newName.trim()) return;
@@ -410,7 +415,12 @@ function StagingPanel({ siteId }: { siteId: string }) {
 
   const refresh = () => setLocations(listAllStagingLocations(siteId));
 
-  useEffect(() => { refresh(); }, [siteId]);
+  useEffect(() => {
+    refresh();
+    // Refresh live when the background sync pulls locations from other devices
+    window.addEventListener('loadout-staging-locations-updated', refresh);
+    return () => window.removeEventListener('loadout-staging-locations-updated', refresh);
+  }, [siteId]);
 
   const add = () => {
     if (!newName.trim()) return;

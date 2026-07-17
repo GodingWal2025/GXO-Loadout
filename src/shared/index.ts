@@ -46,6 +46,7 @@ export {
   addInspector,
   updateInspector,
   deactivateInspector,
+  startInspectorsSync,
 } from './services/inspectors';
 
 export {

@@ -310,6 +310,8 @@ export interface Inspector {
   name: string;
   siteId: string;
   active: boolean;
+  /** Stamped on every write; drives the cross-device sync merge. */
+  updatedAt?: string;
 }
 
 // ============================================================

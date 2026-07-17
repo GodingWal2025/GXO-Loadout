@@ -7,18 +7,22 @@ const cosmosClient = new CosmosClient(process.env.COSMOS_DB_CONNECTION_STRING ||
 const database = cosmosClient.database("loadout-db");
 const container = database.container("inspections");
 
-// Sites are shared reference data (which sites exist), synced across devices so
-// a freshly-set-up device sees the same site list instead of starting empty.
-// The container is created on first use so no manual portal step is required.
-let sitesContainerPromise: Promise<import("@azure/cosmos").Container> | null = null;
-function getSitesContainer() {
-    if (!sitesContainerPromise) {
-        sitesContainerPromise = database.containers
-            .createIfNotExists({ id: "sites", partitionKey: { paths: ["/id"] } })
+// Shared reference data (sites, inspectors, staging locations) is synced
+// across devices so a freshly-set-up device sees the same lists instead of
+// starting empty. Containers are created on first use so no manual portal
+// step is required.
+const refContainerPromises = new Map<string, Promise<import("@azure/cosmos").Container>>();
+function getRefContainer(name: string) {
+    let promise = refContainerPromises.get(name);
+    if (!promise) {
+        promise = database.containers
+            .createIfNotExists({ id: name, partitionKey: { paths: ["/id"] } })
             .then((res) => res.container);
+        refContainerPromises.set(name, promise);
     }
-    return sitesContainerPromise;
+    return promise;
 }
+const getSitesContainer = () => getRefContainer("sites");
 
 // Initialize Blob Storage Client
 // Storage account names are ALWAYS lowercase. The app setting in the portal
@@ -197,6 +201,38 @@ export async function getSites(request: HttpRequest, context: InvocationContext)
     }
 }
 
+// Generic upsert/list handlers for reference-data containers
+// (inspectors, staging locations — same shape as sites).
+function makeRefUpsertHandler(containerName: string, label: string) {
+    return async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        try {
+            const record = await request.json() as any;
+            if (!record || typeof record.id !== "string") {
+                return { status: 400, jsonBody: { error: `Invalid ${label}: missing id` } };
+            }
+            const container = await getRefContainer(containerName);
+            const { resource } = await container.items.upsert(record);
+            return { status: 200, jsonBody: { success: true, resource } };
+        } catch (error) {
+            context.log(`Error syncing ${label}:`, error);
+            return { status: 500, jsonBody: { error: `Error syncing ${label}` } };
+        }
+    };
+}
+
+function makeRefListHandler(containerName: string, label: string) {
+    return async (_request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
+        try {
+            const container = await getRefContainer(containerName);
+            const { resources } = await container.items.query("SELECT * from c").fetchAll();
+            return { status: 200, jsonBody: { success: true, resources } };
+        } catch (error) {
+            context.log(`Error fetching ${label}:`, error);
+            return { status: 500, jsonBody: { error: `Error fetching ${label}` } };
+        }
+    };
+}
+
 // Register the Azure Functions endpoints (v4 Model)
 app.http('sync-inspection', {
     methods: ['POST'],
@@ -232,4 +268,28 @@ app.http('sites', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: getSites
+});
+
+app.http('sync-inspector', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: makeRefUpsertHandler("inspectors", "inspector")
+});
+
+app.http('inspectors', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    handler: makeRefListHandler("inspectors", "inspectors")
+});
+
+app.http('sync-staging-location', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: makeRefUpsertHandler("stagingLocations", "staging location")
+});
+
+app.http('staging-locations', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    handler: makeRefListHandler("stagingLocations", "staging locations")
 });

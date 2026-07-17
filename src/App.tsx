@@ -24,11 +24,15 @@ import { CaptureReturnsStagingRoute } from './routes/CaptureReturnsStagingRoute'
 
 import { startBackgroundSync } from './shared';
 import { startSitesSync } from './services/sites';
+import { startInspectorsSync } from './shared/services/inspectors';
+import { startStagingLocationsSync } from './services/stagingLocations';
 
 export default function App() {
   useEffect(() => {
     startBackgroundSync();
     startSitesSync();
+    startInspectorsSync();
+    startStagingLocationsSync();
   }, []);
 
   return (

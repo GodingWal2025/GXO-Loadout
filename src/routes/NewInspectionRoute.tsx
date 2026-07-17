@@ -159,10 +159,19 @@ export function NewInspectionRoute() {
   const [returnsBrand, setReturnsBrand] = useState<'Dekalb' | 'Channel' | ''>('');
 
   useEffect(() => {
-    if (config) {
+    if (!config) return;
+    const refresh = () => {
       setStagingLocations(listActiveStagingLocations(config.siteId));
       setInspectors(listInspectorsForSite(config.siteId));
-    }
+    };
+    refresh();
+    // Refresh live when the background sync pulls data from other devices
+    window.addEventListener('loadout-inspectors-updated', refresh);
+    window.addEventListener('loadout-staging-locations-updated', refresh);
+    return () => {
+      window.removeEventListener('loadout-inspectors-updated', refresh);
+      window.removeEventListener('loadout-staging-locations-updated', refresh);
+    };
   }, [config]);
 
   if (!config) {

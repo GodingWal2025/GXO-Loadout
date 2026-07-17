@@ -13,7 +13,11 @@ export function InspectorPicker({ siteId, value, placeholder, onChange }: Props)
   const [inspectors, setInspectors] = useState<Inspector[]>([]);
 
   useEffect(() => {
-    setInspectors(listInspectorsForSite(siteId));
+    const refresh = () => setInspectors(listInspectorsForSite(siteId));
+    refresh();
+    // Refresh live when the background sync pulls inspectors from other devices
+    window.addEventListener('loadout-inspectors-updated', refresh);
+    return () => window.removeEventListener('loadout-inspectors-updated', refresh);
   }, [siteId]);
 
   return (
