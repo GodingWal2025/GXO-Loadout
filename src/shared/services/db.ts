@@ -97,6 +97,15 @@ export async function dbSaveInspection(inspection: Inspection): Promise<void> {
 // Same as dbSaveInspection, but doesn't enqueue a sync back to the server
 export async function upsertDownloadedInspection(inspection: Inspection): Promise<void> {
   const db = await getDB();
+
+  // A tombstone always wins, even against newer local edits. An admin deleted
+  // this record; letting a local edit outrank the delete would push the
+  // inspection back to the server and undo it on every other device.
+  if (inspection.deleted) {
+    await db.delete('inspections', inspection.id);
+    return;
+  }
+
   const existing = await db.get('inspections', inspection.id);
   // Simple conflict resolution: if we have local changes, don't overwrite
   // (In a real app, you might compare lastEditedAt timestamps or use a sync status flag)
@@ -113,13 +122,16 @@ export async function dbGetInspection(id: string): Promise<Inspection | undefine
 
 export async function dbListAllInspections(): Promise<Inspection[]> {
   const db = await getDB();
-  return db.getAll('inspections');
+  const all = await db.getAll('inspections');
+  return all.filter((i) => !i.deleted);
 }
 
 export async function dbListInspectionsForSite(siteId: string): Promise<Inspection[]> {
   const db = await getDB();
   const results = await db.getAllFromIndex('inspections', 'by-site', siteId);
-  return results.filter((i) => !i.archived).sort((a, b) => (b.lastEditedAt || '').localeCompare(a.lastEditedAt || ''));
+  return results
+    .filter((i) => !i.archived && !i.deleted)
+    .sort((a, b) => (b.lastEditedAt || '').localeCompare(a.lastEditedAt || ''));
 }
 
 export async function dbListInProgressForSite(siteId: string): Promise<Inspection[]> {

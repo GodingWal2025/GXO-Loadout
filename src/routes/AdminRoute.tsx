@@ -714,6 +714,7 @@ function InspectionManagementPanel() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [deleteError, setDeleteError] = useState('');
   const pageSize = 25;
 
   useEffect(() => {
@@ -723,19 +724,18 @@ function InspectionManagementPanel() {
   const loadInspections = async (p: number) => {
     setLoading(true);
     try {
-      // Try server-side paginated API first
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections?page=${p}&pageSize=${pageSize}`);
+      // GET /api/inspections returns every record; paging is done client-side.
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections`);
       if (res.ok) {
         const data = await res.json();
-        if (data.items) {
-          setInspections(data.items);
-          setTotal(data.total);
-        } else if (data.resources) {
-          setInspections(data.resources.slice((p - 1) * pageSize, p * pageSize));
-          setTotal(data.resources.length);
-        } else {
+        if (!Array.isArray(data.resources)) {
           throw new Error('Unexpected API response structure');
         }
+        // Tombstoned records stay in Cosmos so the delete can propagate — they
+        // must not show up here as though they were still live.
+        const live = data.resources.filter((i: any) => !i.deleted);
+        setInspections(live.slice((p - 1) * pageSize, p * pageSize));
+        setTotal(live.length);
         setLoading(false);
         return;
       }
@@ -751,15 +751,25 @@ function InspectionManagementPanel() {
 
   const handleDelete = async (id: string) => {
     if (!window.confirm('Permanently delete this inspection? This cannot be undone.')) return;
-    await dbHardDeleteInspection(id);
-    
-    // Also delete from backend
+
+    // Delete on the server FIRST. Deleting locally first only clears this
+    // device — the next pull would hand the record straight back, so a failure
+    // here has to surface rather than look like it worked.
+    setDeleteError('');
     try {
-      await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections/${id}`, { method: 'DELETE' });
-    } catch (err) {
-      console.error('Failed to delete inspection from backend', err);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections/${id}`, {
+        method: 'DELETE',
+      });
+      if (!res.ok && res.status !== 404) {
+        setDeleteError(`Server refused the delete (${res.status}). Nothing was removed — try again.`);
+        return;
+      }
+    } catch {
+      setDeleteError('Could not reach the server. Deleting needs a connection, so nothing was removed.');
+      return;
     }
-    
+
+    await dbHardDeleteInspection(id);
     loadInspections(page);
   };
 
@@ -771,7 +781,14 @@ function InspectionManagementPanel() {
         <h2 className="section__title">Inspection <em>management</em></h2>
         <span className="section__meta">{total} total inspections</span>
       </div>
-      
+
+      {deleteError && (
+        <div className="banner banner--danger" style={{ marginBottom: 12 }}>
+          <span className="banner__icon">⚠</span>
+          <div className="banner__body">{deleteError}</div>
+        </div>
+      )}
+
       {loading ? (
         <div className="soft">Loading inspections...</div>
       ) : inspections.length === 0 ? (
@@ -795,7 +812,7 @@ function InspectionManagementPanel() {
                     <td className="mono">{i.id.slice(0, 8)}</td>
                     <td>{i.type}</td>
                     <td>{i.status}</td>
-                    <td>{i.archived ? <span className="pill pill--warning">Archived</span> : <span className="pill pill--success">Active</span>}</td>
+                    <td>{i.archived ? <span className="pill pill--warn">Archived</span> : <span className="pill pill--success">Active</span>}</td>
                     <td className="right">
                       <button className="btn btn--sm btn--danger" onClick={() => handleDelete(i.id)}>Delete</button>
                     </td>

@@ -57,14 +57,29 @@ function ensurePhotoContainer(): Promise<void> {
 export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Syncing inspection. URL: "${request.url}"`);
     try {
-        const inspection = await request.json();
-        
+        const inspection = await request.json() as any;
+
+        // A device that was offline when an admin deleted this inspection still
+        // has its own copy and will happily push it back. Refuse the push if the
+        // server already holds a tombstone, otherwise the delete gets undone.
+        if (inspection?.id) {
+            try {
+                const { resource: existing } = await container.item(inspection.id, inspection.id).read();
+                if (existing?.deleted) {
+                    context.log(`Ignoring push for deleted inspection ${inspection.id}`);
+                    return { status: 200, jsonBody: { success: true, deleted: true, resource: existing } };
+                }
+            } catch {
+                // Not found (or unreadable) — treat as a normal upsert.
+            }
+        }
+
         // Upsert the inspection into Cosmos DB
         const { resource } = await container.items.upsert(inspection);
-        
-        return { 
-            status: 200, 
-            jsonBody: { success: true, resource } 
+
+        return {
+            status: 200,
+            jsonBody: { success: true, resource }
         };
     } catch (error) {
         context.log("Error syncing inspection:", error);
@@ -176,6 +191,47 @@ export async function getInspections(request: HttpRequest, context: InvocationCo
     }
 }
 
+/**
+ * Admin delete. Writes a tombstone rather than removing the document, because
+ * every device keeps its own IndexedDB copy and re-pulls from here on load — a
+ * hard delete here would simply be resurrected by the next device that syncs.
+ * Clients drop tombstoned records locally; `syncInspection` refuses to overwrite
+ * one. Same pattern as staging locations.
+ */
+export async function deleteInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const id = request.params.id;
+    context.log(`Deleting inspection ${id}`);
+
+    if (!id) {
+        return { status: 400, jsonBody: { error: "Missing inspection id" } };
+    }
+
+    try {
+        const { resource: existing } = await container.item(id, id).read();
+        if (!existing) {
+            return { status: 404, jsonBody: { error: "Inspection not found" } };
+        }
+
+        const tombstone = {
+            ...existing,
+            deleted: true,
+            deletedAt: new Date().toISOString(),
+            // Bump lastEditedAt so the client pull-side conflict check
+            // (existing.lastEditedAt >= incoming.lastEditedAt) accepts this.
+            lastEditedAt: new Date().toISOString(),
+        };
+
+        const { resource } = await container.items.upsert(tombstone);
+        return { status: 200, jsonBody: { success: true, resource } };
+    } catch (error: any) {
+        if (error?.code === 404) {
+            return { status: 404, jsonBody: { error: "Inspection not found" } };
+        }
+        context.log("Error deleting inspection:", error);
+        return { status: 500, jsonBody: { error: "Error deleting inspection" } };
+    }
+}
+
 export async function syncSite(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Syncing site. URL: "${request.url}"`);
     try {
@@ -250,6 +306,13 @@ app.http('photo', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: getPhoto
+});
+
+app.http('delete-inspection', {
+    methods: ['DELETE'],
+    authLevel: 'anonymous',
+    route: 'inspections/{id}',
+    handler: deleteInspection
 });
 
 app.http('inspections', {
