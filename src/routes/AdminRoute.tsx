@@ -12,6 +12,8 @@ import {
   addInspector,
   listAllInspectorsForSite,
   updateInspector,
+  dbListAllInspections,
+  dbHardDeleteInspection,
 } from '../shared';
 import {
   listAllStagingLocations,
@@ -678,6 +680,8 @@ function SecurityPanel() {
         </button>
       </section>
 
+      <InspectionManagementPanel />
+
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">Reset <em>all data</em></h2>
@@ -702,5 +706,119 @@ function SecurityPanel() {
         </button>
       </section>
     </>
+  );
+}
+
+function InspectionManagementPanel() {
+  const [inspections, setInspections] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const pageSize = 25;
+
+  useEffect(() => {
+    loadInspections(page);
+  }, [page]);
+
+  const loadInspections = async (p: number) => {
+    setLoading(true);
+    try {
+      // Try server-side paginated API first
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections?page=${p}&pageSize=${pageSize}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items) {
+          setInspections(data.items);
+          setTotal(data.total);
+        } else if (data.resources) {
+          setInspections(data.resources.slice((p - 1) * pageSize, p * pageSize));
+          setTotal(data.resources.length);
+        } else {
+          throw new Error('Unexpected API response structure');
+        }
+        setLoading(false);
+        return;
+      }
+    } catch {
+      // Server unreachable — fall back to local IndexedDB
+    }
+    // Fallback to local
+    const all = await dbListAllInspections();
+    setInspections(all.slice((p - 1) * pageSize, p * pageSize));
+    setTotal(all.length);
+    setLoading(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!window.confirm('Permanently delete this inspection? This cannot be undone.')) return;
+    await dbHardDeleteInspection(id);
+    
+    // Also delete from backend
+    try {
+      await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections/${id}`, { method: 'DELETE' });
+    } catch (err) {
+      console.error('Failed to delete inspection from backend', err);
+    }
+    
+    loadInspections(page);
+  };
+
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  return (
+    <section className="section">
+      <div className="section__head">
+        <h2 className="section__title">Inspection <em>management</em></h2>
+        <span className="section__meta">{total} total inspections</span>
+      </div>
+      
+      {loading ? (
+        <div className="soft">Loading inspections...</div>
+      ) : inspections.length === 0 ? (
+        <div className="soft">No inspections found.</div>
+      ) : (
+        <>
+          <div className="table-card">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Type</th>
+                  <th>Status</th>
+                  <th>State</th>
+                  <th className="right">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inspections.map((i: any) => (
+                  <tr key={i.id}>
+                    <td className="mono">{i.id.slice(0, 8)}</td>
+                    <td>{i.type}</td>
+                    <td>{i.status}</td>
+                    <td>{i.archived ? <span className="pill pill--warning">Archived</span> : <span className="pill pill--success">Active</span>}</td>
+                    <td className="right">
+                      <button className="btn btn--sm btn--danger" onClick={() => handleDelete(i.id)}>Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {totalPages > 1 && (
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16 }}>
+              <button className="btn btn--sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+                ← Previous
+              </button>
+              <span className="small soft">
+                Page {page} of {totalPages}
+              </span>
+              <button className="btn btn--sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+                Next →
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
