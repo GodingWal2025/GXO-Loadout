@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
-import { useInspection } from '../shared';
+import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
@@ -27,6 +27,7 @@ export function InspectionWorkspaceRoute() {
 
 function WorkspaceInner({ initial }: { initial: Inspection }) {
   const { inspection, dispatch } = useInspection(initial);
+  const { locked, editing, readOnly, setEditing } = useInspectionMode(inspection);
   const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
@@ -156,12 +157,25 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
               {inspection.stagingLocation && <> · Staging: {inspection.stagingLocation}</>}
             </div>
           </div>
-          <div className="page-head__actions" style={{ display: 'flex', gap: '8px' }}>
+          <div className="page-head__actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {locked && <ViewEditToggle editing={editing} onChange={setEditing} />}
             <button className="btn btn--ghost" onClick={() => setShowProgressModal(true)}>Review progress</button>
-            <button className="btn btn--ghost" onClick={handleArchive}>Archive</button>
+            {!readOnly && (
+              <button className="btn btn--ghost" onClick={handleArchive}>Archive</button>
+            )}
             <Link to="/" className="btn btn--ghost">← Home</Link>
           </div>
         </div>
+
+        {readOnly && (
+          <div className="banner banner--info" style={{ marginBottom: 20 }}>
+            <span className="banner__icon">👁</span>
+            <div className="banner__body">
+              This inspection is complete and is open in <strong>view mode</strong>. Tap a pallet
+              to review it, or switch to Edit in the corner to make changes.
+            </div>
+          </div>
+        )}
 
         {/* Handoff bar */}
         <div className="handoff-bar">
@@ -179,9 +193,11 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
               </div>
             )}
           </div>
-          <button className="btn btn--sm" onClick={() => setShowHandoffModal(true)}>
-            ⇄ Hand off to another inspector
-          </button>
+          {!readOnly && (
+            <button className="btn btn--sm" onClick={() => setShowHandoffModal(true)}>
+              ⇄ Hand off to another inspector
+            </button>
+          )}
         </div>
 
         {inspection.handoffLog && inspection.handoffLog.length > 0 && (
@@ -205,20 +221,22 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           </details>
         )}
 
-        <button
-          className="btn btn--accent btn--hero"
-          onClick={() => setShowAddModal(true)}
-          style={{ marginBottom: 32 }}
-        >
-          <span className="btn--hero__icon">＋</span>
-          <span className="btn--hero__body">
-            <div className="btn--hero__title">Scan next pallet</div>
-            <div className="btn--hero__sub">
-              {inspection.type === 'returns' ? 'Pick delivery and pallet type' : 'Pick stop, delivery, and pallet type'}
-            </div>
-          </span>
-          <span className="btn--hero__arrow">→</span>
-        </button>
+        {!readOnly && (
+          <button
+            className="btn btn--accent btn--hero"
+            onClick={() => setShowAddModal(true)}
+            style={{ marginBottom: 32 }}
+          >
+            <span className="btn--hero__icon">＋</span>
+            <span className="btn--hero__body">
+              <div className="btn--hero__title">Scan next pallet</div>
+              <div className="btn--hero__sub">
+                {inspection.type === 'returns' ? 'Pick delivery and pallet type' : 'Pick stop, delivery, and pallet type'}
+              </div>
+            </span>
+            <span className="btn--hero__arrow">→</span>
+          </button>
+        )}
 
         {showAddModal && (
           <AddPalletModal
@@ -376,13 +394,15 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
             marginTop: 24,
           }}
         >
-          <Link to="/" className="btn btn--ghost">Save &amp; exit</Link>
+          <Link to="/" className="btn btn--ghost">{readOnly ? '← Back' : 'Save & exit'}</Link>
           <button
             className="btn btn--accent btn--lg"
-            disabled={!allFulfilled}
+            disabled={!readOnly && !allFulfilled}
             onClick={() => navigate(`/inspection/${inspection.id}/review`)}
           >
-            {inspection.type === 'returns' || allFulfilled
+            {readOnly
+              ? 'View summary →'
+              : inspection.type === 'returns' || allFulfilled
               ? 'Complete inspection →'
               : `${remaining} more bag${remaining === 1 ? '' : 's'} to scan`}
           </button>

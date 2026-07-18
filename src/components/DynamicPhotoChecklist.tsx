@@ -10,6 +10,7 @@ interface Props {
   photos: InspectionPhoto[];
   onCaptured: (slotKey: string, photo: InspectionPhoto) => void;
   onQualityFlag: (photoId: string, flag: QualityFlag | undefined) => void;
+  readOnly?: boolean;
 }
 
 export function DynamicPhotoChecklist({
@@ -20,7 +21,8 @@ export function DynamicPhotoChecklist({
   currentUser,
   photos,
   onCaptured,
-  onQualityFlag
+  onQualityFlag,
+  readOnly = false
 }: Props) {
   // 1. Instantly pull the correct group of requirements from the SDK
   let requiredShots = PALLET_PHOTO_REQUIREMENTS[palletType];
@@ -39,7 +41,7 @@ export function DynamicPhotoChecklist({
     <div className="photo-checklist">
       <div className="section__head">
         <h2 className="section__title" style={{ textTransform: 'none' }}>
-          * Take pictures as required for {palletType}
+          {readOnly ? `Photos for ${palletType}` : `* Take pictures as required for ${palletType}`}
         </h2>
         <span className="section__meta">
           {capturedCount} of {requiredShots.length} captured
@@ -70,6 +72,7 @@ export function DynamicPhotoChecklist({
               currentUser={currentUser}
               onCaptured={(photo) => onCaptured(shotType, photo)}
               onQualityFlag={onQualityFlag}
+              readOnly={readOnly}
             />
           );
         })}

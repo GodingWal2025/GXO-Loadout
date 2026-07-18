@@ -1,9 +1,10 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { dbGetInspection, SlotPhotoCapture } from '../shared';
-import { useInspection } from '../shared';
+import { useInspection, useInspectionMode } from '../shared';
 import { SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
+import { ViewEditToggle } from '../shared';
 import type { Inspection, BatchSection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
@@ -50,6 +51,7 @@ export function ScanPalletRoute() {
 
 function PalletInner({ initial, palletIndex }: { initial: Inspection; palletIndex: number }) {
   const { inspection, dispatch } = useInspection(initial);
+  const { locked, editing, readOnly, setEditing } = useInspectionMode(inspection);
   const navigate = useNavigate();
   const location = useLocation();
   const isFromInvestigation = location.state?.from === 'investigation';
@@ -193,17 +195,20 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           </div>
         </div>
         <div className="page-head__actions">
-          <QualityFlagButton
-            flag={pallet.qualityFlag}
-            level="pallet"
-            currentUser={inspection.startedBy || 'unknown'}
-            onFlag={(flag) =>
-              dispatch({ type: 'SET_PALLET_QUALITY_FLAG', index: palletIndex, flag })
-            }
-            onUnflag={() =>
-              dispatch({ type: 'SET_PALLET_QUALITY_FLAG', index: palletIndex, flag: undefined })
-            }
-          />
+          {locked && <ViewEditToggle editing={editing} onChange={setEditing} />}
+          {!readOnly && (
+            <QualityFlagButton
+              flag={pallet.qualityFlag}
+              level="pallet"
+              currentUser={inspection.startedBy || 'unknown'}
+              onFlag={(flag) =>
+                dispatch({ type: 'SET_PALLET_QUALITY_FLAG', index: palletIndex, flag })
+              }
+              onUnflag={() =>
+                dispatch({ type: 'SET_PALLET_QUALITY_FLAG', index: palletIndex, flag: undefined })
+              }
+            />
+          )}
           <button
             className="btn btn--ghost btn--sm"
             onClick={() => navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`)}
@@ -213,6 +218,17 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         </div>
       </div>
 
+      {readOnly && (
+        <div className="banner banner--info" style={{ marginBottom: 20 }}>
+          <span className="banner__icon">👁</span>
+          <div className="banner__body">
+            This inspection is complete and is open in <strong>view mode</strong>. Switch to
+            Edit in the corner to change anything.
+          </div>
+        </div>
+      )}
+
+      <fieldset className="readonly-fieldset" disabled={readOnly}>
       {returnPalletTypeWarning && (
         <div className="banner banner--warn" style={{ marginBottom: 20 }}>
           <span className="banner__icon">⚠</span>
@@ -275,6 +291,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           onQualityFlag={(photoId: any, flag: any) =>
             dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })
           }
+          readOnly={readOnly}
         />
       </section>
 
@@ -411,6 +428,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                       currentUser={inspection.startedBy || 'unknown'}
                       onCaptured={(photo: any) => dispatch({ type: 'REPLACE_PALLET_PHOTO', palletIndex, slotKey: 'RETURNS_DAMAGE', photo })}
                       onQualityFlag={(photoId: string, flag: any) => dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })}
+                      readOnly={readOnly}
                    />
                  </div>
               </div>
@@ -491,6 +509,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           </div>
         </div>
       </div>
+      </fieldset>
 
       <div
         className="row-between"
@@ -513,15 +532,31 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           </div>
         )}
         <div className="row-between">
-          <button className="btn btn--danger btn--ghost" onClick={removePallet}>
-            Remove pallet
-          </button>
-          <button
-            className="btn btn--accent btn--lg"
-            onClick={handleAdd}
-          >
-            ✓ Add to load
-          </button>
+          {readOnly ? (
+            <>
+              <span />
+              <button
+                className="btn btn--accent btn--lg"
+                onClick={() =>
+                  navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`)
+                }
+              >
+                {isFromInvestigation ? '← Back to investigation' : '← Back to load'}
+              </button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn--danger btn--ghost" onClick={removePallet}>
+                Remove pallet
+              </button>
+              <button
+                className="btn btn--accent btn--lg"
+                onClick={handleAdd}
+              >
+                ✓ Add to load
+              </button>
+            </>
+          )}
         </div>
       </div>
     </main>

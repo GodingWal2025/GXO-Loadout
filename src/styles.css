@@ -304,6 +304,53 @@ main {
   gap: 8px;
 }
 
+/* View / Edit switch shown in the corner of a completed inspection */
+.mode-toggle {
+  display: inline-flex;
+  padding: 2px;
+  gap: 2px;
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-tint);
+}
+.mode-toggle button {
+  padding: 6px 12px;
+  border: none;
+  border-radius: calc(var(--radius-sm) - 2px);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  min-height: 0;
+  white-space: nowrap;
+  transition: all .15s var(--ease);
+}
+.mode-toggle button.active {
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+/* Wrapper that turns a whole screen read-only without restyling every field */
+.readonly-fieldset {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.readonly-fieldset:disabled input,
+.readonly-fieldset:disabled select,
+.readonly-fieldset:disabled textarea {
+  background: var(--surface-tint);
+  color: var(--ink);
+  opacity: 1;
+  cursor: default;
+}
+.readonly-fieldset:disabled .toggle-group button:not(.active) {
+  opacity: 0.45;
+}
+
 .section {
   margin-bottom: 32px;
 }

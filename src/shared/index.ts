@@ -58,6 +58,7 @@ export {
 // Hooks
 export { useInspection, emptyInspection } from './hooks/useInspection';
 export { usePhotoUrl } from './hooks/usePhotoUrl';
+export { useInspectionMode, isInspectionLocked } from './hooks/useInspectionMode';
 export type { Action } from './hooks/useInspection';
 
 // State machines
@@ -101,6 +102,7 @@ export { SuggestableField } from './components/SuggestableField';
 export { QualityFlagButton } from './components/QualityFlagButton';
 export { ImageQualityModal } from './components/ImageQualityModal';
 export { PhotoLightbox } from './components/PhotoLightbox';
+export { ViewEditToggle } from './components/ViewEditToggle';
 export { StagingLanesMap } from './components/StagingLanesMap';
 export { DashboardKPIBoxes } from './components/DashboardKPIBoxes';
 export type { DashboardKPI } from './components/DashboardKPIBoxes';

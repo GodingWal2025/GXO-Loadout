@@ -2,10 +2,15 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listActiveSites } from '../services/sites';
 import { getDeviceConfig } from '../lib/deviceConfig';
-import { dbListAllInspections } from '../shared';
+import { dbListAllInspections, PhotoLightbox } from '../shared';
 import { resolvePhotoUrl } from '../shared/services/resolvePhotoUrls';
 import type { InspectionPhoto } from '../shared';
 
+/** Which pallet of which search result is being previewed inline. */
+interface Glimpse {
+  item: any;
+  pallet: any;
+}
 
 export function InvestigationRoute() {
   const navigate = useNavigate();
@@ -18,6 +23,7 @@ export function InvestigationRoute() {
   const [searched, setSearched] = useState(false);
   const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map());
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [glimpse, setGlimpse] = useState<Glimpse | null>(null);
 
   // Default to device site if not already set and sites list is loaded
   useEffect(() => {
@@ -88,6 +94,24 @@ export function InvestigationRoute() {
   const toggleExpand = (id: string) => {
     setExpandedId(expandedId === id ? null : id);
   };
+
+  // Previewing a single pallet — the search form and results stay mounted behind
+  // this panel, so backing out returns to the exact result list.
+  if (glimpse) {
+    return (
+      <PalletGlimpse
+        item={glimpse.item}
+        pallet={glimpse.pallet}
+        photoUrls={photoUrls}
+        onBack={() => setGlimpse(null)}
+        onOpenFull={() =>
+          navigate(`/inspection/${glimpse.item.id}/pallet/${glimpse.pallet.palletNumber - 1}`, {
+            state: { from: 'investigation' },
+          })
+        }
+      />
+    );
+  }
 
   return (
     <main style={{ maxWidth: '800px', margin: '0 auto', padding: '0 16px' }}>
@@ -303,7 +327,7 @@ export function InvestigationRoute() {
                                 background: 'var(--surface-tint)',
                                 cursor: 'pointer' 
                               }}
-                              onClick={() => navigate(`/inspection/${item.id}/pallet/${p.palletNumber - 1}`, { state: { from: 'investigation' } })}
+                              onClick={() => setGlimpse({ item, pallet: p })}
                             >
                               <div className="row-between" style={{ marginBottom: '6px' }}>
                                 <span className="fw-500">Pallet #{p.palletNumber} · <span className="soft" style={{ fontSize: '13px' }}>{p.palletType}</span></span>
@@ -422,6 +446,223 @@ export function InvestigationRoute() {
           </div>
         )}
       </section>
+    </main>
+  );
+}
+
+/**
+ * Read-only close-up of one pallet from a search result. Deliberately shows
+ * only this slice of the inspection — the full record is one tap away.
+ */
+function PalletGlimpse({
+  item,
+  pallet,
+  photoUrls,
+  onBack,
+  onOpenFull,
+}: {
+  item: any;
+  pallet: any;
+  photoUrls: Map<string, string>;
+  onBack: () => void;
+  onOpenFull: () => void;
+}) {
+  const [lightbox, setLightbox] = useState<{ url?: string; label: string } | null>(null);
+
+  const loadNum = item.picklistLoadNumber || item.bolLoadNumber || item.id.slice(0, 8);
+  const delivery = item.deliveries?.find((d: any) => d.id === pallet.deliveryId);
+  const totalBags =
+    pallet.batchSections?.reduce(
+      (sum: number, bs: any) => sum + (bs.actualBagCount?.value || 0),
+      0
+    ) || 0;
+  const findings = (pallet.findings || '')
+    .split(',')
+    .map((f: string) => f.trim())
+    .filter(Boolean);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !lightbox) onBack();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onBack, lightbox]);
+
+  return (
+    <main style={{ maxWidth: '800px', margin: '0 auto', padding: '0 16px' }}>
+      <div className="page-head">
+        <div>
+          <h1 className="page-head__title">
+            Pallet <em>{pallet.palletNumber}</em>
+          </h1>
+          <div className="page-head__sub">
+            Load <span className="mono">#{loadNum}</span> · {pallet.palletType}
+            {delivery && (
+              <>
+                {' '}· Delivery <span className="mono">{delivery.deliveryNumber}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="page-head__actions">
+          <button className="btn btn--ghost" onClick={onBack}>
+            ← Back to results
+          </button>
+        </div>
+      </div>
+
+      <section className="section">
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: '16px',
+            marginBottom: '20px',
+          }}
+        >
+          <div>
+            <div className="xs soft">Total bags</div>
+            <div className="fw-500" style={{ fontSize: '20px' }}>{totalBags}</div>
+          </div>
+          <div>
+            <div className="xs soft">Result</div>
+            <div className="fw-500" style={{ color: pallet.passInspection === 'Fail' ? 'var(--danger)' : undefined }}>
+              {pallet.passInspection || '—'}
+            </div>
+          </div>
+          <div>
+            <div className="xs soft">LPN</div>
+            <div className="fw-500 mono">{pallet.lpnNumber || '—'}</div>
+          </div>
+          <div>
+            <div className="xs soft">Scanned by</div>
+            <div className="fw-500">{pallet.scannedBy || '—'}</div>
+          </div>
+        </div>
+
+        <div className="table-card" style={{ marginBottom: '20px' }}>
+          <table className="data" style={{ width: '100%', fontSize: '13px' }}>
+            <thead>
+              <tr>
+                <th>Batch Code</th>
+                <th className="right">Expected</th>
+                <th className="right">Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pallet.batchSections?.map((bs: any) => (
+                <tr key={bs.id}>
+                  <td className="mono fw-500">{bs.batchCode?.value || '—'}</td>
+                  <td className="right num">{bs.expectedBagCount || 0}</td>
+                  <td className="right num fw-500">{bs.actualBagCount?.value ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {findings.length > 0 && (
+          <div className="banner banner--warn" style={{ marginBottom: '20px' }}>
+            <span className="banner__icon">⚠</span>
+            <div className="banner__body">
+              <strong>Findings:</strong> {findings.join(', ')}
+              {pallet.rejectedBagCount > 0 && (
+                <div style={{ marginTop: 4 }}>
+                  Rejected {pallet.rejectedBagCount} bags
+                  {pallet.rejectedNotes ? ` — ${pallet.rejectedNotes}` : ''}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
+          Photos
+        </div>
+        {pallet.photos?.length > 0 ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+              gap: '10px',
+            }}
+          >
+            {pallet.photos.map((ph: any) => {
+              const photoSrc = photoUrls.get(ph.id) || ph.sharePointUrl || ph.localBlobUrl;
+              const label = (ph.slotKey || ph.category || '').replace(/_/g, ' ');
+              return (
+                <div key={ph.id}>
+                  {photoSrc ? (
+                    <img
+                      src={photoSrc}
+                      alt={label}
+                      onClick={() => setLightbox({ url: photoSrc, label })}
+                      style={{
+                        width: '100%',
+                        aspectRatio: '1',
+                        objectFit: 'cover',
+                        borderRadius: '4px',
+                        border: '1px solid var(--rule-soft)',
+                        cursor: 'zoom-in',
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: '100%',
+                        aspectRatio: '1',
+                        background: 'var(--rule-soft)',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '10px',
+                        color: 'var(--ink-soft)',
+                      }}
+                    >
+                      No Photo
+                    </div>
+                  )}
+                  <div className="xs soft" style={{ textAlign: 'center', marginTop: '3px' }}>
+                    {label}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="empty" style={{ padding: 16 }}>
+            <div className="empty__sub">No photos on this pallet.</div>
+          </div>
+        )}
+      </section>
+
+      <div
+        className="row-between"
+        style={{
+          position: 'sticky',
+          bottom: 0,
+          background: 'var(--paper)',
+          borderTop: '1px solid var(--rule-soft)',
+          padding: '16px 0',
+        }}
+      >
+        <button className="btn btn--ghost" onClick={onBack}>
+          ← Back to results
+        </button>
+        <button className="btn btn--accent" onClick={onOpenFull}>
+          Open full inspection →
+        </button>
+      </div>
+
+      {lightbox && (
+        <PhotoLightbox
+          url={lightbox.url}
+          label={lightbox.label}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </main>
   );
 }

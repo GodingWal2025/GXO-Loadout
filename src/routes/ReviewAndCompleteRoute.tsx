@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection } from '../shared';
-import { useInspection } from '../shared';
+import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import { InspectorPicker } from '../shared';
 import { MultiPhotoCapture } from '../shared';
 import type { Inspection } from '../shared';
@@ -25,6 +25,7 @@ export function ReviewAndCompleteRoute() {
 
 function ReviewInner({ initial }: { initial: Inspection }) {
   const { inspection, dispatch } = useInspection(initial);
+  const { locked, editing, readOnly, setEditing } = useInspectionMode(inspection);
   const navigate = useNavigate();
   const [confirmed, setConfirmed] = useState(false);
   const [completedBy, setCompletedBy] = useState(
@@ -80,7 +81,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Review &amp; <em>complete</em>
+            {readOnly ? <>Inspection <em>summary</em></> : <>Review &amp; <em>complete</em></>}
           </h1>
           <div className="page-head__sub">
             Load <span className="mono">#{loadNum}</span> ·{' '}
@@ -92,7 +93,23 @@ function ReviewInner({ initial }: { initial: Inspection }) {
             }
           </div>
         </div>
+        {locked && (
+          <div className="page-head__actions">
+            <ViewEditToggle editing={editing} onChange={setEditing} />
+          </div>
+        )}
       </div>
+
+      {readOnly && (
+        <div className="banner banner--info">
+          <span className="banner__icon">👁</span>
+          <div className="banner__body">
+            Completed {inspection.completedAt ? new Date(inspection.completedAt).toLocaleString() : ''}
+            {inspection.completedBy ? ` by ${inspection.completedBy}` : ''}. Open in{' '}
+            <strong>view mode</strong> — switch to Edit in the corner to change anything.
+          </div>
+        </div>
+      )}
 
       {!isReturns && totalExpected > 0 && (
         allFulfilled ? (
@@ -249,7 +266,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
             <h2 className="section__title">Packaging <em>used</em></h2>
             <span className="section__meta">Materials consumed for this load</span>
           </div>
-          <div className="card">
+          <fieldset className="readonly-fieldset card" disabled={readOnly}>
             <div className="field-row" style={{ marginBottom: 12 }}>
               <div className="field">
                 <div className="field__label">40×40 pallets</div>
@@ -296,11 +313,11 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                 onChange={(e) =>
                   dispatch({ type: 'SET_STAGING', field: 'otherPackagingNotes', value: e.target.value })
                 }
-                placeholder="Any additional packaging details…"
+                placeholder={readOnly ? '—' : 'Any additional packaging details…'}
                 style={{ width: '100%', resize: 'vertical' }}
               />
             </div>
-          </div>
+          </fieldset>
         </section>
       )}
 
@@ -308,7 +325,9 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         <section className="section">
           <div className="section__head">
             <h2 className="section__title">Final <em>staging lane</em> photos</h2>
-            <span className="section__meta">Capture the finished staging lane with product</span>
+            <span className="section__meta">
+              {readOnly ? 'Tap a photo to enlarge' : 'Capture the finished staging lane with product'}
+            </span>
           </div>
           <MultiPhotoCapture
             inspectionId={inspection.id}
@@ -322,10 +341,29 @@ function ReviewInner({ initial }: { initial: Inspection }) {
             }
             label="Final staging lane"
             currentUser={inspection.currentInspector || inspection.startedBy || 'unknown'}
+            readOnly={readOnly}
           />
         </section>
       )}
 
+      {readOnly ? (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="section__title">Inspector <em>sign-off</em></h2>
+          </div>
+          <div className="card">
+            <div className="xs soft">Completed by</div>
+            <div className="fw-500" style={{ fontSize: 18 }}>
+              {inspection.completedBy || inspection.startedBy || '—'}
+            </div>
+            {inspection.completedAt && (
+              <div className="xs soft" style={{ marginTop: 4 }}>
+                {new Date(inspection.completedAt).toLocaleString()}
+              </div>
+            )}
+          </div>
+        </section>
+      ) : (
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">Inspector <em>sign-off</em></h2>
@@ -370,6 +408,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
           </label>
         </div>
       </section>
+      )}
 
       <div
         className="row-between"
@@ -393,14 +432,16 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         )}
         <div className="row-between">
           <button className="btn btn--ghost" onClick={() => navigate(`/inspection/${inspection.id}`)}>
-            ← Continue editing
+            {readOnly ? '← Back to load' : '← Continue editing'}
           </button>
-          <button
-            className="btn btn--accent btn--lg"
-            onClick={complete}
-          >
-            {inspection.flaggedItemsCount > 0 ? '⚑ Complete (flagged)' : '✓ Complete inspection'}
-          </button>
+          {!readOnly && (
+            <button
+              className="btn btn--accent btn--lg"
+              onClick={complete}
+            >
+              {inspection.flaggedItemsCount > 0 ? '⚑ Complete (flagged)' : '✓ Complete inspection'}
+            </button>
+          )}
         </div>
       </div>
     </main>

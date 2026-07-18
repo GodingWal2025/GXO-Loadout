@@ -38,6 +38,8 @@ interface SlotPhotoCaptureProps {
   onCaptured: (photo: InspectionPhoto) => void;
   onQualityFlag: (photoId: string, flag?: QualityFlag) => void;
   currentUser: string;
+  /** View mode on a completed inspection — photos can be opened but not changed. */
+  readOnly?: boolean;
 }
 
 export function SlotPhotoCapture({
@@ -50,6 +52,7 @@ export function SlotPhotoCapture({
   onCaptured,
   onQualityFlag,
   currentUser,
+  readOnly = false,
 }: SlotPhotoCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
   const [viewing, setViewing] = useState(false);
@@ -117,10 +120,11 @@ export function SlotPhotoCapture({
           className="photo-slot photo-slot--empty"
           onClick={capture}
           type="button"
+          disabled={readOnly}
         >
           <div className="photo-slot__icon">📷</div>
           <div className="photo-slot__label">{slotLabel}</div>
-          <div className="photo-slot__hint">Tap to capture</div>
+          <div className="photo-slot__hint">{readOnly ? 'Not captured' : 'Tap to capture'}</div>
         </button>
         {pending && (
           <ImageQualityModal
@@ -146,13 +150,15 @@ export function SlotPhotoCapture({
       <div className={tileClass} onClick={() => setViewing(true)}>
         <img src={displayUrl} alt={slotLabel} />
 
-        <QualityFlagButton
-          flag={existingPhoto.qualityFlag}
-          level="photo"
-          onFlag={(f) => onQualityFlag(existingPhoto.id, f)}
-          onUnflag={() => onQualityFlag(existingPhoto.id, undefined)}
-          currentUser={currentUser}
-        />
+        {!readOnly && (
+          <QualityFlagButton
+            flag={existingPhoto.qualityFlag}
+            level="photo"
+            onFlag={(f) => onQualityFlag(existingPhoto.id, f)}
+            onUnflag={() => onQualityFlag(existingPhoto.id, undefined)}
+            currentUser={currentUser}
+          />
+        )}
 
         <div className="photo-slot__label-overlay">{slotLabel}</div>
       </div>
@@ -161,7 +167,7 @@ export function SlotPhotoCapture({
           url={displayUrl}
           label={slotLabel}
           onClose={() => setViewing(false)}
-          onRetake={capture}
+          onRetake={readOnly ? undefined : capture}
         />
       )}
       {pending && (
@@ -188,6 +194,8 @@ interface MultiCaptureProps {
   onPhotoQualityFlag: (photoId: string, flag?: QualityFlag) => void;
   label: string;
   currentUser: string;
+  /** View mode on a completed inspection — photos can be opened but not added. */
+  readOnly?: boolean;
 }
 
 export function MultiPhotoCapture({
@@ -198,6 +206,7 @@ export function MultiPhotoCapture({
   onPhotoQualityFlag,
   label,
   currentUser,
+  readOnly = false,
 }: MultiCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<InspectionPhoto | null>(null);
@@ -261,11 +270,13 @@ export function MultiPhotoCapture({
       <div className="field">
         <div className="row-between mb-8">
           <div className="field__label" style={{ margin: 0 }}>{label}</div>
-          <button className="btn btn--sm btn--accent" onClick={capture}>
-            + Photo
-          </button>
+          {!readOnly && (
+            <button className="btn btn--sm btn--accent" onClick={capture}>
+              + Photo
+            </button>
+          )}
         </div>
-        {existingPhotos.length > 0 && (
+        {existingPhotos.length > 0 ? (
           <div className="photo-grid">
             {existingPhotos.map((p) => (
               <MultiPhotoTile
@@ -274,10 +285,15 @@ export function MultiPhotoCapture({
                 onView={() => setViewingPhoto(p)}
                 onQualityFlag={onPhotoQualityFlag}
                 currentUser={currentUser}
+                readOnly={readOnly}
               />
             ))}
           </div>
-        )}
+        ) : readOnly ? (
+          <div className="empty" style={{ padding: 16 }}>
+            <div className="empty__sub">No photos captured.</div>
+          </div>
+        ) : null}
       </div>
       {viewingPhoto && (
         <PhotoLightbox
@@ -303,11 +319,13 @@ function MultiPhotoTile({
   onView,
   onQualityFlag,
   currentUser,
+  readOnly = false,
 }: {
   photo: InspectionPhoto;
   onView: () => void;
   onQualityFlag: (photoId: string, flag?: QualityFlag) => void;
   currentUser: string;
+  readOnly?: boolean;
 }) {
   const url = usePhotoUrl(photo);
   return (
@@ -320,13 +338,15 @@ function MultiPhotoTile({
       style={{ cursor: 'pointer' }}
     >
       <img src={url} alt={photo.category} />
-      <QualityFlagButton
-        flag={photo.qualityFlag}
-        level="photo"
-        onFlag={(f) => onQualityFlag(photo.id, f)}
-        onUnflag={() => onQualityFlag(photo.id, undefined)}
-        currentUser={currentUser}
-      />
+      {!readOnly && (
+        <QualityFlagButton
+          flag={photo.qualityFlag}
+          level="photo"
+          onFlag={(f) => onQualityFlag(photo.id, f)}
+          onUnflag={() => onQualityFlag(photo.id, undefined)}
+          currentUser={currentUser}
+        />
+      )}
     </div>
   );
 }
