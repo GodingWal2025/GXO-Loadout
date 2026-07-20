@@ -108,6 +108,7 @@ function VerifyInner({
             field={inspection.picklist.loadNumber}
             mono
             placeholder="835"
+            hideCamera={true}
             onChange={(field) => {
               dispatch({ type: 'SET_PICKLIST', patch: { loadNumber: field } });
               // Mirror to BOL since they're the same number
@@ -200,6 +201,58 @@ function VerifyInner({
         )}
       </section>
 
+      {/* ===== Verification Questions ===== */}
+      {inspection.type !== 'returns' && (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="section__title">Order <em>Verification</em></h2>
+          </div>
+          
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 16, fontWeight: 500 }}>
+              * Is this a multi-stop load?
+            </div>
+            <div className="row-start gap-8">
+              <button
+                className={`btn btn--lg flex-1 ${inspection.bol.isMultiStopLoad === 'Yes' ? 'btn--accent' : 'btn--ghost'}`}
+                style={inspection.bol.isMultiStopLoad === 'Yes' ? { backgroundColor: 'var(--success)', color: 'white' } : {}}
+                onClick={() => dispatch({ type: 'SET_BOL', patch: { isMultiStopLoad: 'Yes' } })}
+              >
+                Yes
+              </button>
+              <button
+                className={`btn btn--lg flex-1 ${inspection.bol.isMultiStopLoad === 'No' ? 'btn--accent' : 'btn--ghost'}`}
+                style={inspection.bol.isMultiStopLoad === 'No' ? { backgroundColor: 'var(--danger)', color: 'white' } : {}}
+                onClick={() => dispatch({ type: 'SET_BOL', patch: { isMultiStopLoad: 'No' } })}
+              >
+                No
+              </button>
+            </div>
+          </div>
+
+          <div className="card">
+            <div style={{ marginBottom: 16, fontWeight: 500 }}>
+              * Does the placard info match the initial BOL?
+            </div>
+            <div className="row-start gap-8">
+              <button
+                className={`btn btn--lg flex-1 ${inspection.bol.placardMatchesBol === 'Yes' ? 'btn--accent' : 'btn--ghost'}`}
+                style={inspection.bol.placardMatchesBol === 'Yes' ? { backgroundColor: 'var(--success)', color: 'white' } : {}}
+                onClick={() => dispatch({ type: 'SET_BOL', patch: { placardMatchesBol: 'Yes' } })}
+              >
+                Yes
+              </button>
+              <button
+                className={`btn btn--lg flex-1 ${inspection.bol.placardMatchesBol === 'No' ? 'btn--accent' : 'btn--ghost'}`}
+                style={inspection.bol.placardMatchesBol === 'No' ? { backgroundColor: 'var(--danger)', color: 'white' } : {}}
+                onClick={() => dispatch({ type: 'SET_BOL', patch: { placardMatchesBol: 'No' } })}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <div className="flex gap-8" style={{ justifyContent: 'flex-end', marginTop: 24 }}>
         <button className="btn btn--ghost" onClick={() => window.history.back()}>

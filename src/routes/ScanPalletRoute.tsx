@@ -262,7 +262,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             }
           >
             {(inspection.type === 'returns'
-              ? PALLET_TYPES.filter(t => t !== 'Mixed Bag Pallet' && t !== 'Minibulk' && t !== 'Paper Bag')
+              ? PALLET_TYPES.filter(t => t !== 'Mixed Bag Pallet' && t !== 'Minibulk')
               : PALLET_TYPES
             ).map((t) => (
               <option key={t} value={t}>{t}</option>
@@ -280,6 +280,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           isReturns={inspection.type === 'returns'}
           currentUser={inspection.startedBy || 'unknown'}
           photos={pallet.photos}
+          batchCount={pallet.batchCount}
           onCaptured={(slotKey: any, photo: any) =>
             dispatch({
               type: 'REPLACE_PALLET_PHOTO',
@@ -369,7 +370,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             </div>
           </div>
           
-          {inspection.type !== 'returns' && (
+          {inspection.type !== 'returns' && pallet.passInspection === 'Fail' && (
             <div className="field">
               <div className="field__label">* What is the LPN number?</div>
               <input

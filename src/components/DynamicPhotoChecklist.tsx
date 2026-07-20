@@ -11,6 +11,7 @@ interface Props {
   onCaptured: (slotKey: string, photo: InspectionPhoto) => void;
   onQualityFlag: (photoId: string, flag: QualityFlag | undefined) => void;
   readOnly?: boolean;
+  batchCount?: number;
 }
 
 export function DynamicPhotoChecklist({
@@ -22,11 +23,18 @@ export function DynamicPhotoChecklist({
   photos,
   onCaptured,
   onQualityFlag,
-  readOnly = false
+  readOnly = false,
+  batchCount
 }: Props) {
   // 1. Instantly pull the correct group of requirements from the SDK
   let requiredShots = PALLET_PHOTO_REQUIREMENTS[palletType];
-  if (isReturns && palletType !== 'Seedpak') {
+  
+  if (palletType === 'Mixed Bag Pallet') {
+    requiredShots = ['FRONT_FULL_VIEW', 'BACK_FULL_VIEW'];
+    if ((batchCount || 1) >= 1) requiredShots.push('LOT_LABEL_CLOSEUP_1');
+    if ((batchCount || 1) >= 2) requiredShots.push('LOT_LABEL_CLOSEUP_2');
+    if ((batchCount || 1) >= 3) requiredShots.push('LOT_LABEL_CLOSEUP_3');
+  } else if (isReturns && palletType !== 'Seedpak') {
     requiredShots = RETURNS_PALLET_PHOTO_REQUIREMENTS;
   }
 
@@ -53,7 +61,16 @@ export function DynamicPhotoChecklist({
         {requiredShots.map((shotType) => {
           // Determine generic photo category based on requirement (or default to Pallet_Side)
           let category: any = 'Pallet_Side';
-          if (shotType === 'LOT_LABEL_CLOSEUP' || shotType === 'ALL_MIXED_SKUS_VISIBLE' || shotType === 'BAG_FLAP') category = 'Pallet_BagFlap';
+          if (
+            shotType === 'LOT_LABEL_CLOSEUP' ||
+            shotType === 'LOT_LABEL_CLOSEUP_1' ||
+            shotType === 'LOT_LABEL_CLOSEUP_2' ||
+            shotType === 'LOT_LABEL_CLOSEUP_3' ||
+            shotType === 'ALL_MIXED_SKUS_VISIBLE' ||
+            shotType === 'BAG_FLAP'
+          ) {
+            category = 'Pallet_BagFlap';
+          }
           if (shotType === 'SEAL_INTACT_VIEW' || shotType === 'BASE_WOOD_CONDITION') category = 'Pallet_LPN';
           
           if (isReturns && category === 'Pallet_Side') {

@@ -610,7 +610,7 @@ function AddPalletModal({
           <label>Pallet type</label>
           <div className="flex-col gap-8">
             {(isReturns
-              ? PALLET_TYPES.filter(t => t !== 'Mixed Bag Pallet' && t !== 'Minibulk' && t !== 'Paper Bag')
+              ? PALLET_TYPES.filter(t => t !== 'Mixed Bag Pallet' && t !== 'Minibulk')
               : PALLET_TYPES
             ).map((t) => (
               <button

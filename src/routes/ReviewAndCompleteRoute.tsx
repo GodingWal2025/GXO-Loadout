@@ -54,7 +54,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
   if (isReturns) {
     returnsActuals.pallets = inspection.pallets.length;
     returnsActuals.seedPaks = inspection.pallets.filter(p => p.palletType === 'Seedpak').length;
-    returnsActuals.bagPallets = inspection.pallets.filter(p => p.palletType.includes('Bag Pallet') || p.palletType === 'Paper Bag').length;
+    returnsActuals.bagPallets = inspection.pallets.filter(p => p.palletType.includes('Bag Pallet')).length;
   }
 
   const [validationError, setValidationError] = useState('');

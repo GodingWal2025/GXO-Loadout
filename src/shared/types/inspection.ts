@@ -17,8 +17,7 @@ export type PalletType =
   | 'Partial Bag Pallet'
   | 'Mixed Bag Pallet'
   | 'Seedpak'
-  | 'Minibulk'
-  | 'Paper Bag';
+  | 'Minibulk';
 
 export type YesNoNA = 'Yes' | 'No' | 'N/A';
 export type PassFail = 'Pass' | 'Fail';
@@ -186,6 +185,8 @@ export interface BOLData {
   shipDate: Suggestable<string>;
   carrier?: string;
   numberOfStops?: number;
+  isMultiStopLoad?: YesNoNA;
+  placardMatchesBol?: YesNoNA;
   deliveries: Delivery[];
   verifiedAt?: string;
   verifiedBy?: string;
@@ -396,7 +397,6 @@ export const PALLET_TYPES: PalletType[] = [
   'Mixed Bag Pallet',
   'Seedpak',
   'Minibulk',
-  'Paper Bag',
 ];
 
 export const INSPECTION_TYPE_LABELS: Record<InspectionType, string> = {
