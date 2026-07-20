@@ -631,6 +631,8 @@ function BatchSectionRow({
         />
       </div>
 
+      <LayerCountHelper section={section} onUpdate={onUpdate} />
+
       {remainingAvailable !== null && remainingAvailable > 0 && (
         <div className="small soft mt-8">
           {remainingAvailable} bags remaining on picklist for this batch (already scanned on other pallets)
@@ -648,6 +650,83 @@ function BatchSectionRow({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Layer-geometry counter. Standard palletization = bagsPerLayer × layerCount,
+// which is more reliable than eyeballing sagging bags. The verifier enters the
+// two numbers (layers are easy to see from the side) and applies the product to
+// the actual bag count. Inputs persist on the section so the math is auditable.
+function LayerCountHelper({
+  section,
+  onUpdate,
+}: {
+  section: BatchSection;
+  onUpdate: (patch: Partial<BatchSection>) => void;
+}) {
+  const perLayer = section.bagsPerLayer;
+  const layers = section.layerCount;
+  const computed =
+    typeof perLayer === 'number' && perLayer > 0 && typeof layers === 'number' && layers > 0
+      ? perLayer * layers
+      : null;
+  const alreadyApplied = computed !== null && section.actualBagCount.value === computed;
+
+  const parse = (raw: string): number | undefined => {
+    if (raw === '') return undefined;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? n : undefined;
+  };
+
+  return (
+    <div
+      className="mt-8"
+      style={{
+        borderTop: '1px dashed var(--rule-soft)',
+        paddingTop: 8,
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-end',
+        gap: 8,
+      }}
+    >
+      <div className="field" style={{ margin: 0, minWidth: 110, flex: '1 1 110px' }}>
+        <div className="field__label">Bags / layer</div>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={perLayer ?? ''}
+          placeholder="e.g. 8"
+          onChange={(e) => onUpdate({ bagsPerLayer: parse(e.target.value) })}
+        />
+      </div>
+      <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--ink-faint)' }}>×</div>
+      <div className="field" style={{ margin: 0, minWidth: 90, flex: '1 1 90px' }}>
+        <div className="field__label">Layers</div>
+        <input
+          type="number"
+          inputMode="numeric"
+          value={layers ?? ''}
+          placeholder="e.g. 6"
+          onChange={(e) => onUpdate({ layerCount: parse(e.target.value) })}
+        />
+      </div>
+      <div style={{ alignSelf: 'center', paddingBottom: 8, whiteSpace: 'nowrap' }}>
+        = <strong>{computed ?? '—'}</strong> bags
+      </div>
+      <button
+        type="button"
+        className="btn btn--sm"
+        disabled={computed === null || alreadyApplied}
+        onClick={() =>
+          computed !== null &&
+          onUpdate({ actualBagCount: { ...section.actualBagCount, value: computed, source: 'manual' } })
+        }
+        style={{ marginBottom: 2 }}
+      >
+        {alreadyApplied ? '✓ Applied' : 'Use as actual count'}
+      </button>
     </div>
   );
 }

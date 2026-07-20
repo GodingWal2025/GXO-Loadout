@@ -127,6 +127,12 @@ export interface BatchSection {
   expectedBagCount: number; // read-only, derived from picklist
   actualBagCount: Suggestable<number>;
   bagFlapPhotoId?: string;
+  // Layer-geometry helper: standard palletization is bagsPerLayer × layerCount.
+  // Persisted so the computed count is reproducible and the inputs survive
+  // navigation. Sagging/slumped bags make direct counting unreliable (even for
+  // people), so this arithmetic is the primary count; the verifier confirms.
+  bagsPerLayer?: number;
+  layerCount?: number;
 }
 
 export interface PalletInspection {
