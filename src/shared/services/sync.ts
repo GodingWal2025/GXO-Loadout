@@ -39,6 +39,19 @@ export async function processSyncQueue(): Promise<void> {
 
     const pendingEntries = await dbGetPendingSync();
 
+    // Process photo uploads BEFORE inspection saves. This ensures the
+    // sharePointUrl is written onto the local inspection record before
+    // that record is pushed to Cosmos DB — otherwise other devices pull
+    // the inspection without the URL and photos appear broken.
+    const typeOrder: Record<string, number> = {
+      'photo-upload': 0,
+      'inspection-save': 1,
+      'inspection-complete': 1,
+    };
+    pendingEntries.sort(
+      (a, b) => (typeOrder[a.type] ?? 1) - (typeOrder[b.type] ?? 1)
+    );
+
     // Only announce a sync cycle when there's actually work to do, so an idle
     // app doesn't log every 10s.
     if (pendingEntries.length > 0) {
@@ -118,6 +131,19 @@ export async function processSyncQueue(): Promise<void> {
             //    return 403/404 on any device without a SAS token.
             const permanentUrl = `${apiUrl}/api/photo?photoId=${entry.photoId}`;
             await writeBlobUrlToInspectionPhoto(entry.inspectionId, entry.photoId, permanentUrl);
+
+            // Notify the in-memory React reducer so it doesn't overwrite
+            // the sharePointUrl we just saved to IndexedDB on its next
+            // auto-save cycle.
+            window.dispatchEvent(
+              new CustomEvent('loadout-photo-uploaded', {
+                detail: {
+                  inspectionId: entry.inspectionId,
+                  photoId: entry.photoId,
+                  sharePointUrl: permanentUrl,
+                },
+              })
+            );
 
             entry.status = 'done';
             await dbUpdateSyncEntry(entry);

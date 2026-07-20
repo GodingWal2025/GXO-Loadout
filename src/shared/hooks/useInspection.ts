@@ -119,6 +119,7 @@ export type Action =
   | { type: 'SET_INSPECTION_QUALITY_FLAG'; flag?: QualityFlag }
   | { type: 'SET_STAGING'; field: keyof Inspection['staging']; value: any }
   | { type: 'ADD_STAGING_PHOTO'; section: 'overview' | 'cover-sheet' | 'final-lane'; photo: InspectionPhoto }
+  | { type: 'SET_PHOTO_CLOUD_URL'; photoId: string; sharePointUrl: string }
   | { type: 'MARK_COMPLETE' };
 
 function recomputeTallies(state: Inspection): Inspection {
@@ -474,6 +475,28 @@ function reducer(state: Inspection, action: Action): Inspection {
       };
       break;
 
+    // Patches a single photo's cloud URL after the sync module uploads the
+    // blob and writes the URL to IndexedDB. Without this, the in-memory
+    // state would still have sharePointUrl=undefined and overwrite the
+    // IndexedDB record on the next auto-save, erasing the URL.
+    case 'SET_PHOTO_CLOUD_URL': {
+      const patchUrl = (photos: InspectionPhoto[]) =>
+        photos.map((p) =>
+          p.id === action.photoId ? { ...p, sharePointUrl: action.sharePointUrl } : p
+        );
+      next = {
+        ...state,
+        staging: {
+          ...state.staging,
+          overviewPhotos: patchUrl(state.staging.overviewPhotos),
+          coverSheetPhotos: patchUrl(state.staging.coverSheetPhotos),
+          finalLanePhotos: patchUrl(state.staging.finalLanePhotos || []),
+        },
+        pallets: state.pallets.map((p) => ({ ...p, photos: patchUrl(p.photos) })),
+      };
+      break;
+    }
+
     case 'MARK_COMPLETE': {
       const hasFlags = state.flaggedItemsCount > 0;
       next = {
@@ -505,6 +528,21 @@ export function useInspection(initial: Inspection) {
       console.error('Failed to save inspection', err)
     );
   }, [inspection]);
+
+  // Keep the in-memory reducer state in sync with cloud URLs written by
+  // the background sync module. Without this listener the reducer's
+  // auto-save would overwrite IndexedDB with a stale copy that lacks the
+  // sharePointUrl, preventing other devices from ever seeing the photo.
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { inspectionId, photoId, sharePointUrl } = (e as CustomEvent).detail;
+      if (inspectionId === inspection.id) {
+        dispatch({ type: 'SET_PHOTO_CLOUD_URL', photoId, sharePointUrl });
+      }
+    };
+    window.addEventListener('loadout-photo-uploaded', handler);
+    return () => window.removeEventListener('loadout-photo-uploaded', handler);
+  }, [inspection.id]);
 
   return { inspection, dispatch };
 }
