@@ -336,7 +336,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
                       <span className="xs soft fw-500" style={{ marginLeft: 4 }}>bags</span>
                     </div>
                     {p.batchSections.map((bs) => (
-                      <div key={bs.id} className="xs mono faint" style={{ marginTop: 2 }}>
+                      <div key={bs.id} className="xs mono faint" style={{ marginTop: 2, textTransform: 'uppercase' }}>
                         {bs.batchCode.value || '—'}
                         {bs.actualBagCount.value !== null && (
                           <span style={{ color: 'var(--ink-soft)' }}>
@@ -517,7 +517,7 @@ function DeliveryGroup({
                 <span className="xs soft fw-500" style={{ marginLeft: 4 }}>bags</span>
               </div>
               {p.batchSections.map((bs) => (
-                <div key={bs.id} className="xs mono faint" style={{ marginTop: 2 }}>
+                <div key={bs.id} className="xs mono faint" style={{ marginTop: 2, textTransform: 'uppercase' }}>
                   {bs.batchCode.value || '—'}
                   {bs.actualBagCount.value !== null && (
                     <span style={{ color: 'var(--ink-soft)' }}>
