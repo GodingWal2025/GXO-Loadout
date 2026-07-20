@@ -324,6 +324,77 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {!isReturns && (
         <section className="section">
           <div className="section__head">
+            <h2 className="section__title">Staging <em>checklist</em></h2>
+          </div>
+
+          {[
+            {
+              field: 'stagedCorrectly',
+              label: '* Is the load staged correctly on the dock?',
+              options: ['Yes', 'No'] as const
+            },
+            {
+              field: 'paperBagsProperlyStacked',
+              label: '* Are all bag pallets properly stacked, securely wrapped with no breaks or gaps in the wrapping, and not leaning more than 5 inches?',
+              options: ['Yes', 'No', 'N/A'] as const
+            },
+            {
+              field: 'ltlPalletsSecured',
+              label: '* Are all LTL pallets secured with cardboard?',
+              options: ['Yes', 'No', 'N/A'] as const
+            },
+            {
+              field: 'mixedPalletsLabeled',
+              label: '* Do all mixed pallets have proper labels?',
+              options: ['Yes', 'No', 'N/A'] as const
+            },
+            {
+              field: 'multiStopStickersAttached',
+              label: '* Are all multi-stop stickers attached to the first pallet of each stop?',
+              options: ['Yes', 'No', 'N/A'] as const
+            },
+            {
+              field: 'palletQuantityMatchesBOL',
+              label: '* Does the quantity of pallets and physical product staged for the order match the final BOL?',
+              options: ['Yes', 'No'] as const
+            }
+          ].map((q) => (
+            <div key={q.field} className="card" style={{ marginBottom: 16 }}>
+              <div style={{ marginBottom: 16, fontWeight: 500 }}>{q.label}</div>
+              <div className="row-start gap-8">
+                {q.options.map((opt) => {
+                  const currentValue = (inspection.staging as any)[q.field];
+                  let btnClass = 'btn--ghost';
+                  let btnStyle = {};
+                  if (currentValue === opt) {
+                    btnClass = 'btn--accent';
+                    if (opt === 'Yes') btnStyle = { backgroundColor: 'var(--success)', color: 'white' };
+                    if (opt === 'No') btnStyle = { backgroundColor: 'var(--danger)', color: 'white' };
+                    if (opt === 'N/A') btnStyle = { backgroundColor: 'var(--surface-tint)', color: 'var(--text)' };
+                  }
+                  return (
+                    <button
+                      key={opt}
+                      disabled={readOnly}
+                      className={`btn btn--lg flex-1 ${btnClass}`}
+                      style={btnStyle}
+                      onClick={() =>
+                        dispatch({ type: 'SET_STAGING', field: q.field as any, value: opt })
+                      }
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {!isReturns && (
+        <section className="section">
+          <div className="section__head">
             <h2 className="section__title">Final <em>staging lane</em> photos</h2>
             <span className="section__meta">
               {readOnly ? 'Tap a photo to enlarge' : 'Capture the finished staging lane with product'}
