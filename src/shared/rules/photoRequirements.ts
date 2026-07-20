@@ -16,13 +16,16 @@ export type PhotoRequirement =
     | 'PLACARD'
     | 'LOT_LABEL_CLOSEUP_1'
     | 'LOT_LABEL_CLOSEUP_2'
-    | 'LOT_LABEL_CLOSEUP_3';
+    | 'LOT_LABEL_CLOSEUP_3'
+    | 'BAG_FLAP_1'
+    | 'BAG_FLAP_2'
+    | 'BAG_FLAP_3';
 
 // Map the pallet types to their exact required shots
 export const PALLET_PHOTO_REQUIREMENTS: Record<PalletType, PhotoRequirement[]> = {
     // Group 1: Bags
-    'Full Bag Pallet': ['FRONT_FULL_VIEW', 'BACK_FULL_VIEW', 'LOT_LABEL_CLOSEUP'],
-    'Partial Bag Pallet': ['FRONT_FULL_VIEW', 'BACK_FULL_VIEW', 'LOT_LABEL_CLOSEUP'],
+    'Full Bag Pallet': ['BAG_FLAP', 'FRONT_VIEW', 'SIDE_VIEW_1', 'BACK_VIEW', 'SIDE_VIEW_2'],
+    'Partial Bag Pallet': ['BAG_FLAP', 'FRONT_VIEW', 'SIDE_VIEW_1', 'BACK_VIEW', 'SIDE_VIEW_2'],
     
     // Group 2: Bulk
     'Seedpak': ['PLACARD', 'SIDE_VIEW_1', 'SIDE_VIEW_2'],
@@ -57,7 +60,10 @@ export const getPhotoLabel = (req: PhotoRequirement): string => {
         'PLACARD': "Placard",
         'LOT_LABEL_CLOSEUP_1': "Batch Label 1",
         'LOT_LABEL_CLOSEUP_2': "Batch Label 2",
-        'LOT_LABEL_CLOSEUP_3': "Batch Label 3"
+        'LOT_LABEL_CLOSEUP_3': "Batch Label 3",
+        'BAG_FLAP_1': "Bag Flap 1",
+        'BAG_FLAP_2': "Bag Flap 2",
+        'BAG_FLAP_3': "Bag Flap 3"
     };
     return labels[req];
 };

@@ -30,10 +30,11 @@ export function DynamicPhotoChecklist({
   let requiredShots = PALLET_PHOTO_REQUIREMENTS[palletType];
   
   if (palletType === 'Mixed Bag Pallet') {
-    requiredShots = ['FRONT_FULL_VIEW', 'BACK_FULL_VIEW'];
-    if ((batchCount || 1) >= 1) requiredShots.push('LOT_LABEL_CLOSEUP_1');
-    if ((batchCount || 1) >= 2) requiredShots.push('LOT_LABEL_CLOSEUP_2');
-    if ((batchCount || 1) >= 3) requiredShots.push('LOT_LABEL_CLOSEUP_3');
+    requiredShots = [];
+    if ((batchCount || 1) >= 1) requiredShots.push('BAG_FLAP_1');
+    if ((batchCount || 1) >= 2) requiredShots.push('BAG_FLAP_2');
+    if ((batchCount || 1) >= 3) requiredShots.push('BAG_FLAP_3');
+    requiredShots.push('FRONT_VIEW', 'SIDE_VIEW_1', 'BACK_VIEW', 'SIDE_VIEW_2');
   } else if (isReturns && palletType !== 'Seedpak') {
     requiredShots = RETURNS_PALLET_PHOTO_REQUIREMENTS;
   }
@@ -66,6 +67,9 @@ export function DynamicPhotoChecklist({
             shotType === 'LOT_LABEL_CLOSEUP_1' ||
             shotType === 'LOT_LABEL_CLOSEUP_2' ||
             shotType === 'LOT_LABEL_CLOSEUP_3' ||
+            shotType === 'BAG_FLAP_1' ||
+            shotType === 'BAG_FLAP_2' ||
+            shotType === 'BAG_FLAP_3' ||
             shotType === 'ALL_MIXED_SKUS_VISIBLE' ||
             shotType === 'BAG_FLAP'
           ) {
