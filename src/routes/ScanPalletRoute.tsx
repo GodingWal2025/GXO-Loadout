@@ -65,7 +65,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const [validationError, setValidationError] = useState('');
 
   const handleAdd = () => {
-    if (!pallet.lpnNumber && inspection.type !== 'returns') {
+    if (!pallet.lpnNumber && inspection.type !== 'returns' && pallet.passInspection === 'Fail') {
       setValidationError('LPN number is required.');
       return;
     }
