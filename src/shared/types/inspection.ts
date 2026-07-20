@@ -28,11 +28,28 @@ export type PassFail = 'Pass' | 'Fail';
 
 export interface Suggestable<T> {
   value: T | null;
-  source: 'manual' | 'empty';
+  source: 'manual' | 'empty' | 'ml';
+  /** Model confidence (0..1) when source === 'ml'; undefined otherwise. */
+  mlConfidence?: number;
+  /** Identifier of the model/version that produced an 'ml' suggestion. */
+  mlModelVersion?: string;
 }
 
 export function emptySuggestable<T>(): Suggestable<T> {
   return { value: null, source: 'empty' };
+}
+
+/** Build a Suggestable from an ML/OCR inference result (human confirms later). */
+export function mlSuggestable<T>(
+  value: T | null,
+  opts?: { confidence?: number; modelVersion?: string }
+): Suggestable<T> {
+  return {
+    value,
+    source: 'ml',
+    mlConfidence: opts?.confidence,
+    mlModelVersion: opts?.modelVersion,
+  };
 }
 
 // ============================================================

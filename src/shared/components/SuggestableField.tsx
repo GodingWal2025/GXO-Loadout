@@ -62,9 +62,35 @@ export function SuggestableField<T extends string | number>({
     handleChange(finalValue);
   };
 
+  const isMlSuggested = field.source === 'ml' && field.value !== null;
+  const confidencePct =
+    typeof field.mlConfidence === 'number'
+      ? Math.round(field.mlConfidence * 100)
+      : null;
+
   return (
     <div className="field">
-      <div className="field__label">{label}</div>
+      <div className="field__label">
+        {label}
+        {isMlSuggested && (
+          <span
+            className="field__ml-badge"
+            title="Auto-filled from a scanned document. Confirm or correct it."
+            style={{
+              marginLeft: 8,
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              padding: '1px 6px',
+              borderRadius: 999,
+              background: '#fef3c7',
+              color: '#92400e',
+              verticalAlign: 'middle',
+            }}
+          >
+            ✨ AI{confidencePct !== null ? ` ${confidencePct}%` : ''} · confirm
+          </span>
+        )}
+      </div>
       <div style={{ display: 'flex', gap: '8px' }}>
         <input
           type={type}

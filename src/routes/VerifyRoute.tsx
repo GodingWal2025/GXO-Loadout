@@ -1,9 +1,9 @@
-import { generateId } from '../shared';
+import { generateId, emptySuggestable } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection } from '../shared';
 import { useInspection } from '../shared';
-import type { Inspection, Suggestable } from '../shared';
+import type { Inspection, Suggestable, PicklistLineItemEntry } from '../shared';
 import { SuggestableField } from '../shared';
 
 export function VerifyRoute() {
@@ -124,6 +124,29 @@ function VerifyInner({
           />
         </div>
       </section>
+
+      {/* ===== Picklist line items ===== */}
+      <PicklistLineItems
+        lineItems={inspection.picklist.lineItems}
+        onAdd={() =>
+          dispatch({
+            type: 'ADD_PICKLIST_LINE',
+            line: {
+              id: generateId(),
+              batchCode: emptySuggestable<string>(),
+              productName: emptySuggestable<string>(),
+              expectedQuantity: emptySuggestable<number>(),
+              uom: 'BAG',
+              actualQuantity: 0,
+              fulfilled: false,
+            },
+          })
+        }
+        onUpdate={(index, patch) =>
+          dispatch({ type: 'UPDATE_PICKLIST_LINE', index, patch })
+        }
+        onRemove={(index) => dispatch({ type: 'REMOVE_PICKLIST_LINE', index })}
+      />
 
       {/* ===== Deliveries ===== */}
       <section className="section">
@@ -263,6 +286,113 @@ function VerifyInner({
         </button>
       </div>
     </main>
+  );
+}
+
+function PicklistLineItems({
+  lineItems,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  lineItems: PicklistLineItemEntry[];
+  onAdd: () => void;
+  onUpdate: (index: number, patch: Partial<PicklistLineItemEntry>) => void;
+  onRemove: (index: number) => void;
+}) {
+  const totalExpected = lineItems.reduce(
+    (sum, li) => sum + (li.expectedQuantity.value || 0),
+    0
+  );
+
+  return (
+    <section className="section">
+      <div className="section__head">
+        <h2 className="section__title">
+          Picklist <em>line items ({lineItems.length})</em>
+        </h2>
+        <button className="btn btn--sm" onClick={onAdd}>
+          + Add line
+        </button>
+      </div>
+
+      <div className="banner banner--info">
+        <span className="banner__icon">i</span>
+        <div className="banner__body">
+          Enter each batch code and the quantity the picklist calls for. These expected
+          counts drive the per-pallet reconciliation and the "remaining to pick" tally.
+        </div>
+      </div>
+
+      {lineItems.length === 0 ? (
+        <div className="empty">
+          <div className="empty__title">No line items yet</div>
+          <div className="empty__sub">Tap "+ Add line" to enter the picklist quantities.</div>
+        </div>
+      ) : (
+        <div className="delivery-list">
+          {lineItems.map((li, index) => (
+            <div key={li.id} className="card">
+              <div className="field-row">
+                <SuggestableField
+                  label="Batch code"
+                  field={li.batchCode}
+                  mono
+                  uppercase
+                  placeholder="H18MYD9JX"
+                  onChange={(field) => onUpdate(index, { batchCode: field })}
+                />
+                <SuggestableField
+                  label="Product"
+                  field={li.productName}
+                  hideCamera
+                  placeholder="Product name"
+                  onChange={(field) => onUpdate(index, { productName: field })}
+                />
+              </div>
+              <div className="field-row">
+                <SuggestableField
+                  label="Expected qty"
+                  field={li.expectedQuantity}
+                  type="number"
+                  hideCamera
+                  placeholder="0"
+                  onChange={(field) => onUpdate(index, { expectedQuantity: field })}
+                />
+                <div className="field">
+                  <div className="field__label">Unit</div>
+                  <select
+                    value={li.uom}
+                    onChange={(e) =>
+                      onUpdate(index, {
+                        uom: e.target.value as PicklistLineItemEntry['uom'],
+                      })
+                    }
+                  >
+                    <option value="BAG">BAG</option>
+                    <option value="SP">SP</option>
+                    <option value="PCE">PCE</option>
+                  </select>
+                </div>
+                <div className="field" style={{ alignSelf: 'flex-end' }}>
+                  <button
+                    className="btn btn--sm btn--ghost"
+                    onClick={() => onRemove(index)}
+                  >
+                    Remove line
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+
+          <div className="small soft" style={{ textAlign: 'right', marginTop: 8 }}>
+            Total expected: <strong>{totalExpected}</strong> across {lineItems.length}{' '}
+            line{lineItems.length === 1 ? '' : 's'}
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
