@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { CosmosClient } from "@azure/cosmos";
 import { BlobServiceClient, generateBlobSASQueryParameters, ContainerSASPermissions, StorageSharedKeyCredential } from "@azure/storage-blob";
+import { DocumentAnalysisClient, AzureKeyCredential } from "@azure/ai-form-recognizer";
 
 // Initialize Cosmos DB Client
 const cosmosClient = new CosmosClient(process.env.COSMOS_DB_CONNECTION_STRING || "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==");
@@ -52,6 +53,147 @@ function ensurePhotoContainer(): Promise<void> {
             });
     }
     return photoContainerPromise;
+}
+
+// Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
+// App settings (never shipped to the client) so picklist/BOL images are read
+// server-side. If unset, the analyze endpoints report "not configured" rather
+// than crashing, so the app degrades to manual entry.
+const docIntelEndpoint = (process.env.DOC_INTEL_ENDPOINT || "").trim();
+const docIntelKey = (process.env.DOC_INTEL_KEY || "").trim();
+let docClient: DocumentAnalysisClient | null = null;
+function getDocClient(): DocumentAnalysisClient | null {
+    if (!docIntelEndpoint || !docIntelKey) return null;
+    if (!docClient) {
+        docClient = new DocumentAnalysisClient(docIntelEndpoint, new AzureKeyCredential(docIntelKey));
+    }
+    return docClient;
+}
+
+type OcrLineItem = {
+    batchCode: string | null;
+    productName: string | null;
+    expectedQuantity: number | null;
+    uom: "BAG" | "SP" | "PCE";
+};
+
+// Header keyword → semantic column. First match wins, checked in order.
+const COLUMN_KEYWORDS: Array<{ key: keyof OcrLineItem; words: string[] }> = [
+    { key: "batchCode", words: ["batch", "lot"] },
+    { key: "expectedQuantity", words: ["qty", "quantity", "cases", "bags", "count", "pieces", "ordered", "pick"] },
+    { key: "uom", words: ["uom", "unit"] },
+    { key: "productName", words: ["product", "description", "item", "material", "sku", "commodity"] },
+];
+
+function normalizeUom(raw: string | null): "BAG" | "SP" | "PCE" {
+    const v = (raw || "").toUpperCase();
+    if (v.includes("SP")) return "SP";
+    if (v.includes("PCE") || v.includes("PC") || v.includes("EA") || v.includes("PIECE")) return "PCE";
+    return "BAG";
+}
+
+function parseQuantity(raw: string | null): number | null {
+    if (!raw) return null;
+    const m = raw.replace(/,/g, "").match(/\d+(\.\d+)?/);
+    return m ? Number(m[0]) : null;
+}
+
+// Map a prebuilt-layout table into line items by matching header cells to the
+// keyword table above. Layout preserves cell row/column indices, so we detect
+// the header row (row 0), build a column→field map, then read each data row.
+function extractLineItemsFromTables(tables: any[] | undefined): OcrLineItem[] {
+    if (!tables || !tables.length) return [];
+    const items: OcrLineItem[] = [];
+
+    for (const table of tables) {
+        const cells: any[] = table.cells || [];
+        if (!cells.length) continue;
+
+        // Build column → field map from the first row's header text.
+        const headerCells = cells.filter((c) => c.rowIndex === 0);
+        const colToField = new Map<number, keyof OcrLineItem>();
+        for (const cell of headerCells) {
+            const text = String(cell.content || "").toLowerCase();
+            for (const { key, words } of COLUMN_KEYWORDS) {
+                if ([...colToField.values()].includes(key)) continue; // don't map same field twice
+                if (words.some((w) => text.includes(w))) {
+                    colToField.set(cell.columnIndex, key);
+                    break;
+                }
+            }
+        }
+        // Need at least a quantity column plus one identifier to be useful.
+        const mappedFields = new Set(colToField.values());
+        const hasIdentifier = mappedFields.has("batchCode") || mappedFields.has("productName");
+        if (!mappedFields.has("expectedQuantity") || !hasIdentifier) continue;
+
+        const maxRow = Math.max(...cells.map((c) => c.rowIndex));
+        for (let r = 1; r <= maxRow; r++) {
+            const rowCells = cells.filter((c) => c.rowIndex === r);
+            if (!rowCells.length) continue;
+
+            const raw: Record<string, string | null> = {};
+            for (const cell of rowCells) {
+                const field = colToField.get(cell.columnIndex);
+                if (field) raw[field] = String(cell.content || "").trim() || null;
+            }
+
+            const item: OcrLineItem = {
+                batchCode: raw.batchCode ? raw.batchCode.toUpperCase() : null,
+                productName: raw.productName ?? null,
+                expectedQuantity: parseQuantity(raw.expectedQuantity ?? null),
+                uom: normalizeUom(raw.uom ?? null),
+            };
+            // Skip empty/subtotal rows.
+            if (item.batchCode || item.productName || item.expectedQuantity !== null) {
+                items.push(item);
+            }
+        }
+    }
+
+    return items;
+}
+
+// POST /api/analyze-picklist — body is the raw image bytes (image/jpeg). Runs
+// Document Intelligence prebuilt-layout and returns best-effort line items for
+// the verifier to confirm (source: 'ml' on the client). Never throws to the
+// client on config/OCR failure; the app falls back to manual entry.
+export async function analyzePicklist(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const client = getDocClient();
+    if (!client) {
+        return {
+            status: 501,
+            jsonBody: {
+                error: "OCR not configured",
+                detail: "Set DOC_INTEL_ENDPOINT and DOC_INTEL_KEY in the Function App settings.",
+            },
+        };
+    }
+
+    try {
+        const buffer = Buffer.from(await request.arrayBuffer());
+        if (!buffer.length) {
+            return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+        }
+
+        const poller = await client.beginAnalyzeDocument("prebuilt-layout", buffer);
+        const result = await poller.pollUntilDone();
+        const lineItems = extractLineItemsFromTables(result.tables as any[]);
+
+        const debug = request.query.get("debug") === "1";
+        return {
+            status: 200,
+            jsonBody: {
+                success: true,
+                lineItems,
+                tableCount: result.tables?.length || 0,
+                ...(debug ? { tables: result.tables } : {}),
+            },
+        };
+    } catch (error) {
+        context.log("Error analyzing picklist:", error);
+        return { status: 500, jsonBody: { error: "Error analyzing picklist" } };
+    }
 }
 
 export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
@@ -319,6 +461,12 @@ app.http('inspections', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: getInspections
+});
+
+app.http('analyze-picklist', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: analyzePicklist
 });
 
 app.http('sync-site', {

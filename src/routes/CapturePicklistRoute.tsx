@@ -1,4 +1,4 @@
-import { generateId } from '../shared';
+import { generateId, mlSuggestable, analyzePicklistPhoto } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
@@ -6,7 +6,7 @@ import { useCameraCapture } from '../shared';
 
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
-import type { Inspection, InspectionPhoto } from '../shared';
+import type { Inspection, InspectionPhoto, PicklistLineItemEntry } from '../shared';
 
 export function CapturePicklistRoute() {
   const { id } = useParams<{ id: string }>();
@@ -62,6 +62,27 @@ export function CapturePicklistRoute() {
     try {
       const updatedPicklist = { ...inspection.picklist };
       updatedPicklist.photoIds = [...updatedPicklist.photoIds, photo.id];
+
+      // Best-effort OCR: extract line items so the verifier confirms rather
+      // than types. Any failure (offline, OCR not configured, parse miss)
+      // falls through to manual entry — never blocks the capture flow.
+      try {
+        const ocrItems = await analyzePicklistPhoto(blob);
+        if (ocrItems.length > 0) {
+          const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
+            id: generateId(),
+            batchCode: mlSuggestable(li.batchCode),
+            productName: mlSuggestable(li.productName),
+            expectedQuantity: mlSuggestable(li.expectedQuantity),
+            uom: li.uom,
+            actualQuantity: 0,
+            fulfilled: false,
+          }));
+          updatedPicklist.lineItems = [...updatedPicklist.lineItems, ...mapped];
+        }
+      } catch (err) {
+        console.warn('[picklist-ocr] extraction skipped:', err);
+      }
 
       const updated: Inspection = {
         ...inspection,

@@ -40,6 +40,9 @@ export {
   setApiUrl,
 } from './services/sync';
 
+export { analyzePicklistPhoto } from './services/ocr';
+export type { OcrLineItem } from './services/ocr';
+
 export {
   listInspectorsForSite,
   listAllInspectorsForSite,
