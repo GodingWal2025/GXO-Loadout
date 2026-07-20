@@ -227,7 +227,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                       <td className="mono small">{r.deliveryNumber}</td>
                       {inspection.type !== 'returns' && <td className="num small">{r.stopNumber ?? '—'}</td>}
                       <td className="small soft">{r.palletType}</td>
-                      <td className="mono">{r.batchCode || '—'}</td>
+                      <td className="mono" style={{ textTransform: 'uppercase' }}>{r.batchCode || '—'}</td>
                       <td className="right num fw-500">{r.bagCount}</td>
                       <td className="small soft">{r.scannedBy || '—'}</td>
                     </tr>
