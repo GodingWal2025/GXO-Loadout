@@ -40,6 +40,8 @@ interface SlotPhotoCaptureProps {
   currentUser: string;
   /** View mode on a completed inspection — photos can be opened but not changed. */
   readOnly?: boolean;
+  /** Skip the portrait-orientation warning (for wide/document subjects). */
+  allowLandscape?: boolean;
 }
 
 export function SlotPhotoCapture({
@@ -53,13 +55,14 @@ export function SlotPhotoCapture({
   onQualityFlag,
   currentUser,
   readOnly = false,
+  allowLandscape = false,
 }: SlotPhotoCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
   const [viewing, setViewing] = useState(false);
   const displayUrl = usePhotoUrl(existingPhoto);
 
   const capture = useCameraCapture(async (blob) => {
-    const quality = await checkImageQuality(blob);
+    const quality = await checkImageQuality(blob, { allowLandscape });
     if (!quality.passed) {
       const previewUrl = URL.createObjectURL(blob);
       setPending({
@@ -196,6 +199,8 @@ interface MultiCaptureProps {
   currentUser: string;
   /** View mode on a completed inspection — photos can be opened but not added. */
   readOnly?: boolean;
+  /** Skip the portrait-orientation warning (for wide/document subjects). */
+  allowLandscape?: boolean;
 }
 
 export function MultiPhotoCapture({
@@ -207,13 +212,14 @@ export function MultiPhotoCapture({
   label,
   currentUser,
   readOnly = false,
+  allowLandscape = false,
 }: MultiCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
   const [viewingPhoto, setViewingPhoto] = useState<InspectionPhoto | null>(null);
   const viewingUrl = usePhotoUrl(viewingPhoto || undefined);
 
   const capture = useCameraCapture(async (blob) => {
-    const quality = await checkImageQuality(blob);
+    const quality = await checkImageQuality(blob, { allowLandscape });
     if (!quality.passed) {
       const previewUrl = URL.createObjectURL(blob);
       setPending({

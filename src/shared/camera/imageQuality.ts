@@ -24,7 +24,19 @@ export interface QualityCheckResult {
   };
 }
 
-export async function checkImageQuality(blob: Blob): Promise<QualityCheckResult> {
+export interface QualityCheckOptions {
+  /**
+   * Skip the portrait-orientation check. Documents (BOL, picklist) and other
+   * wide subjects are legitimately landscape, so enforcing portrait there just
+   * produces false rejections.
+   */
+  allowLandscape?: boolean;
+}
+
+export async function checkImageQuality(
+  blob: Blob,
+  options: QualityCheckOptions = {}
+): Promise<QualityCheckResult> {
   let bitmap: ImageBitmap;
   try {
     bitmap = await createImageBitmap(blob);
@@ -60,17 +72,18 @@ export async function checkImageQuality(blob: Blob): Promise<QualityCheckResult>
 
   const issues: QualityIssue[] = [];
 
-  // Photos must be taken with the device held upright (portrait). The capture
-  // pipeline already applies EXIF rotation, so by the time we get here the
-  // pixel dimensions reflect the true orientation: wider than tall = the
-  // device was held sideways. (Upside-down shots are auto-corrected by the
-  // EXIF normalization step, so they never reach this check inverted.)
-  if (bitmap.width > bitmap.height) {
+  // Orientation warning (non-blocking). Wider-than-tall usually means the
+  // device was held sideways — but this is unreliable: some devices/capture
+  // paths drop EXIF orientation, so an upright shot can read as landscape.
+  // We therefore WARN but always let the verifier keep it, and skip the check
+  // entirely for documents (allowLandscape), which are legitimately wide.
+  if (!options.allowLandscape && bitmap.width > bitmap.height) {
     issues.push({
       type: 'sideways',
-      severity: 'severe',
-      blocking: true,
-      message: 'Photo was taken sideways. Hold the device upright (portrait) and retake.',
+      severity: 'mild',
+      blocking: false,
+      message:
+        'This photo is wider than tall. If you held the device upright you can keep it; otherwise retake in portrait.',
       score: bitmap.width / bitmap.height,
     });
   }

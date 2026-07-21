@@ -1,4 +1,4 @@
-import { generateId, mlSuggestable, analyzePicklistPhoto } from '../shared';
+import { generateId, mlSuggestable, analyzePicklistPhoto, compressPhoto } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
@@ -7,6 +7,7 @@ import { useCameraCapture } from '../shared';
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
 import type { Inspection, InspectionPhoto, PicklistLineItemEntry } from '../shared';
+import { CapturedPageThumb } from '../components/CapturedPageThumb';
 
 export function CapturePicklistRoute() {
   const { id } = useParams<{ id: string }>();
@@ -28,46 +29,49 @@ export function CapturePicklistRoute() {
   }, [id, navigate]);
 
   const capture = useCameraCapture(async (blob) => {
-    const quality = await checkImageQuality(blob);
+    // A picklist is a document — landscape is a legitimate way to shoot it, so
+    // the portrait check is skipped here.
+    const quality = await checkImageQuality(blob, { allowLandscape: true });
     if (!quality.passed) {
       const previewUrl = URL.createObjectURL(blob);
       setPending({ blob, previewUrl, issues: quality.issues });
       return;
     }
-    await processPicklist(blob);
+    await addPage(blob);
   });
 
-  async function processPicklist(blob: Blob) {
+  async function addPage(blob: Blob) {
     if (!inspection) return;
-
-    const bitmap = await createImageBitmap(blob);
-    const photo: InspectionPhoto = {
-      id: generateId(),
-      capturedAt: new Date().toISOString(),
-      capturedBy: inspection.startedBy || 'unknown',
-      category: 'Picklist',
-      localBlobUrl: URL.createObjectURL(blob),
-      metadata: {
-        deviceModel: navigator.userAgent.includes('iPad') ? 'iPad' : 'web',
-        orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
-        originalWidth: bitmap.width,
-        originalHeight: bitmap.height,
-        fileSizeBytes: blob.size,
-      },
-    };
-
-    await dbSavePhotoBlob(photo.id, inspection.id, blob);
 
     setAnalyzing(true);
     try {
+      const compressed = await compressPhoto(blob);
+      const bitmap = await createImageBitmap(compressed);
+      const photo: InspectionPhoto = {
+        id: generateId(),
+        capturedAt: new Date().toISOString(),
+        capturedBy: inspection.startedBy || 'unknown',
+        category: 'Picklist',
+        localBlobUrl: URL.createObjectURL(compressed),
+        metadata: {
+          deviceModel: navigator.userAgent.includes('iPad') ? 'iPad' : 'web',
+          orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
+          originalWidth: bitmap.width,
+          originalHeight: bitmap.height,
+          fileSizeBytes: compressed.size,
+        },
+      };
+
+      await dbSavePhotoBlob(photo.id, inspection.id, compressed);
+
       const updatedPicklist = { ...inspection.picklist };
       updatedPicklist.photoIds = [...updatedPicklist.photoIds, photo.id];
 
-      // Best-effort OCR: extract line items so the verifier confirms rather
-      // than types. Any failure (offline, OCR not configured, parse miss)
+      // Best-effort OCR per page, so a multi-page picklist accumulates its
+      // line items. Any failure (offline, OCR not configured, parse miss)
       // falls through to manual entry — never blocks the capture flow.
       try {
-        const ocrItems = await analyzePicklistPhoto(blob);
+        const ocrItems = await analyzePicklistPhoto(compressed);
         if (ocrItems.length > 0) {
           const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
             id: generateId(),
@@ -90,7 +94,7 @@ export function CapturePicklistRoute() {
         lastEditedAt: new Date().toISOString(),
       };
       await dbSaveInspection(updated);
-      navigate(`/inspection/${inspection.id}/verify`);
+      setInspection(updated);
     } finally {
       setAnalyzing(false);
     }
@@ -107,15 +111,14 @@ export function CapturePicklistRoute() {
     const { blob, previewUrl } = pending;
     URL.revokeObjectURL(previewUrl);
     setPending(null);
-    await processPicklist(blob);
-  };
-
-  const skipToVerify = async () => {
-    if (!inspection) return;
-    navigate(`/inspection/${inspection.id}/verify`);
+    await addPage(blob);
   };
 
   if (!inspection) return null;
+
+  const pageIds = inspection.picklist.photoIds;
+  const lineCount = inspection.picklist.lineItems.length;
+  const goNext = () => navigate(`/inspection/${inspection.id}/verify`);
 
   return (
     <main style={{ maxWidth: 560 }}>
@@ -130,29 +133,52 @@ export function CapturePicklistRoute() {
         </div>
       </div>
 
-      <div
-        style={{
-          aspectRatio: '4 / 3',
-          background: 'var(--surface-tint)',
-          border: '2px dashed var(--rule-soft)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          marginBottom: 20,
-          padding: 24,
-        }}
-      >
-        <div style={{ fontSize: 48, color: 'var(--ink-faint)', marginBottom: 8 }}>⌗</div>
-        <div className="small soft">
-          {analyzing ? 'Analyzing picklist…' : 'No photo yet'}
+      {pageIds.length === 0 ? (
+        <div
+          style={{
+            aspectRatio: '4 / 3',
+            background: 'var(--surface-tint)',
+            border: '2px dashed var(--rule-soft)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            marginBottom: 20,
+            padding: 24,
+          }}
+        >
+          <div style={{ fontSize: 48, color: 'var(--ink-faint)', marginBottom: 8 }}>⌗</div>
+          <div className="small soft">{analyzing ? 'Analyzing picklist…' : 'No pages yet'}</div>
         </div>
-      </div>
+      ) : (
+        <div className="field" style={{ marginBottom: 20 }}>
+          <div className="field__label">
+            {pageIds.length} page{pageIds.length === 1 ? '' : 's'} captured
+            {analyzing ? ' · analyzing…' : ''}
+          </div>
+          <div className="photo-grid">
+            {pageIds.map((pid, i) => (
+              <CapturedPageThumb key={pid} photoId={pid} label={`Page ${i + 1}`} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {lineCount > 0 && (
+        <div className="banner banner--info">
+          <span className="banner__icon">✨</span>
+          <div className="banner__body">
+            <strong>{lineCount} line item{lineCount === 1 ? '' : 's'}</strong> read from the
+            picklist. You'll confirm each one on the next screen.
+          </div>
+        </div>
+      )}
 
       <div className="banner banner--info">
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          Photograph the printed picklist to document it for the inspection record.
+          Photograph the printed picklist. Add a page for each sheet — every page is read
+          for line items, then continue.
         </div>
       </div>
 
@@ -162,12 +188,23 @@ export function CapturePicklistRoute() {
         disabled={analyzing}
         style={{ width: '100%' }}
       >
-        📷 Take photo
+        📷 {pageIds.length === 0 ? 'Take photo' : 'Add another page'}
       </button>
 
+      {pageIds.length > 0 && (
+        <button
+          className="btn btn--lg mt-16"
+          onClick={goNext}
+          disabled={analyzing}
+          style={{ width: '100%' }}
+        >
+          Continue → Verify
+        </button>
+      )}
+
       <div className="center mt-16">
-        <button className="btn btn--ghost" onClick={skipToVerify}>
-          Skip — enter picklist manually
+        <button className="btn btn--ghost" onClick={goNext}>
+          {pageIds.length === 0 ? 'Skip — enter picklist manually' : 'Skip rest'}
         </button>
       </div>
 

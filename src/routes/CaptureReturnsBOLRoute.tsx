@@ -28,7 +28,8 @@ export function CaptureReturnsBOLRoute() {
   }, [id, navigate]);
 
   const capture = useCameraCapture(async (blob) => {
-    const quality = await checkImageQuality(blob);
+    // Document capture — landscape is legitimate, so skip the portrait check.
+    const quality = await checkImageQuality(blob, { allowLandscape: true });
     if (!quality.passed) {
       const previewUrl = URL.createObjectURL(blob);
       setPending({ blob, previewUrl, issues: quality.issues });
