@@ -28,6 +28,7 @@ import { startInspectorsSync } from './shared/services/inspectors';
 import { startStagingLocationsSync } from './services/stagingLocations';
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
+import { SyncRefreshButton } from './components/SyncRefreshButton';
 
 export default function App() {
   useEffect(() => {
@@ -110,10 +111,13 @@ function Shell({ children }: { children: React.ReactNode }) {
     const handleOffline = () => setOnline(false);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    // A manual refresh shouldn't leave a stale count sitting there for 5s.
+    window.addEventListener('loadout-sync-updated', refresh);
     return () => {
       clearInterval(interval);
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('loadout-sync-updated', refresh);
     };
   }, [location.pathname]);
 
@@ -163,6 +167,7 @@ function Shell({ children }: { children: React.ReactNode }) {
                 ? t('shell.pending', '{count} pending', { count: sync.pending + sync.photos })
                 : t('shell.synced', 'Synced')}
             </div>
+            <SyncRefreshButton />
             <LanguageToggle />
           </div>
         </div>

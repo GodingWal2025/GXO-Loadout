@@ -5,10 +5,12 @@ import {
   dbEnqueueSync,
   dbGetPendingSync,
   dbRequeueStalledSync,
+  dbResetFailedSync,
+  dbReenqueueOrphanedPhotos,
   dbUpdateSyncEntry,
   MAX_SYNC_ATTEMPTS,
 } from './db';
-import { processSyncQueue, setApiUrl } from './sync';
+import { processSyncQueue, forceFullSync, setApiUrl } from './sync';
 
 // Reset the persisted stores between tests (the db module memoizes a single
 // connection, so we clear rather than recreate the database).
@@ -70,6 +72,85 @@ describe('sync queue recovery (dbRequeueStalledSync)', () => {
     const requeued = await dbRequeueStalledSync();
     expect(requeued).toBe(0);
     expect(await dbGetPendingSync()).toHaveLength(0);
+  });
+});
+
+describe('manual refresh (forceFullSync)', () => {
+  it('revives an entry the automatic loop gave up on', async () => {
+    await dbEnqueueSync({ type: 'inspection-save', inspectionId: 'insp-dead' });
+    await markStatus('insp-dead', 'failed', MAX_SYNC_ATTEMPTS);
+
+    // The automatic loop leaves it stranded...
+    expect(await dbRequeueStalledSync()).toBe(0);
+
+    // ...but an explicit refresh resets the counter and retries it.
+    expect(await dbResetFailedSync()).toBe(1);
+    const pending = await dbGetPendingSync();
+    expect(pending).toHaveLength(1);
+    expect(pending[0].attempts).toBe(0);
+  });
+
+  it('re-enqueues an un-uploaded photo that lost its queue entry', async () => {
+    const db = await getDB();
+    await db.put('photoBlobs', {
+      photoId: 'photo-orphan',
+      inspectionId: 'insp-5',
+      blob: new Blob(['x']),
+      capturedAt: '2026-07-15T00:00:00.000Z',
+      uploaded: false,
+    } as any);
+    // An already-uploaded blob must not be re-queued.
+    await db.put('photoBlobs', {
+      photoId: 'photo-done',
+      inspectionId: 'insp-5',
+      blob: new Blob(['y']),
+      capturedAt: '2026-07-15T00:00:00.000Z',
+      uploaded: true,
+    } as any);
+
+    expect(await dbReenqueueOrphanedPhotos()).toBe(1);
+    const pending = await dbGetPendingSync();
+    expect(pending).toHaveLength(1);
+    expect(pending[0].photoId).toBe('photo-orphan');
+
+    // Idempotent: a second pass sees the entry it just created.
+    expect(await dbReenqueueOrphanedPhotos()).toBe(0);
+  });
+
+  it('rejects when the server is unreachable so the UI can report it', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Load failed'); }));
+    setApiUrl('');
+    await expect(forceFullSync()).rejects.toThrow();
+  });
+
+  it('pulls cloud inspections and drains the queue in one pass', async () => {
+    const db = await getDB();
+    await db.put('inspections', {
+      id: 'insp-6', siteId: 'S1', status: 'IN_PROGRESS', lastEditedAt: '2026-07-15T00:00:00.000Z',
+    } as any);
+    await dbEnqueueSync({ type: 'inspection-save', inspectionId: 'insp-6' });
+    await markStatus('insp-6', 'failed', MAX_SYNC_ATTEMPTS);
+
+    vi.stubGlobal('fetch', vi.fn(async (url: any) => ({
+      ok: true,
+      status: 200,
+      json: async () =>
+        String(url).includes('/api/inspections')
+          ? { resources: [{ id: 'insp-cloud', siteId: 'S1', status: 'COMPLETED', lastEditedAt: '2026-07-20T00:00:00.000Z' }] }
+          : { success: true },
+    } as any)));
+
+    // Tests run in node, so the UI-nudge events have nowhere to go.
+    vi.stubGlobal('window', { dispatchEvent: vi.fn() });
+
+    setApiUrl('');
+    const result = await forceFullSync();
+
+    expect(result.pulled).toBe(1);
+    expect(result.revived).toBe(1);
+    expect(result.stillPending).toBe(0);
+    expect(await db.get('inspections', 'insp-cloud')).toBeTruthy();
+    expect(await db.getAll('syncQueue')).toHaveLength(0);
   });
 });
 

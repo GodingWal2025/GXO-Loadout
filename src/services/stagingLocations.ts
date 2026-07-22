@@ -75,3 +75,8 @@ export function deleteStagingLocation(id: string): void {
 export function startStagingLocationsSync(): void {
   refSync.start();
 }
+
+/** One-shot pull/merge/push, for the manual refresh button. */
+export function syncStagingLocationsNow(): Promise<void> {
+  return refSync.sync();
+}

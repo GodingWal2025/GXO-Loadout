@@ -65,3 +65,8 @@ export function deactivateInspector(id: string): void {
 export function startInspectorsSync(): void {
   refSync.start();
 }
+
+/** One-shot pull/merge/push, for the manual refresh button. */
+export function syncInspectorsNow(): Promise<void> {
+  return refSync.sync();
+}

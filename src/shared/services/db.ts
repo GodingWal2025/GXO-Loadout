@@ -300,6 +300,63 @@ export async function dbRequeueStalledSync(): Promise<number> {
   return requeued;
 }
 
+/**
+ * Manual-refresh counterpart to dbRequeueStalledSync: revive EVERY stranded
+ * entry, including ones that burned through MAX_SYNC_ATTEMPTS, and reset their
+ * attempt counters. A device that was away while the API was misbehaving can
+ * exhaust the cap on records that are perfectly fine — the automatic loop then
+ * never touches them again, and the data sits on the device forever. Tapping
+ * refresh is an explicit "try again anyway".
+ */
+export async function dbResetFailedSync(): Promise<number> {
+  const db = await getDB();
+  const tx = db.transaction('syncQueue', 'readwrite');
+  const all = await tx.store.getAll();
+  let revived = 0;
+  for (const entry of all) {
+    if (entry.id === undefined) continue;
+    if (entry.status === 'failed' || entry.status === 'in-progress') {
+      entry.status = 'pending';
+      entry.attempts = 0;
+      await tx.store.put(entry);
+      revived++;
+    }
+  }
+  await tx.done;
+  return revived;
+}
+
+/**
+ * Re-enqueue photos whose blob is still un-uploaded but which have no sync
+ * queue entry left. That happens when an entry was dropped (the queue deletes
+ * 'done' records) or lost with a partially-written transaction — the blob then
+ * shows up in the "pending" badge forever with nothing driving it. Returns the
+ * number of uploads re-queued.
+ */
+export async function dbReenqueueOrphanedPhotos(): Promise<number> {
+  const db = await getDB();
+  const [blobs, queue] = await Promise.all([
+    db.getAll('photoBlobs'),
+    db.getAll('syncQueue'),
+  ]);
+  const queuedPhotoIds = new Set(
+    queue.filter((e) => e.type === 'photo-upload' && e.photoId).map((e) => e.photoId)
+  );
+
+  let requeued = 0;
+  for (const record of blobs) {
+    if (record.uploaded) continue;
+    if (queuedPhotoIds.has(record.photoId)) continue;
+    await dbEnqueueSync({
+      type: 'photo-upload',
+      inspectionId: record.inspectionId,
+      photoId: record.photoId,
+    });
+    requeued++;
+  }
+  return requeued;
+}
+
 export async function dbUpdateSyncEntry(entry: SyncQueueEntry): Promise<void> {
   const db = await getDB();
   await db.put('syncQueue', entry);

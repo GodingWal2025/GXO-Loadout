@@ -7,6 +7,17 @@ export const shell: Record<string, string> = {
   'shell.offline': 'Sin conexión',
   'shell.pending': '{count} pendientes',
   'shell.synced': 'Sincronizado',
+  'shell.refresh': 'Actualizar datos',
+  'shell.refreshDone': 'Actualizado',
+  'shell.refreshPulled': '{count} inspección(es) de la nube',
+  'shell.refreshRetried': '{count} elemento(s) atascado(s) reintentado(s)',
+  'shell.refreshStillPending': '{count} elemento(s) aún subiendo',
+  'shell.refreshFailed': 'No se pudo conectar con el servidor',
+  'shell.refreshFailedHint':
+    'Su trabajo está guardado en este dispositivo y se sincronizará cuando haya conexión.',
+  'shell.reloadApp': 'Recargar app',
+  'shell.updateReady': 'Hay una versión más reciente de la app lista.',
+  'shell.updateNow': 'Actualizar y recargar',
 
   // ---- Home ----
   'home.title': 'Inspecciones',

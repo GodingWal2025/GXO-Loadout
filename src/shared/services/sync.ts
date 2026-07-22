@@ -1,6 +1,8 @@
 import {
   dbGetPendingSync,
   dbRequeueStalledSync,
+  dbResetFailedSync,
+  dbReenqueueOrphanedPhotos,
   dbUpdateSyncEntry,
   dbGetInspection,
   dbGetPhotoBlob,
@@ -11,8 +13,11 @@ import {
 } from './db';
 import type { InspectionPhoto } from '../types/inspection';
 
-let isSyncing = false;
-let isPulling = false;
+// In-flight promises rather than plain booleans: a manual refresh that lands
+// while a background cycle is running must await the real work instead of
+// returning instantly and reporting a success it never performed.
+let syncPromise: Promise<void> | null = null;
+let pullPromise: Promise<number> | null = null;
 let apiUrl = '';
 
 const PUSH_INTERVAL_MS = 10_000;
@@ -27,10 +32,16 @@ export function setApiUrl(url: string): void {
 // (navigator.onLine can be stuck false; the probe can time out on a cold
 // launch), and when they misfired the app never synced. Instead we just attempt
 // the real request — if it fails, the retry queue picks it up next cycle.
-export async function processSyncQueue(): Promise<void> {
-  if (isSyncing) return;
-  isSyncing = true;
+export function processSyncQueue(): Promise<void> {
+  if (!syncPromise) {
+    syncPromise = runSyncQueue().finally(() => {
+      syncPromise = null;
+    });
+  }
+  return syncPromise;
+}
 
+async function runSyncQueue(): Promise<void> {
   try {
     // Bring previously-failed and orphaned in-progress entries back into the
     // queue. Without this, anything enqueued while the API was unreachable
@@ -177,47 +188,94 @@ export async function processSyncQueue(): Promise<void> {
       }
     }
     await tx.done;
-    
+
   } catch (err) {
     console.error('[loadout-sync] Error running sync queue:', err);
-  } finally {
-    isSyncing = false;
   }
 }
 
-export async function pullInspectionsFromServer(): Promise<void> {
-  if (isPulling) return;
-  isPulling = true;
-
-  try {
-    // cache: 'no-store' matters on iOS/iPadOS Safari, which otherwise happily
-    // serves a stale cached GET so the device never sees newly-synced data.
-    const response = await fetch(`${apiUrl}/api/inspections`, { cache: 'no-store' });
-    if (!response.ok) throw new Error(`Failed to fetch inspections: ${response.status}`);
-
-    const { resources } = await response.json();
-    if (Array.isArray(resources)) {
-      for (const inspection of resources) {
-        await upsertDownloadedInspection(inspection);
-      }
-      // Only log and nudge the UI when the server actually returned data, so an
-      // empty server doesn't spam the console or trigger needless re-renders.
-      if (resources.length > 0) {
-        console.log(`[loadout-sync] Pulled ${resources.length} inspection(s) from server.`);
-        window.dispatchEvent(new CustomEvent('loadout-sync-updated'));
-      }
-    }
-  } catch (error) {
-    console.error('[loadout-sync] Error pulling inspections:', error);
-  } finally {
-    isPulling = false;
+/**
+ * Pull cloud inspections into IndexedDB. Rejects if the server is unreachable
+ * or errors, so a manual refresh can tell the user it failed; background
+ * callers swallow it via pullInBackground().
+ */
+export function pullInspectionsFromServer(): Promise<number> {
+  if (!pullPromise) {
+    pullPromise = runPull().finally(() => {
+      pullPromise = null;
+    });
   }
+  return pullPromise;
+}
+
+function pullInBackground(): void {
+  void pullInspectionsFromServer().catch((error) => {
+    console.error('[loadout-sync] Error pulling inspections:', error);
+  });
+}
+
+async function runPull(): Promise<number> {
+  // cache: 'no-store' matters on iOS/iPadOS Safari, which otherwise happily
+  // serves a stale cached GET so the device never sees newly-synced data.
+  const response = await fetch(`${apiUrl}/api/inspections`, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`Failed to fetch inspections: ${response.status}`);
+
+  const { resources } = await response.json();
+  if (!Array.isArray(resources)) return 0;
+
+  for (const inspection of resources) {
+    await upsertDownloadedInspection(inspection);
+  }
+  // Only log and nudge the UI when the server actually returned data, so an
+  // empty server doesn't spam the console or trigger needless re-renders.
+  if (resources.length > 0) {
+    console.log(`[loadout-sync] Pulled ${resources.length} inspection(s) from server.`);
+    window.dispatchEvent(new CustomEvent('loadout-sync-updated'));
+  }
+  return resources.length;
+}
+
+export interface ForceSyncResult {
+  pulled: number;
+  revived: number;
+  photosRequeued: number;
+  stillPending: number;
+}
+
+/**
+ * Everything the automatic loop won't do on its own, for the "device that has
+ * been away for weeks" case:
+ *   - revive entries that exhausted MAX_SYNC_ATTEMPTS (the loop gives up on
+ *     those permanently, even when the failures were a transient API outage)
+ *   - re-enqueue un-uploaded photos that lost their queue entry
+ *   - pull first so local records are reconciled against the cloud, then push
+ * Rejects if the pull fails, so the UI can show "couldn't reach the server"
+ * rather than a green checkmark.
+ */
+export async function forceFullSync(): Promise<ForceSyncResult> {
+  const [revived, photosRequeued] = await Promise.all([
+    dbResetFailedSync(),
+    dbReenqueueOrphanedPhotos(),
+  ]);
+
+  const pulled = await pullInspectionsFromServer();
+  await processSyncQueue();
+
+  const stillPending = (await dbGetPendingSync()).length;
+
+  console.log(
+    `[loadout-sync] Manual refresh: pulled ${pulled}, revived ${revived}, ` +
+    `re-queued ${photosRequeued} photo(s), ${stillPending} still pending.`
+  );
+  window.dispatchEvent(new CustomEvent('loadout-sync-updated'));
+
+  return { pulled, revived, photosRequeued, stillPending };
 }
 
 export function startBackgroundSync(): void {
   const fullSync = () => {
-    pullInspectionsFromServer();
-    processSyncQueue();
+    pullInBackground();
+    void processSyncQueue();
   };
 
   // Initial sync on load.
@@ -226,8 +284,8 @@ export function startBackgroundSync(): void {
   // Push often; pull on a slower cadence so the device still recovers even if
   // the one-shot startup pull was missed (e.g. launched before the network was
   // ready) — the previous one-shot-only pull is exactly why iPads started fresh.
-  setInterval(processSyncQueue, PUSH_INTERVAL_MS);
-  setInterval(pullInspectionsFromServer, PULL_INTERVAL_MS);
+  setInterval(() => void processSyncQueue(), PUSH_INTERVAL_MS);
+  setInterval(pullInBackground, PULL_INTERVAL_MS);
 
   // Re-sync when connectivity returns or the app is brought back to the
   // foreground. The visibility handler is essential on iOS/iPadOS, where

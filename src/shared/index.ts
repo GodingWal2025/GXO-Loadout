@@ -27,6 +27,8 @@ export {
   dbEnqueueSync,
   dbGetPendingSync,
   dbRequeueStalledSync,
+  dbResetFailedSync,
+  dbReenqueueOrphanedPhotos,
   dbUpdateSyncEntry,
   dbGetPendingSyncCount,
   dbGetUnuploadedPhotoCount,
@@ -37,8 +39,11 @@ export type { SyncQueueEntry } from './services/db';
 export {
   startBackgroundSync,
   processSyncQueue,
+  pullInspectionsFromServer,
+  forceFullSync,
   setApiUrl,
 } from './services/sync';
+export type { ForceSyncResult } from './services/sync';
 
 export { analyzePicklistPhoto } from './services/ocr';
 export type { OcrLineItem } from './services/ocr';
@@ -50,6 +55,7 @@ export {
   updateInspector,
   deactivateInspector,
   startInspectorsSync,
+  syncInspectorsNow,
 } from './services/inspectors';
 
 export {
