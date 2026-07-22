@@ -241,9 +241,54 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
         }
 
-        const poller = await client.beginAnalyzeDocument("prebuilt-layout", buffer);
+        const modelId = process.env.DOC_INTEL_MODEL_ID || "PickList";
+        context.log(`Using Document Intelligence model: ${modelId}`);
+        const poller = await client.beginAnalyzeDocument(modelId, buffer);
         const result = await poller.pollUntilDone();
-        const lineItems = extractLineItemsFromTables(result.tables as any[]);
+
+        let lineItems: OcrLineItem[] = [];
+
+        // 1. Try to extract from the Custom Model's LineItems table field
+        const doc = result.documents && result.documents[0];
+        if (doc && doc.fields && doc.fields.LineItems && doc.fields.LineItems.type === "array") {
+            context.log("Extracting from Custom Model LineItems field...");
+            const rowFields = doc.fields.LineItems.values || [];
+            for (const row of rowFields) {
+                if (row.type === "object" && row.value) {
+                    const rowObj = row.value as any;
+
+                    // The field names must match what was labeled in Studio
+                    const batchCodeRaw = rowObj.BatchCode?.content || rowObj.BatchCode?.valueString || null;
+                    const sku = rowObj.SKU?.content || rowObj.SKU?.valueString || null;
+                    const description = rowObj.Description?.content || rowObj.Description?.valueString || null;
+                    
+                    // Quantity might be a number or a string depending on how the model parsed it
+                    let expectedQuantity = rowObj.Quantity?.valueNumber ?? null;
+                    if (expectedQuantity === null) {
+                        expectedQuantity = parseQuantity(rowObj.Quantity?.content || rowObj.Quantity?.valueString || null);
+                    }
+                    
+                    const uomRaw = rowObj.UOM?.content || rowObj.UOM?.valueString || null;
+
+                    const item: OcrLineItem = {
+                        batchCode: batchCodeRaw ? batchCodeRaw.trim().toUpperCase() : null,
+                        sku: sku ? sku.trim() : null,
+                        description: description ? description.trim() : null,
+                        expectedQuantity,
+                        uom: normalizeUom(uomRaw),
+                    };
+
+                    if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
+                        lineItems.push(item);
+                    }
+                }
+            }
+        } 
+        // 2. Fallback to generic table extraction (e.g. if using prebuilt-layout)
+        else {
+            context.log("LineItems custom field not found, falling back to prebuilt-layout table extraction...");
+            lineItems = extractLineItemsFromTables(result.tables as any[]);
+        }
 
         const debug = request.query.get("debug") === "1";
         return {
