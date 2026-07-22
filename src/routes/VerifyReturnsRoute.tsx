@@ -5,6 +5,8 @@ import { dbGetInspection } from '../shared';
 import { useInspection } from '../shared';
 import type { Inspection, Suggestable, ReturnsBOLData } from '../shared';
 import { SuggestableField } from '../shared';
+import { StepBackLink } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function VerifyReturnsRoute() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +34,7 @@ function VerifyReturnsInner({
   onVerified: () => void;
 }) {
   const { inspection, dispatch } = useInspection(initial);
+  const t = useT();
   const returnsBol = inspection.returnsBol;
 
   // Auto-initialize a default delivery if none exist
@@ -64,13 +67,16 @@ function VerifyReturnsInner({
 
   return (
     <main>
+      <StepBackLink to={`/inspection/${inspection.id}/capture-returns-staging`} />
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Verify <em>returns data</em>
+            {t('verifyReturns.titleLead', 'Verify')}{' '}
+            <em>{t('verifyReturns.titleEm', 'returns data')}</em>
           </h1>
           <div className="page-head__sub">
-            Step 4 of 5 · Confirm expected quantities
+            {t('verifyReturns.subtitle', 'Step 4 of 5 · Confirm expected quantities')}
           </div>
         </div>
       </div>
@@ -78,18 +84,23 @@ function VerifyReturnsInner({
       <div className="banner banner--warn">
         <span className="banner__icon">⚠</span>
         <div className="banner__body">
-          Verify each quantity carefully. These numbers will be cross-referenced against your physical counts during scanning.
+          {t(
+            'verifyReturns.warn',
+            'Verify each quantity carefully. These numbers will be cross-referenced against your physical counts during scanning.'
+          )}
         </div>
       </div>
 
       {/* ===== Load header ===== */}
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">BOL <em>details</em></h2>
+          <h2 className="section__title">
+            {t('verifyReturns.bolLead', 'BOL')} <em>{t('verifyReturns.bolEm', 'details')}</em>
+          </h2>
         </div>
         <div className="field-row">
           <SuggestableField
-            label="Returns BOL #"
+            label={t('verifyReturns.bolNumber', 'Returns BOL #')}
             field={returnsBol.bolNumber}
             mono
             placeholder="835"
@@ -105,18 +116,21 @@ function VerifyReturnsInner({
       {/* ===== Expected Quantities ===== */}
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Expected <em>quantities</em></h2>
+          <h2 className="section__title">
+            {t('verifyReturns.expectedLead', 'Expected')}{' '}
+            <em>{t('verifyReturns.expectedEm', 'quantities')}</em>
+          </h2>
         </div>
 
         <div className="card">
           <div className="field-row" style={{ marginBottom: 16 }}>
             <ReturnsQtyField
-              label="Wooden Pallets (54x40)"
+              label={t('verifyReturns.pallets54x40', 'Wooden Pallets (54x40)')}
               field={returnsBol.expectedPallets54x40}
               onChange={(field) => updateField({ expectedPallets54x40: field })}
             />
             <ReturnsQtyField
-              label="Wooden Pallets (40x40)"
+              label={t('verifyReturns.pallets40x40', 'Wooden Pallets (40x40)')}
               field={returnsBol.expectedPallets40x40}
               onChange={(field) => updateField({ expectedPallets40x40: field })}
             />
@@ -124,12 +138,12 @@ function VerifyReturnsInner({
           
           <div className="field-row" style={{ marginBottom: 16 }}>
             <ReturnsQtyField
-              label="Empty SeedPaks"
+              label={t('verifyReturns.emptySeedPaks', 'Empty SeedPaks')}
               field={returnsBol.expectedEmptySeedPaks}
               onChange={(field) => updateField({ expectedEmptySeedPaks: field })}
             />
             <ReturnsQtyField
-              label="Product SeedPaks"
+              label={t('verifyReturns.productSeedPaks', 'Product SeedPaks')}
               field={returnsBol.expectedProductSeedPaks}
               onChange={(field) => updateField({ expectedProductSeedPaks: field })}
             />
@@ -137,7 +151,7 @@ function VerifyReturnsInner({
 
           <div className="field-row">
             <ReturnsQtyField
-              label="Bagged Product (pallets)"
+              label={t('verifyReturns.baggedProduct', 'Bagged Product (pallets)')}
               field={returnsBol.expectedBaggedProduct}
               onChange={(field) => updateField({ expectedBaggedProduct: field })}
             />
@@ -147,10 +161,10 @@ function VerifyReturnsInner({
 
       <div className="flex gap-8" style={{ justifyContent: 'flex-end', marginTop: 24 }}>
         <button className="btn btn--ghost" onClick={() => window.history.back()}>
-          ← Back
+          {t('verifyReturns.back', '← Back')}
         </button>
         <button className="btn btn--accent btn--lg" onClick={confirm} disabled={!canConfirm}>
-          ✓ Confirm &amp; start scanning
+          {t('verifyReturns.confirmStart', '✓ Confirm & start scanning')}
         </button>
       </div>
     </main>
@@ -164,9 +178,10 @@ function ShipDateField({
   field: Suggestable<string>;
   onChange: (next: Suggestable<string>) => void;
 }) {
+  const t = useT();
   return (
     <div className="field">
-      <div className="field__label">Received date</div>
+      <div className="field__label">{t('verifyReturns.receivedDate', 'Received date')}</div>
       <input
         type="date"
         value={field.value || ''}

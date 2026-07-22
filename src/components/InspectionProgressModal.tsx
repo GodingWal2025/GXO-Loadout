@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import type { Inspection } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
+import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
   inspection: Inspection;
@@ -8,6 +9,7 @@ interface Props {
 }
 
 export function InspectionProgressModal({ inspection, onClose }: Props) {
+  const t = useT();
   const [search, setSearch] = useState('');
   const [filterDelivery, setFilterDelivery] = useState('all');
   const [filterStop, setFilterStop] = useState('all');
@@ -112,15 +114,15 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
       >
         <div className="modal__head">
           <h2 className="modal__title">
-            Inspection <em>progress</em>
+            {t('progress.titleLead', 'Inspection')} <em>{t('progress.titleEm', 'progress')}</em>
           </h2>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn btn--outline btn--sm"
               onClick={() => downloadInspectionPdf(inspection)}
-              title="Download batch summary as PDF"
+              title={t('progress.downloadPdfTitle', 'Download batch summary as PDF')}
             >
-              ⤓ Download PDF
+              {t('progress.downloadPdf', '⤓ Download PDF')}
             </button>
             <button className="btn btn--ghost btn--sm" onClick={onClose}>
               ✕
@@ -130,11 +132,21 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
 
         {/* Summary pills */}
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-          <div className="pill pill--info">{inspection.pallets.length} pallets scanned</div>
-          <div className="pill pill--info">{totalBags} total bags</div>
-          <div className="pill pill--info">{uniqueBatches.size} unique batches</div>
+          <div className="pill pill--info">
+            {t('progress.palletsScanned', '{count} pallets scanned', {
+              count: inspection.pallets.length,
+            })}
+          </div>
+          <div className="pill pill--info">
+            {t('progress.totalBags', '{count} total bags', { count: totalBags })}
+          </div>
+          <div className="pill pill--info">
+            {t('progress.uniqueBatches', '{count} unique batches', { count: uniqueBatches.size })}
+          </div>
           {inspection.flaggedItemsCount > 0 && (
-            <div className="pill pill--warn">⚑ {inspection.flaggedItemsCount} flagged</div>
+            <div className="pill pill--warn">
+              {t('progress.flagged', '⚑ {count} flagged', { count: inspection.flaggedItemsCount })}
+            </div>
           )}
         </div>
 
@@ -142,7 +154,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
         <div className="field" style={{ marginBottom: 12 }}>
           <input
             type="text"
-            placeholder="Search batch code or pallet number…"
+            placeholder={t('progress.searchPlaceholder', 'Search batch code or pallet number…')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             autoFocus
@@ -157,9 +169,9 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
               onChange={(e) => setFilterDelivery(e.target.value)}
               style={{ minHeight: '38px', padding: '6px 10px' }}
             >
-              <option value="all">All Deliveries</option>
+              <option value="all">{t('progress.allDeliveries', 'All Deliveries')}</option>
               {deliveriesList.map(d => (
-                <option key={d} value={d}>Delivery {d}</option>
+                <option key={d} value={d}>{t('progress.deliveryOption', 'Delivery {n}', { n: d })}</option>
               ))}
             </select>
           </div>
@@ -170,9 +182,9 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                 onChange={(e) => setFilterStop(e.target.value)}
                 style={{ minHeight: '38px', padding: '6px 10px' }}
               >
-                <option value="all">All Stops</option>
+                <option value="all">{t('progress.allStops', 'All Stops')}</option>
                 {stopsList.map(s => (
-                  <option key={s} value={String(s)}>Stop {s}</option>
+                  <option key={s} value={String(s)}>{t('progress.stopOption', 'Stop {n}', { n: s })}</option>
                 ))}
               </select>
             </div>
@@ -183,7 +195,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
               onChange={(e) => setFilterType(e.target.value)}
               style={{ minHeight: '38px', padding: '6px 10px' }}
             >
-              <option value="all">All Pallet Types</option>
+              <option value="all">{t('progress.allPalletTypes', 'All Pallet Types')}</option>
               {typesList.map(t => (
                 <option key={t} value={t}>{t}</option>
               ))}
@@ -197,13 +209,13 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
             <div className="empty" style={{ padding: 24 }}>
               <div className="empty__title">
                 {search || filterDelivery !== 'all' || filterStop !== 'all' || filterType !== 'all'
-                  ? 'No matching batches'
-                  : 'No pallets scanned yet'}
+                  ? t('progress.noMatches', 'No matching batches')
+                  : t('progress.noPallets', 'No pallets scanned yet')}
               </div>
               <div className="empty__sub">
                 {search || filterDelivery !== 'all' || filterStop !== 'all' || filterType !== 'all'
-                  ? 'Try relaxing your filter criteria.'
-                  : 'Scan pallets to see progress here.'}
+                  ? t('progress.noMatchesHint', 'Try relaxing your filter criteria.')
+                  : t('progress.noPalletsHint', 'Scan pallets to see progress here.')}
               </div>
             </div>
           ) : (
@@ -211,13 +223,13 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Pallet</th>
-                    <th>Delivery</th>
-                    {inspection.type !== 'returns' && <th>Stop</th>}
-                    <th>Type</th>
-                    <th>Batch Code</th>
-                    <th className="right">Bags</th>
-                    <th>Scanned by</th>
+                    <th>{t('progress.colPallet', 'Pallet')}</th>
+                    <th>{t('progress.colDelivery', 'Delivery')}</th>
+                    {inspection.type !== 'returns' && <th>{t('progress.colStop', 'Stop')}</th>}
+                    <th>{t('progress.colType', 'Type')}</th>
+                    <th>{t('progress.colBatchCode', 'Batch Code')}</th>
+                    <th className="right">{t('progress.colBags', 'Bags')}</th>
+                    <th>{t('progress.colScannedBy', 'Scanned by')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -245,15 +257,21 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
               className="xs soft"
               style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}
             >
-              Handoff timeline
+              {t('progress.handoffTimeline', 'Handoff timeline')}
             </div>
             {inspection.handoffLog.map((entry, i) => (
               <div key={i} className="small" style={{ marginBottom: 4 }}>
-                <strong>{entry.fromInspector || 'Started'}</strong> → <strong>{entry.toInspector}</strong>{' '}
+                <strong>{entry.fromInspector || t('progress.started', 'Started')}</strong> →{' '}
+                <strong>{entry.toInspector}</strong>{' '}
                 <span className="xs soft">
                   {new Date(entry.at).toLocaleString()}
                   {entry.palletsCompletedByPrevious.length > 0 && (
-                    <> · completed pallets {entry.palletsCompletedByPrevious.join(', ')}</>
+                    <>
+                      {' '}
+                      {t('progress.completedPallets', '· completed pallets {list}', {
+                        list: entry.palletsCompletedByPrevious.join(', '),
+                      })}
+                    </>
                   )}
                 </span>
               </div>

@@ -6,9 +6,12 @@ import { useCameraCapture } from '../shared';
 
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
+import { StepBackLink } from '../shared';
 import type { Inspection, InspectionPhoto } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function CaptureReturnsBOLRoute() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -110,13 +113,15 @@ export function CaptureReturnsBOLRoute() {
 
   return (
     <main style={{ maxWidth: 560 }}>
+      <StepBackLink to={`/inspection/${inspection.id}/details`} />
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Capture <em>Returns BOL</em>
+            {t('returnsBol.titleLead', 'Capture')} <em>{t('returnsBol.titleEm', 'Returns BOL')}</em>
           </h1>
           <div className="page-head__sub">
-            Step 2 of 5 · Photograph the Returns BOL & Packing List
+            {t('returnsBol.subtitle', 'Step 2 of 5 · Photograph the Returns BOL & Packing List')}
           </div>
         </div>
       </div>
@@ -136,14 +141,16 @@ export function CaptureReturnsBOLRoute() {
       >
         <div style={{ fontSize: 48, color: 'var(--ink-faint)', marginBottom: 8 }}>⌗</div>
         <div className="small soft">
-          {analyzing ? 'Analyzing Returns BOL…' : 'No photo yet'}
+          {analyzing
+            ? t('returnsBol.analyzing', 'Analyzing Returns BOL…')
+            : t('returnsBol.noPhoto', 'No photo yet')}
         </div>
       </div>
 
       <div className="banner banner--info">
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          Please take a picture of the Returns BOL.
+          {t('returnsBol.hint', 'Please take a picture of the Returns BOL.')}
         </div>
       </div>
 
@@ -153,12 +160,12 @@ export function CaptureReturnsBOLRoute() {
         disabled={analyzing}
         style={{ width: '100%' }}
       >
-        📷 Take photo
+        📷 {t('returnsBol.takePhoto', 'Take photo')}
       </button>
 
       <div className="center mt-16">
         <button className="btn btn--ghost" onClick={skipToVerify}>
-          Skip — enter data manually
+          {t('returnsBol.skipManual', 'Skip — enter data manually')}
         </button>
       </div>
 

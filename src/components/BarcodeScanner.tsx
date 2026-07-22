@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
   onResult: (decodedText: string) => void;
@@ -7,6 +8,7 @@ interface Props {
 }
 
 export function BarcodeScanner({ onResult, onClose }: Props) {
+  const t = useT();
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   useEffect(() => {
@@ -63,8 +65,10 @@ export function BarcodeScanner({ onResult, onClose }: Props) {
         background: 'var(--surface)', 
         borderBottom: '1px solid var(--rule-soft)' 
       }}>
-        <h2 style={{ margin: 0, fontSize: '18px' }}>Scan Barcode / QR Code</h2>
-        <button onClick={onClose} className="btn">Close</button>
+        <h2 style={{ margin: 0, fontSize: '18px' }}>
+          {t('scanner.title', 'Scan Barcode / QR Code')}
+        </h2>
+        <button onClick={onClose} className="btn">{t('scanner.close', 'Close')}</button>
       </div>
       <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
         <div id="reader" style={{ width: '100%', maxWidth: '600px', margin: '0 auto', background: '#000' }}></div>

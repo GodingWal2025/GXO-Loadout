@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useT } from '../i18n/LanguageContext';
 
 interface Props {
   url?: string;
@@ -13,6 +14,8 @@ interface Props {
  * immediately re-opening the camera — retaking is now an explicit button.
  */
 export function PhotoLightbox({ url, label, onClose, onRetake }: Props) {
+  const t = useT();
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -49,7 +52,7 @@ export function PhotoLightbox({ url, label, onClose, onRetake }: Props) {
         {url ? (
           <img
             src={url}
-            alt={label || 'Photo'}
+            alt={label || t('lightbox.photoAlt', 'Photo')}
             style={{
               maxWidth: '95vw',
               maxHeight: '75vh',
@@ -59,7 +62,9 @@ export function PhotoLightbox({ url, label, onClose, onRetake }: Props) {
             }}
           />
         ) : (
-          <div style={{ color: '#fff', padding: 40 }}>Photo unavailable on this device</div>
+          <div style={{ color: '#fff', padding: 40 }}>
+            {t('lightbox.unavailable', 'Photo unavailable on this device')}
+          </div>
         )}
         <div style={{ display: 'flex', gap: 12 }}>
           {onRetake && (
@@ -70,11 +75,11 @@ export function PhotoLightbox({ url, label, onClose, onRetake }: Props) {
                 onRetake();
               }}
             >
-              📷 Retake photo
+              {t('lightbox.retake', '📷 Retake photo')}
             </button>
           )}
           <button className="btn" style={{ background: '#fff' }} onClick={onClose}>
-            ✕ Close
+            {t('lightbox.close', '✕ Close')}
           </button>
         </div>
       </div>

@@ -11,6 +11,7 @@
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Inspection } from '../types/inspection';
+import { emptySuggestable } from '../types/inspection';
 
 interface InspectionDB extends DBSchema {
   inspections: {
@@ -115,9 +116,40 @@ export async function upsertDownloadedInspection(inspection: Inspection): Promis
   await db.put('inspections', inspection);
 }
 
+/**
+ * Picklist lines used to carry a single `productName` that held whichever of
+ * the material number or the material description the OCR happened to grab.
+ * Those two are separate fields now. Move the legacy value into `description`
+ * (the safer of the two — a description in the SKU box would look like a
+ * confirmed material number) and leave the SKU empty for the verifier.
+ *
+ * Applied on read rather than as a one-shot upgrade so records arriving later
+ * from sync are migrated too. In-progress inspections keep their data; nothing
+ * is wiped.
+ */
+function migrateInspection(inspection: Inspection | undefined): Inspection | undefined {
+  if (!inspection?.picklist?.lineItems?.length) return inspection;
+  let changed = false;
+
+  const lineItems = inspection.picklist.lineItems.map((li) => {
+    if (li.sku !== undefined && li.description !== undefined) return li;
+    changed = true;
+    const legacy = li.productName;
+    const { productName: _drop, ...rest } = li;
+    return {
+      ...rest,
+      sku: li.sku ?? emptySuggestable<string>(),
+      description: li.description ?? legacy ?? emptySuggestable<string>(),
+    };
+  });
+
+  if (!changed) return inspection;
+  return { ...inspection, picklist: { ...inspection.picklist, lineItems } };
+}
+
 export async function dbGetInspection(id: string): Promise<Inspection | undefined> {
   const db = await getDB();
-  return db.get('inspections', id);
+  return migrateInspection(await db.get('inspections', id));
 }
 
 export async function dbListAllInspections(): Promise<Inspection[]> {

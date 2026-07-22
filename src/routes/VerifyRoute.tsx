@@ -5,6 +5,8 @@ import { dbGetInspection } from '../shared';
 import { useInspection } from '../shared';
 import type { Inspection, Suggestable, PicklistLineItemEntry } from '../shared';
 import { SuggestableField } from '../shared';
+import { StepBackLink } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function VerifyRoute() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +34,7 @@ function VerifyInner({
   onVerified: () => void;
 }) {
   const { inspection, dispatch } = useInspection(initial);
+  const t = useT();
 
   const confirm = () => {
     dispatch({ type: 'VERIFY_PICKLIST', verifiedBy: inspection.startedBy || 'unknown' });
@@ -52,7 +55,15 @@ function VerifyInner({
   };
 
   const removeDelivery = (deliveryId: string) => {
-    if (!window.confirm('Remove this delivery? Any line items assigned to it will need reassignment.')) return;
+    if (
+      !window.confirm(
+        t(
+          'verify.removeDeliveryConfirm',
+          'Remove this delivery? Any line items assigned to it will need reassignment.'
+        )
+      )
+    )
+      return;
     dispatch({ type: 'REMOVE_DELIVERY', id: deliveryId });
   };
 
@@ -68,13 +79,15 @@ function VerifyInner({
 
   return (
     <main>
+      <StepBackLink to={`/inspection/${inspection.id}/capture-picklist`} />
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Verify <em>load data</em>
+            {t('verify.titleLead', 'Verify')} <em>{t('verify.titleEm', 'load data')}</em>
           </h1>
           <div className="page-head__sub">
-            Step 4 of 4 · Confirm data and reconcile picklist vs BOL
+            {t('verify.subtitle', 'Step 4 of 4 · Confirm data and reconcile picklist vs BOL')}
           </div>
         </div>
       </div>
@@ -82,8 +95,9 @@ function VerifyInner({
       <div className="banner banner--warn">
         <span className="banner__icon">⚠</span>
         <div className="banner__body">
-          Verify each row carefully. <strong>Mistakes here affect the whole inspection.</strong>{' '}
-          Bag counts and batch codes drive every per-pallet check.
+          {t('verify.warnLead', 'Verify each row carefully.')}{' '}
+          <strong>{t('verify.warnStrong', 'Mistakes here affect the whole inspection.')}</strong>{' '}
+          {t('verify.warnTail', 'Bag counts and batch codes drive every per-pallet check.')}
         </div>
       </div>
 
@@ -91,8 +105,11 @@ function VerifyInner({
         <div className="banner banner--danger">
           <span className="banner__icon">✕</span>
           <div className="banner__body">
-            <strong>Load # mismatch.</strong> Picklist says <span className="mono">{picklistLoad}</span>,
-            BOL says <span className="mono">{bolLoad}</span>. These should be the same — pick the correct one.
+            <strong>{t('verify.loadMismatchTitle', 'Load # mismatch.')}</strong>{' '}
+            {t('verify.loadMismatchPicklist', 'Picklist says')}{' '}
+            <span className="mono">{picklistLoad}</span>,{' '}
+            {t('verify.loadMismatchBol', 'BOL says')} <span className="mono">{bolLoad}</span>.{' '}
+            {t('verify.loadMismatchTail', 'These should be the same — pick the correct one.')}
           </div>
         </div>
       )}
@@ -100,11 +117,13 @@ function VerifyInner({
       {/* ===== Load header ===== */}
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Load <em>header</em></h2>
+          <h2 className="section__title">
+            {t('verify.loadHeaderLead', 'Load')} <em>{t('verify.loadHeaderEm', 'header')}</em>
+          </h2>
         </div>
         <div className="field-row">
           <SuggestableField
-            label="Load # (matches BOL #)"
+            label={t('verify.loadNumberLabel', 'Load # (matches BOL #)')}
             field={inspection.picklist.loadNumber}
             mono
             placeholder="835"
@@ -134,7 +153,8 @@ function VerifyInner({
             line: {
               id: generateId(),
               batchCode: emptySuggestable<string>(),
-              productName: emptySuggestable<string>(),
+              sku: emptySuggestable<string>(),
+              description: emptySuggestable<string>(),
               expectedQuantity: emptySuggestable<number>(),
               uom: 'BAG',
               actualQuantity: 0,
@@ -152,10 +172,10 @@ function VerifyInner({
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
-            Deliveries <em>({inspection.bol.deliveries.length})</em>
+            {t('verify.deliveries', 'Deliveries')} <em>({inspection.bol.deliveries.length})</em>
           </h2>
           <button className="btn btn--sm" onClick={addDelivery}>
-            + Add delivery
+            {t('verify.addDelivery', '+ Add delivery')}
           </button>
         </div>
 
@@ -163,15 +183,23 @@ function VerifyInner({
           <span className="banner__icon">i</span>
           <div className="banner__body">
             {inspection.type === 'returns'
-              ? 'One Load can have multiple Delivery #s. Each line item below is assigned to a specific delivery.'
-              : 'One Load can have multiple Delivery #s (for one or many stops). Each line item below is assigned to a specific delivery.'}
+              ? t(
+                  'verify.deliveriesHintReturns',
+                  'One Load can have multiple Delivery #s. Each line item below is assigned to a specific delivery.'
+                )
+              : t(
+                  'verify.deliveriesHint',
+                  'One Load can have multiple Delivery #s (for one or many stops). Each line item below is assigned to a specific delivery.'
+                )}
           </div>
         </div>
 
         {inspection.bol.deliveries.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No deliveries yet</div>
-            <div className="empty__sub">Tap "+ Add delivery" to enter at least one.</div>
+            <div className="empty__title">{t('verify.noDeliveries', 'No deliveries yet')}</div>
+            <div className="empty__sub">
+              {t('verify.noDeliveriesHint', 'Tap "+ Add delivery" to enter at least one.')}
+            </div>
           </div>
         ) : (
           <div className="delivery-list">
@@ -179,7 +207,7 @@ function VerifyInner({
               <div key={d.id} className="card">
                 <div className="field-row">
                   <div className="field">
-                    <div className="field__label">Delivery #</div>
+                    <div className="field__label">{t('verify.deliveryNumber', 'Delivery #')}</div>
                     <input
                       className="mono"
                       value={d.deliveryNumber}
@@ -195,7 +223,7 @@ function VerifyInner({
                   </div>
                   {inspection.type !== 'returns' && (
                     <div className="field">
-                      <div className="field__label">Stop #</div>
+                      <div className="field__label">{t('verify.stopNumber', 'Stop #')}</div>
                       <input
                         type="number"
                         value={d.stopNumber ?? ''}
@@ -214,7 +242,7 @@ function VerifyInner({
                   )}
                   <div className="field" style={{ alignSelf: 'flex-end' }}>
                     <button className="btn btn--sm btn--ghost" onClick={() => removeDelivery(d.id)}>
-                      Remove delivery
+                      {t('verify.removeDelivery', 'Remove delivery')}
                     </button>
                   </div>
                 </div>
@@ -228,12 +256,15 @@ function VerifyInner({
       {inspection.type !== 'returns' && (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Order <em>Verification</em></h2>
+            <h2 className="section__title">
+              {t('verify.orderVerificationLead', 'Order')}{' '}
+              <em>{t('verify.orderVerificationEm', 'Verification')}</em>
+            </h2>
           </div>
-          
+
           <div className="card" style={{ marginBottom: 16 }}>
             <div style={{ marginBottom: 16, fontWeight: 500 }}>
-              * Is this a multi-stop load?
+              {t('verify.multiStopQuestion', '* Is this a multi-stop load?')}
             </div>
             <div className="row-start gap-8">
               <button
@@ -241,21 +272,21 @@ function VerifyInner({
                 style={inspection.bol.isMultiStopLoad === 'Yes' ? { backgroundColor: 'var(--success)', color: 'white' } : {}}
                 onClick={() => dispatch({ type: 'SET_BOL', patch: { isMultiStopLoad: 'Yes' } })}
               >
-                Yes
+                {t('verify.yes', 'Yes')}
               </button>
               <button
                 className={`btn btn--lg flex-1 ${inspection.bol.isMultiStopLoad === 'No' ? 'btn--accent' : 'btn--ghost'}`}
                 style={inspection.bol.isMultiStopLoad === 'No' ? { backgroundColor: 'var(--danger)', color: 'white' } : {}}
                 onClick={() => dispatch({ type: 'SET_BOL', patch: { isMultiStopLoad: 'No' } })}
               >
-                No
+                {t('verify.no', 'No')}
               </button>
             </div>
           </div>
 
           <div className="card">
             <div style={{ marginBottom: 16, fontWeight: 500 }}>
-              * Does the placard info match the initial BOL?
+              {t('verify.placardQuestion', '* Does the placard info match the initial BOL?')}
             </div>
             <div className="row-start gap-8">
               <button
@@ -263,26 +294,25 @@ function VerifyInner({
                 style={inspection.bol.placardMatchesBol === 'Yes' ? { backgroundColor: 'var(--success)', color: 'white' } : {}}
                 onClick={() => dispatch({ type: 'SET_BOL', patch: { placardMatchesBol: 'Yes' } })}
               >
-                Yes
+                {t('verify.yes', 'Yes')}
               </button>
               <button
                 className={`btn btn--lg flex-1 ${inspection.bol.placardMatchesBol === 'No' ? 'btn--accent' : 'btn--ghost'}`}
                 style={inspection.bol.placardMatchesBol === 'No' ? { backgroundColor: 'var(--danger)', color: 'white' } : {}}
                 onClick={() => dispatch({ type: 'SET_BOL', patch: { placardMatchesBol: 'No' } })}
               >
-                No
+                {t('verify.no', 'No')}
               </button>
             </div>
           </div>
         </section>
       )}
 
+      {/* Back lives in StepBackLink at the top of the page now — it targets the
+          previous step explicitly rather than whatever history happens to hold. */}
       <div className="flex gap-8" style={{ justifyContent: 'flex-end', marginTop: 24 }}>
-        <button className="btn btn--ghost" onClick={() => window.history.back()}>
-          ← Back
-        </button>
         <button className="btn btn--accent btn--lg" onClick={confirm} disabled={!canConfirm}>
-          ✓ Confirm &amp; start scanning
+          {t('verify.confirmStart', '✓ Confirm & start scanning')}
         </button>
       </div>
     </main>
@@ -300,6 +330,7 @@ function PicklistLineItems({
   onUpdate: (index: number, patch: Partial<PicklistLineItemEntry>) => void;
   onRemove: (index: number) => void;
 }) {
+  const t = useT();
   const totalExpected = lineItems.reduce(
     (sum, li) => sum + (li.expectedQuantity.value || 0),
     0
@@ -309,25 +340,30 @@ function PicklistLineItems({
     <section className="section">
       <div className="section__head">
         <h2 className="section__title">
-          Picklist <em>line items ({lineItems.length})</em>
+          {t('verify.picklistLead', 'Picklist')}{' '}
+          <em>{t('verify.picklistEm', 'line items ({count})', { count: lineItems.length })}</em>
         </h2>
         <button className="btn btn--sm" onClick={onAdd}>
-          + Add line
+          {t('verify.addLine', '+ Add line')}
         </button>
       </div>
 
       <div className="banner banner--info">
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          Enter each batch code and the quantity the picklist calls for. These expected
-          counts drive the per-pallet reconciliation and the "remaining to pick" tally.
+          {t(
+            'verify.lineItemsHint',
+            'Enter each batch code and the quantity the picklist calls for. These expected counts drive the per-pallet reconciliation and the "remaining to pick" tally.'
+          )}
         </div>
       </div>
 
       {lineItems.length === 0 ? (
         <div className="empty">
-          <div className="empty__title">No line items yet</div>
-          <div className="empty__sub">Tap "+ Add line" to enter the picklist quantities.</div>
+          <div className="empty__title">{t('verify.noLineItems', 'No line items yet')}</div>
+          <div className="empty__sub">
+            {t('verify.noLineItemsHint', 'Tap "+ Add line" to enter the picklist quantities.')}
+          </div>
         </div>
       ) : (
         <div className="delivery-list">
@@ -335,7 +371,7 @@ function PicklistLineItems({
             <div key={li.id} className="card">
               <div className="field-row">
                 <SuggestableField
-                  label="Batch code"
+                  label={t('verify.batchCode', 'Batch code')}
                   field={li.batchCode}
                   mono
                   uppercase
@@ -343,16 +379,26 @@ function PicklistLineItems({
                   onChange={(field) => onUpdate(index, { batchCode: field })}
                 />
                 <SuggestableField
-                  label="Product"
-                  field={li.productName}
+                  label={t('verify.sku', 'SKU / Material')}
+                  field={li.sku}
+                  mono
                   hideCamera
-                  placeholder="Product name"
-                  onChange={(field) => onUpdate(index, { productName: field })}
+                  placeholder="91007244"
+                  onChange={(field) => onUpdate(index, { sku: field })}
                 />
               </div>
               <div className="field-row">
                 <SuggestableField
-                  label="Expected qty"
+                  label={t('verify.description', 'Material description')}
+                  field={li.description}
+                  hideCamera
+                  placeholder={t('verify.descriptionPlaceholder', 'Material description')}
+                  onChange={(field) => onUpdate(index, { description: field })}
+                />
+              </div>
+              <div className="field-row">
+                <SuggestableField
+                  label={t('verify.expectedQty', 'Expected qty')}
                   field={li.expectedQuantity}
                   type="number"
                   hideCamera
@@ -360,7 +406,7 @@ function PicklistLineItems({
                   onChange={(field) => onUpdate(index, { expectedQuantity: field })}
                 />
                 <div className="field">
-                  <div className="field__label">Unit</div>
+                  <div className="field__label">{t('verify.unit', 'Unit')}</div>
                   <select
                     value={li.uom}
                     onChange={(e) =>
@@ -379,7 +425,7 @@ function PicklistLineItems({
                     className="btn btn--sm btn--ghost"
                     onClick={() => onRemove(index)}
                   >
-                    Remove line
+                    {t('verify.removeLine', 'Remove line')}
                   </button>
                 </div>
               </div>
@@ -387,8 +433,10 @@ function PicklistLineItems({
           ))}
 
           <div className="small soft" style={{ textAlign: 'right', marginTop: 8 }}>
-            Total expected: <strong>{totalExpected}</strong> across {lineItems.length}{' '}
-            line{lineItems.length === 1 ? '' : 's'}
+            {t('verify.totalExpectedLabel', 'Total expected:')} <strong>{totalExpected}</strong>{' '}
+            {lineItems.length === 1
+              ? t('verify.acrossLine', 'across {count} line', { count: lineItems.length })
+              : t('verify.acrossLines', 'across {count} lines', { count: lineItems.length })}
           </div>
         </div>
       )}
@@ -403,10 +451,11 @@ function ShipDateField({
   field: Suggestable<string>;
   onChange: (next: Suggestable<string>) => void;
 }) {
+  const t = useT();
   // Use HTML5 date picker - works well on iPad (native picker UI)
   return (
     <div className="field">
-      <div className="field__label">Ship date</div>
+      <div className="field__label">{t('verify.shipDate', 'Ship date')}</div>
       <input
         type="date"
         value={field.value || ''}

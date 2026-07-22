@@ -3,9 +3,11 @@ import { useState, useEffect } from 'react';
 import { setDeviceConfig } from '../lib/deviceConfig';
 import { listActiveSites, addSite } from '../services/sites';
 import type { Site } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function SetupRoute() {
   const navigate = useNavigate();
+  const t = useT();
   const [sites, setSites] = useState<Site[]>(() => listActiveSites());
   const [siteId, setSiteId] = useState('');
   const [name, setName] = useState('');
@@ -51,10 +53,13 @@ export function SetupRoute() {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Device <em>setup</em>
+            {t('setup.titleLead', 'Device')} <em>{t('setup.titleEm', 'setup')}</em>
           </h1>
           <div className="page-head__sub">
-            One-time configuration. After this, the device knows which site it belongs to.
+            {t(
+              'setup.subtitle',
+              'One-time configuration. After this, the device knows which site it belongs to.'
+            )}
           </div>
         </div>
       </div>
@@ -64,33 +69,38 @@ export function SetupRoute() {
           <div className="banner banner--warn">
             <span className="banner__icon">⚠</span>
             <div className="banner__body">
-              <strong>No sites exist yet.</strong> Create the first site below to get started.
-              You can add more sites later from the admin console.
+              <strong>{t('setup.noSitesTitle', 'No sites exist yet.')}</strong>{' '}
+              {t(
+                'setup.noSitesBody',
+                'Create the first site below to get started. You can add more sites later from the admin console.'
+              )}
             </div>
           </div>
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">Create the <em>first site</em></h2>
+              <h2 className="section__title">
+                {t('setup.firstSiteLead', 'Create the')} <em>{t('setup.firstSiteEm', 'first site')}</em>
+              </h2>
             </div>
 
             <div className="field">
-              <div className="field__label">Site name</div>
+              <div className="field__label">{t('setup.siteNameLabel', 'Site name')}</div>
               <input
                 value={newSiteName}
                 onChange={(e) => setNewSiteName(e.target.value)}
-                placeholder="e.g. Memphis Distribution Center"
+                placeholder={t('setup.siteNamePlaceholder', 'e.g. Memphis Distribution Center')}
                 onKeyDown={(e) => e.key === 'Enter' && createSite()}
                 autoFocus
               />
             </div>
 
             <div className="field">
-              <div className="field__label">Address (optional)</div>
+              <div className="field__label">{t('setup.addressLabel', 'Address (optional)')}</div>
               <input
                 value={newSiteAddress}
                 onChange={(e) => setNewSiteAddress(e.target.value)}
-                placeholder="123 Main St, Memphis TN"
+                placeholder={t('setup.addressPlaceholder', '123 Main St, Memphis TN')}
               />
             </div>
 
@@ -100,12 +110,12 @@ export function SetupRoute() {
               disabled={!newSiteName.trim()}
               style={{ width: '100%' }}
             >
-              Create site &amp; continue
+              {t('setup.createSiteContinue', 'Create site & continue')}
             </button>
 
             <div className="center mt-16">
               <Link to="/admin" className="btn btn--ghost btn--sm">
-                Or go to admin console (advanced)
+                {t('setup.goToAdmin', 'Or go to admin console (advanced)')}
               </Link>
             </div>
           </section>
@@ -115,20 +125,24 @@ export function SetupRoute() {
           <div className="banner banner--info">
             <span className="banner__icon">i</span>
             <div className="banner__body">
-              Pick the site this device will be assigned to. If you need a new site, you can add
-              one inline below.
+              {t(
+                'setup.pickSiteBanner',
+                'Pick the site this device will be assigned to. If you need a new site, you can add one inline below.'
+              )}
             </div>
           </div>
 
           <div className="field">
-            <div className="field__label">Site assignment</div>
+            <div className="field__label">{t('setup.siteAssignmentLabel', 'Site assignment')}</div>
             <select value={siteId} onChange={(e) => setSiteId(e.target.value)}>
-              <option value="">Select a site…</option>
+              <option value="">{t('setup.selectSiteOption', 'Select a site…')}</option>
               {sites.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
             </select>
-            <div className="field__hint">Inspectors and loads will be scoped to this site.</div>
+            <div className="field__hint">
+              {t('setup.siteAssignmentHint', 'Inspectors and loads will be scoped to this site.')}
+            </div>
           </div>
 
           <details style={{ margin: '12px 0 16px' }}>
@@ -140,7 +154,7 @@ export function SetupRoute() {
                 padding: '6px 0',
               }}
             >
-              + Add a new site inline
+              {t('setup.addSiteInline', '+ Add a new site inline')}
             </summary>
             <div
               style={{
@@ -151,20 +165,20 @@ export function SetupRoute() {
               }}
             >
               <div className="field">
-                <div className="field__label">New site name</div>
+                <div className="field__label">{t('setup.newSiteNameLabel', 'New site name')}</div>
                 <input
                   value={newSiteName}
                   onChange={(e) => setNewSiteName(e.target.value)}
-                  placeholder="e.g. Memphis Distribution Center"
+                  placeholder={t('setup.siteNamePlaceholder', 'e.g. Memphis Distribution Center')}
                   onKeyDown={(e) => e.key === 'Enter' && createSite()}
                 />
               </div>
               <div className="field">
-                <div className="field__label">Address (optional)</div>
+                <div className="field__label">{t('setup.addressLabel', 'Address (optional)')}</div>
                 <input
                   value={newSiteAddress}
                   onChange={(e) => setNewSiteAddress(e.target.value)}
-                  placeholder="123 Main St, Memphis TN"
+                  placeholder={t('setup.addressPlaceholder', '123 Main St, Memphis TN')}
                 />
               </div>
               <button
@@ -172,17 +186,17 @@ export function SetupRoute() {
                 onClick={createSite}
                 disabled={!newSiteName.trim()}
               >
-                Create site
+                {t('setup.createSite', 'Create site')}
               </button>
             </div>
           </details>
 
           <div className="field">
-            <div className="field__label">Configured by (optional)</div>
+            <div className="field__label">{t('setup.configuredByLabel', 'Configured by (optional)')}</div>
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Your name or IT ticket #"
+              placeholder={t('setup.configuredByPlaceholder', 'Your name or IT ticket #')}
             />
           </div>
 
@@ -192,7 +206,7 @@ export function SetupRoute() {
             disabled={!siteId}
             style={{ marginTop: 16, width: '100%' }}
           >
-            Complete setup →
+            {t('setup.completeSetup', 'Complete setup →')}
           </button>
         </>
       )}

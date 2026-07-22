@@ -106,6 +106,7 @@ export { QualityFlagButton } from './components/QualityFlagButton';
 export { ImageQualityModal } from './components/ImageQualityModal';
 export { PhotoLightbox } from './components/PhotoLightbox';
 export { ViewEditToggle } from './components/ViewEditToggle';
+export { StepBackLink } from './components/StepBackLink';
 export { StagingLanesMap } from './components/StagingLanesMap';
 export { DashboardKPIBoxes } from './components/DashboardKPIBoxes';
 export type { DashboardKPI } from './components/DashboardKPIBoxes';

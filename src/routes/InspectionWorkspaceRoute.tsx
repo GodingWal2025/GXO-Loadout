@@ -7,6 +7,21 @@ import { PALLET_TYPES } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
+import { useT } from '../shared/i18n/LanguageContext';
+
+// Pallet types are persisted data, so the stored value stays English. This hook
+// translates them only where they are displayed.
+function usePalletTypeLabel(): (value: string) => string {
+  const t = useT();
+  const labels: Record<string, string> = {
+    'Full Bag Pallet': t('pallet.typeFullBag', 'Full Bag Pallet'),
+    'Partial Bag Pallet': t('pallet.typePartialBag', 'Partial Bag Pallet'),
+    'Mixed Bag Pallet': t('pallet.typeMixedBag', 'Mixed Bag Pallet'),
+    Seedpak: t('pallet.typeSeedpak', 'Seedpak'),
+    Minibulk: t('pallet.typeMinibulk', 'Minibulk'),
+  };
+  return (value: string) => labels[value] ?? value;
+}
 
 export function InspectionWorkspaceRoute() {
   const { id } = useParams<{ id: string }>();
@@ -28,6 +43,8 @@ export function InspectionWorkspaceRoute() {
 function WorkspaceInner({ initial }: { initial: Inspection }) {
   const { inspection, dispatch } = useInspection(initial);
   const { locked, editing, readOnly, setEditing } = useInspectionMode(inspection);
+  const t = useT();
+  const palletTypeLabel = usePalletTypeLabel();
   const navigate = useNavigate();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
@@ -43,7 +60,11 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
         const totalActual = p.batchSections.reduce((sum, bs) => sum + (bs.actualBagCount.value || 0), 0);
         if (totalActual !== 60) {
           list.push(
-            `Pallet #${p.palletNumber} is marked as a Full Bag Pallet but has ${totalActual} bags. It must contain exactly 60 bags.`
+            t(
+              'workspace.warnFullBagCount',
+              'Pallet #{pallet} is marked as a Full Bag Pallet but has {count} bags. It must contain exactly 60 bags.',
+              { pallet: p.palletNumber, count: totalActual }
+            )
           );
         }
       }
@@ -70,13 +91,17 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
     for (const [batchCode, palletNums] of Object.entries(partialPalletsByBatch)) {
       if (palletNums.length > 1) {
         list.push(
-          `Batch "${batchCode}" is split across multiple partial pallets (Pallets #${palletNums.join(', ')}). We want only one partial pallet per batch code.`
+          t(
+            'workspace.warnSplitBatch',
+            'Batch "{batch}" is split across multiple partial pallets (Pallets #{pallets}). We want only one partial pallet per batch code.',
+            { batch: batchCode, pallets: palletNums.join(', ') }
+          )
         );
       }
     }
 
     return list;
-  }, [inspection.pallets, inspection.type]);
+  }, [inspection.pallets, inspection.type, t]);
 
   const allFulfilled =
     inspection.type === 'returns'
@@ -137,7 +162,14 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
   };
 
   const handleArchive = async () => {
-    if (window.confirm('Are you sure you want to archive this inspection? It will be hidden from the active list.')) {
+    if (
+      window.confirm(
+        t(
+          'workspace.confirmArchive',
+          'Are you sure you want to archive this inspection? It will be hidden from the active list.'
+        )
+      )
+    ) {
       await dbArchiveInspection(inspection.id);
       navigate('/');
     }
@@ -151,19 +183,41 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           <div>
             <h1 className="page-head__title mono">#{loadNum}</h1>
             <div className="page-head__sub">
-              {inspection.pallets.length} pallets · {inspection.bol.deliveries.length}{' '}
-              {inspection.bol.deliveries.length === 1 ? 'delivery' : 'deliveries'}
-              {inspection.type !== 'returns' && <> · {stopKeys.length} {stopKeys.length === 1 ? 'stop' : 'stops'}</>}
-              {inspection.stagingLocation && <> · Staging: {inspection.stagingLocation}</>}
+              {t('workspace.palletsCount', '{count} pallets', { count: inspection.pallets.length })} ·{' '}
+              {inspection.bol.deliveries.length === 1
+                ? t('workspace.deliveryCountOne', '{count} delivery', { count: 1 })
+                : t('workspace.deliveryCountMany', '{count} deliveries', {
+                    count: inspection.bol.deliveries.length,
+                  })}
+              {inspection.type !== 'returns' && (
+                <>
+                  {' '}·{' '}
+                  {stopKeys.length === 1
+                    ? t('workspace.stopCountOne', '{count} stop', { count: 1 })
+                    : t('workspace.stopCountMany', '{count} stops', { count: stopKeys.length })}
+                </>
+              )}
+              {inspection.stagingLocation && (
+                <>
+                  {' '}·{' '}
+                  {t('workspace.staging', 'Staging: {location}', {
+                    location: inspection.stagingLocation,
+                  })}
+                </>
+              )}
             </div>
           </div>
           <div className="page-head__actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {locked && <ViewEditToggle editing={editing} onChange={setEditing} />}
-            <button className="btn btn--ghost" onClick={() => setShowProgressModal(true)}>Review progress</button>
+            <button className="btn btn--ghost" onClick={() => setShowProgressModal(true)}>
+              {t('workspace.reviewProgress', 'Review progress')}
+            </button>
             {!readOnly && (
-              <button className="btn btn--ghost" onClick={handleArchive}>Archive</button>
+              <button className="btn btn--ghost" onClick={handleArchive}>
+                {t('workspace.archive', 'Archive')}
+              </button>
             )}
-            <Link to="/" className="btn btn--ghost">← Home</Link>
+            <Link to="/" className="btn btn--ghost">{t('workspace.home', '← Home')}</Link>
           </div>
         </div>
 
@@ -171,8 +225,12 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           <div className="banner banner--info" style={{ marginBottom: 20 }}>
             <span className="banner__icon">👁</span>
             <div className="banner__body">
-              This inspection is complete and is open in <strong>view mode</strong>. Tap a pallet
-              to review it, or switch to Edit in the corner to make changes.
+              {t('workspace.viewBannerPre', 'This inspection is complete and is open in')}{' '}
+              <strong>{t('workspace.viewBannerMode', 'view mode')}</strong>
+              {t(
+                'workspace.viewBannerPost',
+                '. Tap a pallet to review it, or switch to Edit in the corner to make changes.'
+              )}
             </div>
           </div>
         )}
@@ -181,38 +239,48 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
         <div className="handoff-bar">
           <div>
             <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Scanning as
+              {t('workspace.scanningAs', 'Scanning as')}
             </div>
             <div className="fw-500" style={{ fontSize: 16, marginTop: 2 }}>
-              {inspection.currentInspector || inspection.startedBy || 'Unknown'}
+              {inspection.currentInspector ||
+                inspection.startedBy ||
+                t('workspace.unknownInspector', 'Unknown')}
             </div>
             {inspection.handoffLog && inspection.handoffLog.length > 0 && (
               <div className="xs soft" style={{ marginTop: 4 }}>
-                {inspection.handoffLog.length} handoff
-                {inspection.handoffLog.length === 1 ? '' : 's'} this load
+                {inspection.handoffLog.length === 1
+                  ? t('workspace.handoffCountOne', '{count} handoff this load', { count: 1 })
+                  : t('workspace.handoffCountMany', '{count} handoffs this load', {
+                      count: inspection.handoffLog.length,
+                    })}
               </div>
             )}
           </div>
           {!readOnly && (
             <button className="btn btn--sm" onClick={() => setShowHandoffModal(true)}>
-              ⇄ Hand off to another inspector
+              {t('workspace.handoffButton', '⇄ Hand off to another inspector')}
             </button>
           )}
         </div>
 
         {inspection.handoffLog && inspection.handoffLog.length > 0 && (
           <details className="handoff-history">
-            <summary>Handoff history</summary>
+            <summary>{t('workspace.handoffHistory', 'Handoff history')}</summary>
             <ul>
               {inspection.handoffLog.map((entry, i) => (
                 <li key={i}>
-                  <strong>{entry.fromInspector || 'started'}</strong> →{' '}
+                  <strong>{entry.fromInspector || t('workspace.handoffStarted', 'started')}</strong> →{' '}
                   <strong>{entry.toInspector}</strong>{' '}
                   <span className="xs soft">
                     ({new Date(entry.at).toLocaleString()})
                     {entry.palletsCompletedByPrevious.length > 0 && (
-                      <> · {entry.fromInspector} completed pallets{' '}
-                      {entry.palletsCompletedByPrevious.join(', ')}</>
+                      <>
+                        {' '}·{' '}
+                        {t('workspace.handoffCompleted', '{name} completed pallets {pallets}', {
+                          name: entry.fromInspector ?? '',
+                          pallets: entry.palletsCompletedByPrevious.join(', '),
+                        })}
+                      </>
                     )}
                   </span>
                 </li>
@@ -229,9 +297,11 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           >
             <span className="btn--hero__icon">＋</span>
             <span className="btn--hero__body">
-              <div className="btn--hero__title">Scan next pallet</div>
+              <div className="btn--hero__title">{t('workspace.scanNextPallet', 'Scan next pallet')}</div>
               <div className="btn--hero__sub">
-                {inspection.type === 'returns' ? 'Pick delivery and pallet type' : 'Pick stop, delivery, and pallet type'}
+                {inspection.type === 'returns'
+                  ? t('workspace.pickDeliveryType', 'Pick delivery and pallet type')
+                  : t('workspace.pickStopDeliveryType', 'Pick stop, delivery, and pallet type')}
               </div>
             </span>
             <span className="btn--hero__arrow">→</span>
@@ -267,29 +337,42 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
 
         {inspection.bol.deliveries.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No deliveries on this load</div>
+            <div className="empty__title">
+              {t('workspace.noDeliveriesTitle', 'No deliveries on this load')}
+            </div>
             <div className="empty__sub">
-              Go back to verify the BOL and add at least one delivery before scanning pallets.
+              {t(
+                'workspace.noDeliveriesSub',
+                'Go back to verify the BOL and add at least one delivery before scanning pallets.'
+              )}
             </div>
             <Link
               to={`/inspection/${inspection.id}/verify`}
               className="btn btn--accent"
               style={{ marginTop: 12 }}
             >
-              Back to verify
+              {t('workspace.backToVerify', 'Back to verify')}
             </Link>
           </div>
         ) : inspection.type === 'returns' ? (
           <section className="stop-section">
             <div className="stop-section__head">
-              <h2 className="stop-section__title">Returned Pallets</h2>
+              <h2 className="stop-section__title">
+                {t('workspace.returnedPallets', 'Returned Pallets')}
+              </h2>
               <span className="stop-section__meta">
-                {inspection.pallets.length} {inspection.pallets.length === 1 ? 'pallet' : 'pallets'}
+                {inspection.pallets.length === 1
+                  ? t('workspace.palletCountOne', '{count} pallet', { count: 1 })
+                  : t('workspace.palletsCount', '{count} pallets', {
+                      count: inspection.pallets.length,
+                    })}
               </span>
             </div>
             {inspection.pallets.length === 0 ? (
               <div className="empty" style={{ padding: 16 }}>
-                <div className="empty__sub">No pallets scanned yet.</div>
+                <div className="empty__sub">
+                  {t('workspace.noPalletsYet', 'No pallets scanned yet.')}
+                </div>
               </div>
             ) : (
               <div
@@ -316,12 +399,16 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
                         className="xs soft"
                         style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
                       >
-                        Pallet {p.palletNumber}
+                        {t('workspace.palletLabel', 'Pallet {number}', {
+                          number: p.palletNumber,
+                        })}
                       </div>
                       {p.scannedBy && (
                         <div
                           className="xs soft"
-                          title={`Scanned by ${p.scannedBy}`}
+                          title={t('workspace.scannedBy', 'Scanned by {name}', {
+                            name: p.scannedBy,
+                          })}
                           style={{ fontFamily: 'JetBrains Mono, monospace' }}
                         >
                           {p.scannedBy.split(' ').map((n) => n[0]).join('').slice(0, 2)}
@@ -333,7 +420,9 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
                         (sum: number, bs) => sum + (bs.actualBagCount.value || 0),
                         0
                       ) || '—'}
-                      <span className="xs soft fw-500" style={{ marginLeft: 4 }}>bags</span>
+                      <span className="xs soft fw-500" style={{ marginLeft: 4 }}>
+                        {t('workspace.bagsUnit', 'bags')}
+                      </span>
                     </div>
                     {p.batchSections.map((bs) => (
                       <div key={bs.id} className="xs mono faint" style={{ marginTop: 2, textTransform: 'uppercase' }}>
@@ -345,10 +434,12 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
                         )}
                       </div>
                     ))}
-                    <div className="xs soft" style={{ marginTop: 4 }}>{p.palletType}</div>
+                    <div className="xs soft" style={{ marginTop: 4 }}>
+                      {palletTypeLabel(p.palletType)}
+                    </div>
                     {p.qualityFlag && (
                       <div className="xs" style={{ color: 'var(--danger)', marginTop: 4 }}>
-                        ⚑ Flagged
+                        {t('workspace.flagged', '⚑ Flagged')}
                       </div>
                     )}
                   </Link>
@@ -373,7 +464,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           <div className="banner banner--warn" style={{ marginBottom: 20, display: 'flex', flexDirection: 'column', gap: '8px', alignItems: 'flex-start' }}>
             <div className="row-start gap-8" style={{ fontWeight: 600, fontSize: '15px' }}>
               <span className="banner__icon">⚠️</span>
-              Attention Required
+              {t('workspace.attentionRequired', 'Attention Required')}
             </div>
             <ul style={{ listStyleType: 'disc', paddingLeft: '20px', margin: 0 }}>
               {warnings.map((w, i) => (
@@ -394,17 +485,21 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
             marginTop: 24,
           }}
         >
-          <Link to="/" className="btn btn--ghost">{readOnly ? '← Back' : 'Save & exit'}</Link>
+          <Link to="/" className="btn btn--ghost">
+            {readOnly ? t('workspace.back', '← Back') : t('workspace.saveExit', 'Save & exit')}
+          </Link>
           <button
             className="btn btn--accent btn--lg"
             disabled={!readOnly && !allFulfilled}
             onClick={() => navigate(`/inspection/${inspection.id}/review`)}
           >
             {readOnly
-              ? 'View summary →'
+              ? t('workspace.viewSummary', 'View summary →')
               : inspection.type === 'returns' || allFulfilled
-              ? 'Complete inspection →'
-              : `${remaining} more bag${remaining === 1 ? '' : 's'} to scan`}
+              ? t('workspace.completeInspection', 'Complete inspection →')
+              : remaining === 1
+              ? t('workspace.moreBagsOne', '{count} more bag to scan', { count: 1 })
+              : t('workspace.moreBagsMany', '{count} more bags to scan', { count: remaining })}
           </button>
         </div>
       </main>
@@ -423,16 +518,22 @@ function StopSection({
   palletsByDelivery: Record<string, PalletInspection[]>;
   inspectionId: string;
 }) {
+  const t = useT();
   const allPallets = deliveries.flatMap((d) => palletsByDelivery[d.id] || []);
-  const stopLabel = stopKey === 'unassigned' ? 'Unassigned' : `Stop ${stopKey}`;
+  const stopLabel =
+    stopKey === 'unassigned'
+      ? t('workspace.unassigned', 'Unassigned')
+      : t('workspace.stopLabel', 'Stop {number}', { number: stopKey });
 
   return (
     <section className="stop-section">
       <div className="stop-section__head">
         <h2 className="stop-section__title">{stopLabel}</h2>
         <span className="stop-section__meta">
-          {deliveries.length} {deliveries.length === 1 ? 'delivery' : 'deliveries'} ·{' '}
-          {allPallets.length} pallets
+          {deliveries.length === 1
+            ? t('workspace.deliveryCountOne', '{count} delivery', { count: 1 })
+            : t('workspace.deliveryCountMany', '{count} deliveries', { count: deliveries.length })}{' '}
+          · {t('workspace.palletsCount', '{count} pallets', { count: allPallets.length })}
         </span>
       </div>
 
@@ -457,20 +558,27 @@ function DeliveryGroup({
   pallets: PalletInspection[];
   inspectionId: string;
 }) {
+  const t = useT();
+  const palletTypeLabel = usePalletTypeLabel();
+
   return (
     <div className="delivery-group">
       <div className="delivery-group__head">
         <div className="delivery-group__num mono">
-          Delivery {delivery.deliveryNumber}
+          {t('workspace.deliveryLabel', 'Delivery {number}', { number: delivery.deliveryNumber })}
         </div>
         <div className="delivery-group__meta">
-          {pallets.length} {pallets.length === 1 ? 'pallet' : 'pallets'}
+          {pallets.length === 1
+            ? t('workspace.palletCountOne', '{count} pallet', { count: 1 })
+            : t('workspace.palletsCount', '{count} pallets', { count: pallets.length })}
         </div>
       </div>
 
       {pallets.length === 0 ? (
         <div className="empty" style={{ padding: 16 }}>
-          <div className="empty__sub">No pallets scanned for this delivery yet.</div>
+          <div className="empty__sub">
+            {t('workspace.noPalletsForDelivery', 'No pallets scanned for this delivery yet.')}
+          </div>
         </div>
       ) : (
         <div
@@ -497,12 +605,12 @@ function DeliveryGroup({
                   className="xs soft"
                   style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}
                 >
-                  Pallet {p.palletNumber}
+                  {t('workspace.palletLabel', 'Pallet {number}', { number: p.palletNumber })}
                 </div>
                 {p.scannedBy && (
                   <div
                     className="xs soft"
-                    title={`Scanned by ${p.scannedBy}`}
+                    title={t('workspace.scannedBy', 'Scanned by {name}', { name: p.scannedBy })}
                     style={{ fontFamily: 'JetBrains Mono, monospace' }}
                   >
                     {p.scannedBy.split(' ').map((n) => n[0]).join('').slice(0, 2)}
@@ -514,7 +622,9 @@ function DeliveryGroup({
                   (sum: number, bs) => sum + (bs.actualBagCount.value || 0),
                   0
                 ) || '—'}
-                <span className="xs soft fw-500" style={{ marginLeft: 4 }}>bags</span>
+                <span className="xs soft fw-500" style={{ marginLeft: 4 }}>
+                  {t('workspace.bagsUnit', 'bags')}
+                </span>
               </div>
               {p.batchSections.map((bs) => (
                 <div key={bs.id} className="xs mono faint" style={{ marginTop: 2, textTransform: 'uppercase' }}>
@@ -526,10 +636,12 @@ function DeliveryGroup({
                   )}
                 </div>
               ))}
-              <div className="xs soft" style={{ marginTop: 4 }}>{p.palletType}</div>
+              <div className="xs soft" style={{ marginTop: 4 }}>
+                {palletTypeLabel(p.palletType)}
+              </div>
               {p.qualityFlag && (
                 <div className="xs" style={{ color: 'var(--danger)', marginTop: 4 }}>
-                  ⚑ Flagged
+                  {t('workspace.flagged', '⚑ Flagged')}
                 </div>
               )}
             </Link>
@@ -555,6 +667,8 @@ function AddPalletModal({
   onAdd: (palletType: PalletType, deliveryId: string, batchCount: 1 | 2 | 3) => void;
   onClose: () => void;
 }) {
+  const t = useT();
+  const palletTypeLabel = usePalletTypeLabel();
   const [stopKey, setStopKey] = useState(stopKeys[0] || '');
   const [deliveryId, setDeliveryId] = useState(() => {
     if (isReturns) return deliveries[0]?.id || '';
@@ -577,16 +691,20 @@ function AddPalletModal({
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal__title">Scan next pallet</h3>
-        <p className="modal__sub">Pick stop, delivery, and pallet type.</p>
+        <h3 className="modal__title">{t('workspace.scanNextPallet', 'Scan next pallet')}</h3>
+        <p className="modal__sub">
+          {t('workspace.modalSub', 'Pick stop, delivery, and pallet type.')}
+        </p>
 
         {!isReturns && (
           <div className="modal__field">
-            <label>Stop</label>
+            <label>{t('workspace.stopFieldLabel', 'Stop')}</label>
             <select value={stopKey} onChange={(e) => handleStopChange(e.target.value)}>
               {stopKeys.map((k) => (
                 <option key={k} value={k}>
-                  {k === 'unassigned' ? 'Unassigned' : `Stop ${k}`}
+                  {k === 'unassigned'
+                    ? t('workspace.unassigned', 'Unassigned')
+                    : t('workspace.stopLabel', 'Stop {number}', { number: k })}
                 </option>
               ))}
             </select>
@@ -595,7 +713,7 @@ function AddPalletModal({
 
         {!isReturns && (
           <div className="modal__field">
-            <label>Delivery</label>
+            <label>{t('workspace.deliveryFieldLabel', 'Delivery')}</label>
             <select value={deliveryId} onChange={(e) => setDeliveryId(e.target.value)}>
               {(stops[stopKey] || []).map((d) => (
                 <option key={d.id} value={d.id}>
@@ -607,20 +725,20 @@ function AddPalletModal({
         )}
 
         <div className="modal__field">
-          <label>Pallet type</label>
+          <label>{t('pallet.typeLabel', 'Pallet type')}</label>
           <div className="flex-col gap-8">
             {(isReturns
-              ? PALLET_TYPES.filter(t => t !== 'Mixed Bag Pallet' && t !== 'Minibulk')
+              ? PALLET_TYPES.filter(pt => pt !== 'Mixed Bag Pallet' && pt !== 'Minibulk')
               : PALLET_TYPES
-            ).map((t) => (
+            ).map((pt) => (
               <button
-                key={t}
+                key={pt}
                 type="button"
-                className={`btn ${palletType === t ? 'btn--accent' : ''}`}
-                onClick={() => setPalletType(t)}
+                className={`btn ${palletType === pt ? 'btn--accent' : ''}`}
+                onClick={() => setPalletType(pt)}
                 style={{ justifyContent: 'flex-start' }}
               >
-                {t}
+                {palletTypeLabel(pt)}
               </button>
             ))}
           </div>
@@ -628,7 +746,7 @@ function AddPalletModal({
 
         {needsBatchCount && (
           <div className="modal__field">
-            <label>How many batches on this pallet?</label>
+            <label>{t('workspace.howManyBatches', 'How many batches on this pallet?')}</label>
             <div className="flex gap-8">
               {[1, 2, 3].map((n) => (
                 <button
@@ -646,7 +764,9 @@ function AddPalletModal({
         )}
 
         <div className="modal__actions">
-          <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn--ghost" onClick={onClose}>
+            {t('workspace.cancel', 'Cancel')}
+          </button>
           <button
             className="btn btn--accent"
             disabled={!canSubmit}
@@ -656,7 +776,7 @@ function AddPalletModal({
               }
             }}
           >
-            Start scanning →
+            {t('workspace.startScanning', 'Start scanning →')}
           </button>
         </div>
       </div>
@@ -675,35 +795,43 @@ function HandoffModal({
   onSubmit: (name: string) => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const [newName, setNewName] = useState('');
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal__title">Hand off to another inspector</h3>
+        <h3 className="modal__title">
+          {t('workspace.handoffTitle', 'Hand off to another inspector')}
+        </h3>
         <p className="modal__sub">
-          From this point forward, new pallets will be tagged to the new inspector.
-          Previous pallets stay attributed to <strong>{currentInspector}</strong>.
+          {t(
+            'workspace.handoffSubPre',
+            'From this point forward, new pallets will be tagged to the new inspector. Previous pallets stay attributed to'
+          )}{' '}
+          <strong>{currentInspector}</strong>.
         </p>
 
         <div className="modal__field">
-          <label>New inspector</label>
+          <label>{t('workspace.newInspector', 'New inspector')}</label>
           <InspectorPicker
             siteId={siteId}
             value={newName}
-            placeholder="Select inspector…"
+            placeholder={t('workspace.selectInspector', 'Select inspector…')}
             onChange={setNewName}
           />
         </div>
 
         <div className="modal__actions">
-          <button className="btn btn--ghost" onClick={onClose}>Cancel</button>
+          <button className="btn btn--ghost" onClick={onClose}>
+            {t('workspace.cancel', 'Cancel')}
+          </button>
           <button
             className="btn btn--accent"
             disabled={!newName || newName === currentInspector}
             onClick={() => onSubmit(newName)}
           >
-            Confirm handoff
+            {t('workspace.confirmHandoff', 'Confirm handoff')}
           </button>
         </div>
       </div>

@@ -8,6 +8,7 @@ import { ViewEditToggle } from '../shared';
 import type { Inspection, BatchSection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
+import { useT } from '../shared/i18n/LanguageContext';
 
 const FINDINGS_OPTIONS = [
   'Picked Short',
@@ -26,6 +27,45 @@ const FINDINGS_OPTIONS = [
   'Damage / Reject - Plot seed',
   'Other'
 ];
+
+// The findings and pallet-type values above are persisted data, so they stay in
+// English. These hooks translate them only at the point of display.
+function useFindingLabel(): (value: string) => string {
+  const t = useT();
+  const labels: Record<string, string> = {
+    'Picked Short': t('pallet.findingPickedShort', 'Picked Short'),
+    'Picked Long': t('pallet.findingPickedLong', 'Picked Long'),
+    'Wrong LPN': t('pallet.findingWrongLpn', 'Wrong LPN'),
+    'Missed Scan': t('pallet.findingMissedScan', 'Missed Scan'),
+    'Not Taken through Inventory': t('pallet.findingNotInventory', 'Not Taken through Inventory'),
+    'Staging Error (wrong location, stops mixed, etc)': t(
+      'pallet.findingStagingError',
+      'Staging Error (wrong location, stops mixed, etc)'
+    ),
+    'Poor Wrapping': t('pallet.findingPoorWrapping', 'Poor Wrapping'),
+    'Bags DMG': t('pallet.findingBagsDmg', 'Bags DMG'),
+    'Pallet DMG / Bag': t('pallet.findingPalletDmg', 'Pallet DMG / Bag'),
+    'Pallet Dirty': t('pallet.findingPalletDirty', 'Pallet Dirty'),
+    'Stacking Issue': t('pallet.findingStackingIssue', 'Stacking Issue'),
+    'Tags Missing': t('pallet.findingTagsMissing', 'Tags Missing'),
+    'Damage / Reject - Date on tag': t('pallet.findingDamageDate', 'Damage / Reject - Date on tag'),
+    'Damage / Reject - Plot seed': t('pallet.findingDamagePlotSeed', 'Damage / Reject - Plot seed'),
+    Other: t('pallet.findingOther', 'Other'),
+  };
+  return (value: string) => labels[value] ?? value;
+}
+
+function usePalletTypeLabel(): (value: string) => string {
+  const t = useT();
+  const labels: Record<string, string> = {
+    'Full Bag Pallet': t('pallet.typeFullBag', 'Full Bag Pallet'),
+    'Partial Bag Pallet': t('pallet.typePartialBag', 'Partial Bag Pallet'),
+    'Mixed Bag Pallet': t('pallet.typeMixedBag', 'Mixed Bag Pallet'),
+    Seedpak: t('pallet.typeSeedpak', 'Seedpak'),
+    Minibulk: t('pallet.typeMinibulk', 'Minibulk'),
+  };
+  return (value: string) => labels[value] ?? value;
+}
 
 export function ScanPalletRoute() {
   const { id, palletIndex } = useParams<{ id: string; palletIndex: string }>();
@@ -52,6 +92,9 @@ export function ScanPalletRoute() {
 function PalletInner({ initial, palletIndex }: { initial: Inspection; palletIndex: number }) {
   const { inspection, dispatch } = useInspection(initial);
   const { locked, editing, readOnly, setEditing } = useInspectionMode(inspection);
+  const t = useT();
+  const findingLabel = useFindingLabel();
+  const palletTypeLabel = usePalletTypeLabel();
   const navigate = useNavigate();
   const location = useLocation();
   const isFromInvestigation = location.state?.from === 'investigation';
@@ -66,12 +109,14 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
 
   const handleAdd = () => {
     if (!pallet.lpnNumber && inspection.type !== 'returns' && pallet.passInspection === 'Fail') {
-      setValidationError('LPN number is required.');
+      setValidationError(t('pallet.errLpnRequired', 'LPN number is required.'));
       return;
     }
     const missingBatch = pallet.batchSections.some(s => !s.batchCode?.value);
     if (missingBatch) {
-      setValidationError('All batch sections must have a batch code.');
+      setValidationError(
+        t('pallet.errBatchRequired', 'All batch sections must have a batch code.')
+      );
       return;
     }
     setValidationError('');
@@ -105,7 +150,12 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
 
 
   const removePallet = () => {
-    if (!window.confirm('Remove this pallet? Photos and data will be lost.')) return;
+    if (
+      !window.confirm(
+        t('pallet.confirmRemove', 'Remove this pallet? Photos and data will be lost.')
+      )
+    )
+      return;
     dispatch({ type: 'REMOVE_PALLET', index: palletIndex });
     navigate(`/inspection/${inspection.id}`);
   };
@@ -141,10 +191,18 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const returnPalletTypeWarning = (() => {
     if (!showReturnPalletTypeWarning) return null;
     if (pallet.palletType === 'Full Bag Pallet' && totalActualOnPallet < 60) {
-      return `Full bag pallets must contain exactly 60 bags. Since this pallet has less than 60 bags (${totalActualOnPallet}), it should be marked as a Partial Bag Pallet.`;
+      return t(
+        'pallet.warnFullUnder60',
+        'Full bag pallets must contain exactly 60 bags. Since this pallet has less than 60 bags ({count}), it should be marked as a Partial Bag Pallet.',
+        { count: totalActualOnPallet }
+      );
     }
     if (pallet.palletType === 'Partial Bag Pallet' && totalActualOnPallet >= 60) {
-      return `A partial bag pallet should contain less than 60 bags. Since this pallet has 60 or more bags (${totalActualOnPallet}), it should be marked as a Full Bag Pallet.`;
+      return t(
+        'pallet.warnPartialOver60',
+        'A partial bag pallet should contain less than 60 bags. Since this pallet has 60 or more bags ({count}), it should be marked as a Full Bag Pallet.',
+        { count: totalActualOnPallet }
+      );
     }
     return null;
   })();
@@ -169,7 +227,11 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             (obs) => obs.batchCode.value === batchCode
           );
           if (hasSameBatch) {
-            return `There is another pallet (Pallet ${otherPallet.palletNumber}) containing batch ${batchCode} that is also under 60 bags (${otherPalletTotal} bags). Consider consolidating them.`;
+            return t(
+              'pallet.warnDuplicateBatch',
+              'There is another pallet (Pallet {pallet}) containing batch {batch} that is also under 60 bags ({count} bags). Consider consolidating them.',
+              { pallet: otherPallet.palletNumber, batch: batchCode, count: otherPalletTotal }
+            );
           }
         }
       }
@@ -182,14 +244,17 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Pallet <em>{pallet.palletNumber}</em>
+            {t('pallet.headPallet', 'Pallet')} <em>{pallet.palletNumber}</em>
           </h1>
           <div className="page-head__sub">
-            {pallet.palletType}
+            {palletTypeLabel(pallet.palletType)}
             {!isReturns && delivery && (
               <>
-                {' '}· Delivery <span className="mono">{delivery.deliveryNumber}</span>
-                {delivery.stopNumber !== undefined && <> (Stop {delivery.stopNumber})</>}
+                {' '}· {t('pallet.headDelivery', 'Delivery')}{' '}
+                <span className="mono">{delivery.deliveryNumber}</span>
+                {delivery.stopNumber !== undefined && (
+                  <> ({t('pallet.headStop', 'Stop {number}', { number: delivery.stopNumber })})</>
+                )}
               </>
             )}
           </div>
@@ -213,7 +278,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             className="btn btn--ghost btn--sm"
             onClick={() => navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`)}
           >
-            ← Back
+            {t('pallet.back', '← Back')}
           </button>
         </div>
       </div>
@@ -222,8 +287,9 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         <div className="banner banner--info" style={{ marginBottom: 20 }}>
           <span className="banner__icon">👁</span>
           <div className="banner__body">
-            This inspection is complete and is open in <strong>view mode</strong>. Switch to
-            Edit in the corner to change anything.
+            {t('pallet.viewBannerPre', 'This inspection is complete and is open in')}{' '}
+            <strong>{t('pallet.viewBannerMode', 'view mode')}</strong>
+            {t('pallet.viewBannerPost', '. Switch to Edit in the corner to change anything.')}
           </div>
         </div>
       )}
@@ -250,7 +316,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       {/* Pallet type / change */}
       <section className="section">
         <div className="field">
-          <div className="field__label">Pallet type</div>
+          <div className="field__label">{t('pallet.typeLabel', 'Pallet type')}</div>
           <select
             value={pallet.palletType}
             onChange={(e) =>
@@ -262,10 +328,10 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             }
           >
             {(inspection.type === 'returns'
-              ? PALLET_TYPES.filter(t => t !== 'Mixed Bag Pallet' && t !== 'Minibulk')
+              ? PALLET_TYPES.filter(pt => pt !== 'Mixed Bag Pallet' && pt !== 'Minibulk')
               : PALLET_TYPES
-            ).map((t) => (
-              <option key={t} value={t}>{t}</option>
+            ).map((pt) => (
+              <option key={pt} value={pt}>{palletTypeLabel(pt)}</option>
             ))}
           </select>
         </div>
@@ -300,10 +366,18 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
-            Batch <em>{pallet.batchSections.length === 1 ? 'data' : 'sections'}</em>
+            <em>
+              {pallet.batchSections.length === 1
+                ? t('pallet.batchDataTitle', 'Batch data')
+                : t('pallet.batchSectionsTitle', 'Batch sections')}
+            </em>
           </h2>
           {pallet.batchSections.length > 1 && (
-            <span className="section__meta">{pallet.batchSections.length} batches on this pallet</span>
+            <span className="section__meta">
+              {t('pallet.batchesOnPallet', '{count} batches on this pallet', {
+                count: pallet.batchSections.length,
+              })}
+            </span>
           )}
         </div>
 
@@ -331,16 +405,26 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
-            {isReturns ? 'Damage' : <>Order <em>Verification</em></>}
+            {isReturns ? (
+              t('pallet.damageTitle', 'Damage')
+            ) : (
+              <em>{t('pallet.orderVerificationTitle', 'Order verification')}</em>
+            )}
           </h2>
         </div>
         
         <div className="field-row">
           <div className="field">
             <div className="field__label">
-              {isReturns 
-                ? '* Was anything damaged (Mouse holes, unfilled Seedpaks/bags, or overly damaged bags/boxes)?' 
-                : '* Does the Bag Pallet pass inspection with no findings? (No damage, all info matches, all labels applied)'}
+              {isReturns
+                ? t(
+                    'pallet.qDamaged',
+                    '* Was anything damaged (Mouse holes, unfilled Seedpaks/bags, or overly damaged bags/boxes)?'
+                  )
+                : t(
+                    'pallet.qPassInspection',
+                    '* Does the Bag Pallet pass inspection with no findings? (No damage, all info matches, all labels applied)'
+                  )}
             </div>
             <div className="toggle-group">
               <button
@@ -353,7 +437,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                   })
                 }
               >
-                {isReturns ? 'No' : 'Pass'}
+                {isReturns ? t('pallet.no', 'No') : t('pallet.pass', 'Pass')}
               </button>
               <button
                 className={pallet.passInspection === 'Fail' ? 'active danger' : ''}
@@ -365,14 +449,14 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                   })
                 }
               >
-                {isReturns ? 'Yes' : 'Fail'}
+                {isReturns ? t('pallet.yes', 'Yes') : t('pallet.fail', 'Fail')}
               </button>
             </div>
           </div>
           
           {inspection.type !== 'returns' && pallet.passInspection === 'Fail' && (
             <div className="field">
-              <div className="field__label">* What is the LPN number?</div>
+              <div className="field__label">{t('pallet.lpnLabel', '* What is the LPN number?')}</div>
               <input
                 type="text"
                 value={pallet.lpnNumber || ''}
@@ -383,7 +467,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                     patch: { lpnNumber: e.target.value },
                   })
                 }
-                placeholder="Enter LPN number..."
+                placeholder={t('pallet.lpnPlaceholder', 'Enter LPN number...')}
                 className="mono"
               />
             </div>
@@ -391,7 +475,9 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
 
           {inspection.type !== 'returns' && (
             <div className="field">
-              <div className="field__label">* Is there an accuracy verification label attached?</div>
+              <div className="field__label">
+                {t('pallet.accuracyLabel', '* Is there an accuracy verification label attached?')}
+              </div>
               <div className="toggle-group">
                 {(['Yes', 'No', 'N/A'] as const).map((v) => (
                   <button
@@ -405,7 +491,11 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                       })
                     }
                   >
-                    {v}
+                    {v === 'Yes'
+                      ? t('pallet.yes', 'Yes')
+                      : v === 'No'
+                      ? t('pallet.no', 'No')
+                      : t('pallet.na', 'N/A')}
                   </button>
                 ))}
               </div>
@@ -417,13 +507,13 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           <div className="flex-col gap-16" style={{ marginTop: 16 }}>
             {isReturns && (
               <div className="field">
-                 <div className="field__label">* Photograph the damage</div>
+                 <div className="field__label">{t('pallet.photographDamage', '* Photograph the damage')}</div>
                  <div className="photo-slot-grid">
                    <SlotPhotoCapture
                       inspectionId={inspection.id}
                       category="Returns_Damage_Assessment"
                       slotKey="RETURNS_DAMAGE"
-                      slotLabel="Damage Photo"
+                      slotLabel={t('pallet.damagePhotoSlot', 'Damage Photo')}
                       palletIndex={palletIndex}
                       existingPhoto={pallet.photos.find((p: any) => p.slotKey === 'RETURNS_DAMAGE')}
                       currentUser={inspection.startedBy || 'unknown'}
@@ -435,7 +525,11 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
               </div>
             )}
             <div className="field">
-              <div className="field__label">* Select all {pallet.palletType} findings</div>
+              <div className="field__label">
+                {t('pallet.selectFindings', '* Select all {type} findings', {
+                  type: palletTypeLabel(pallet.palletType),
+                })}
+              </div>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
@@ -457,7 +551,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                         onChange={() => toggleFinding(opt)}
                         style={{ cursor: 'pointer', width: 16, height: 16 }}
                       />
-                      {opt}
+                      {findingLabel(opt)}
                     </label>
                   );
                 })}
@@ -465,7 +559,9 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             </div>
 
             <div className="field">
-              <div className="field__label">Rejected Bags (how many bags are rejected)</div>
+              <div className="field__label">
+                {t('pallet.rejectedBagsLabel', 'Rejected Bags (how many bags are rejected)')}
+              </div>
               <input
                 type="number"
                 value={pallet.rejectedBagCount === undefined ? '' : String(pallet.rejectedBagCount)}
@@ -482,7 +578,9 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
               />
             </div>
             <div className="field">
-              <div className="field__label">Notes / Reasoning for rejection</div>
+              <div className="field__label">
+                {t('pallet.rejectionNotesLabel', 'Notes / Reasoning for rejection')}
+              </div>
               <textarea
                 value={pallet.rejectedNotes || ''}
                 onChange={(e) =>
@@ -493,7 +591,10 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                   })
                 }
                 rows={3}
-                placeholder="Describe why these bags were rejected (e.g. forklift damage, mouse holes, water damage)..."
+                placeholder={t(
+                  'pallet.rejectionNotesPlaceholder',
+                  'Describe why these bags were rejected (e.g. forklift damage, mouse holes, water damage)...'
+                )}
               />
             </div>
           </div>
@@ -504,9 +605,11 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         <div className="row-between">
           <div>
             <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Total on this pallet
+              {t('pallet.totalOnPallet', 'Total on this pallet')}
             </div>
-            <div className="fw-500" style={{ fontSize: 24 }}>{totalActualOnPallet} bags</div>
+            <div className="fw-500" style={{ fontSize: 24 }}>
+              {t('pallet.bagsCount', '{count} bags', { count: totalActualOnPallet })}
+            </div>
           </div>
         </div>
       </div>
@@ -542,19 +645,21 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                   navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`)
                 }
               >
-                {isFromInvestigation ? '← Back to investigation' : '← Back to load'}
+                {isFromInvestigation
+                  ? t('pallet.backToInvestigation', '← Back to investigation')
+                  : t('pallet.backToLoad', '← Back to load')}
               </button>
             </>
           ) : (
             <>
               <button className="btn btn--danger btn--ghost" onClick={removePallet}>
-                Remove pallet
+                {t('pallet.removePallet', 'Remove pallet')}
               </button>
               <button
                 className="btn btn--accent btn--lg"
                 onClick={handleAdd}
               >
-                ✓ Add to load
+                {t('pallet.addToLoad', '✓ Add to load')}
               </button>
             </>
           )}
@@ -579,6 +684,7 @@ function BatchSectionRow({
   remainingAvailable: number | null;
   onUpdate: (patch: Partial<BatchSection>) => void;
 }) {
+  const t = useT();
   const actual = section.actualBagCount.value;
   const expected = section.expectedBagCount;
   const mismatch = expected > 0 && actual !== null && actual !== expected;
@@ -590,12 +696,12 @@ function BatchSectionRow({
           className="xs soft fw-500"
           style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}
         >
-          Batch {sectionNumber}
+          {t('pallet.batchNumber', 'Batch {number}', { number: sectionNumber })}
         </div>
       )}
       <div className="field-row">
         <SuggestableField
-          label="Batch code"
+          label={t('pallet.batchCodeLabel', 'Batch code')}
           field={section.batchCode}
           mono
           uppercase
@@ -605,7 +711,7 @@ function BatchSectionRow({
         />
         {!isReturns && (
           <div className="field">
-            <div className="field__label">Expected bag count</div>
+            <div className="field__label">{t('pallet.expectedBagCount', 'Expected bag count')}</div>
             <input
               type="number"
               value={expected || ''}
@@ -616,13 +722,15 @@ function BatchSectionRow({
             />
             <div className="field__hint">
               {section.batchCode.value
-                ? `From picklist line for ${section.batchCode.value}`
-                : 'Enter batch code first'}
+                ? t('pallet.fromPicklistLine', 'From picklist line for {batch}', {
+                    batch: section.batchCode.value,
+                  })
+                : t('pallet.enterBatchFirst', 'Enter batch code first')}
             </div>
           </div>
         )}
         <SuggestableField
-          label="Actual bag count (confirm)"
+          label={t('pallet.actualBagCount', 'Actual bag count (confirm)')}
           field={section.actualBagCount}
           type="number"
           hideCamera={true}
@@ -635,7 +743,11 @@ function BatchSectionRow({
 
       {remainingAvailable !== null && remainingAvailable > 0 && (
         <div className="small soft mt-8">
-          {remainingAvailable} bags remaining on picklist for this batch (already scanned on other pallets)
+          {t(
+            'pallet.remainingOnPicklist',
+            '{count} bags remaining on picklist for this batch (already scanned on other pallets)',
+            { count: remainingAvailable }
+          )}
         </div>
       )}
 
@@ -643,9 +755,15 @@ function BatchSectionRow({
         <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
           <span className="banner__icon">⚠</span>
           <div className="banner__body">
-            Count mismatch: expected <strong>{expected}</strong>, you entered <strong>{actual}</strong>
+            {t('pallet.mismatchPre', 'Count mismatch: expected')} <strong>{expected}</strong>
+            {t('pallet.mismatchMid', ', you entered')} <strong>{actual}</strong>
             {actual !== null && expected !== 0 && (
-              <> (difference {(actual - expected) > 0 ? '+' : ''}{actual - expected})</>
+              <>
+                {' '}
+                ({t('pallet.mismatchDiff', 'difference {diff}', {
+                  diff: `${actual - expected > 0 ? '+' : ''}${actual - expected}`,
+                })})
+              </>
             )}
           </div>
         </div>
@@ -665,6 +783,7 @@ function LayerCountHelper({
   section: BatchSection;
   onUpdate: (patch: Partial<BatchSection>) => void;
 }) {
+  const t = useT();
   const perLayer = section.bagsPerLayer;
   const layers = section.layerCount;
   const computed =
@@ -692,28 +811,28 @@ function LayerCountHelper({
       }}
     >
       <div className="field" style={{ margin: 0, minWidth: 110, flex: '1 1 110px' }}>
-        <div className="field__label">Bags / layer</div>
+        <div className="field__label">{t('pallet.bagsPerLayer', 'Bags / layer')}</div>
         <input
           type="number"
           inputMode="numeric"
           value={perLayer ?? ''}
-          placeholder="e.g. 8"
+          placeholder={t('pallet.bagsPerLayerHint', 'e.g. 8')}
           onChange={(e) => onUpdate({ bagsPerLayer: parse(e.target.value) })}
         />
       </div>
       <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--ink-faint)' }}>×</div>
       <div className="field" style={{ margin: 0, minWidth: 90, flex: '1 1 90px' }}>
-        <div className="field__label">Layers</div>
+        <div className="field__label">{t('pallet.layers', 'Layers')}</div>
         <input
           type="number"
           inputMode="numeric"
           value={layers ?? ''}
-          placeholder="e.g. 6"
+          placeholder={t('pallet.layersHint', 'e.g. 6')}
           onChange={(e) => onUpdate({ layerCount: parse(e.target.value) })}
         />
       </div>
       <div style={{ alignSelf: 'center', paddingBottom: 8, whiteSpace: 'nowrap' }}>
-        = <strong>{computed ?? '—'}</strong> bags
+        = <strong>{computed ?? '—'}</strong> {t('pallet.bagsUnit', 'bags')}
       </div>
       <button
         type="button"
@@ -725,7 +844,9 @@ function LayerCountHelper({
         }
         style={{ marginBottom: 2 }}
       >
-        {alreadyApplied ? '✓ Applied' : 'Use as actual count'}
+        {alreadyApplied
+          ? t('pallet.layerApplied', '✓ Applied')
+          : t('pallet.layerApply', 'Use as actual count')}
       </button>
     </div>
   );

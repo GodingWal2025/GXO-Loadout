@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { QualityFlag, QualityFlagReason } from '../types/inspection';
 import { QUALITY_FLAG_REASONS } from '../types/inspection';
+import { useT } from '../i18n/LanguageContext';
 
 interface Props {
   flag?: QualityFlag;
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export function QualityFlagButton({ flag, level, onFlag, onUnflag, currentUser }: Props) {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState<QualityFlagReason | ''>(flag?.reason || '');
   const [otherReason, setOtherReason] = useState(flag?.otherReason || '');
@@ -44,7 +46,7 @@ export function QualityFlagButton({ flag, level, onFlag, onUnflag, currentUser }
         <button
           className={`photo-tile__flag-btn ${isFlagged ? 'photo-tile__flag-btn--active' : ''}`}
           onClick={(e) => { e.stopPropagation(); openModal(); }}
-          aria-label="Flag quality issue"
+          aria-label={t('quality.flagIssueAria', 'Flag quality issue')}
         >
           ⚑
         </button>
@@ -67,7 +69,9 @@ export function QualityFlagButton({ flag, level, onFlag, onUnflag, currentUser }
     );
   }
 
-  const buttonLabel = isFlagged ? '⚑ Flagged' : '⚑ Flag issue';
+  const buttonLabel = isFlagged
+    ? t('quality.flagged', '⚑ Flagged')
+    : t('quality.flagIssue', '⚑ Flag issue');
   const buttonClass = `btn btn--sm ${isFlagged ? 'btn--danger' : ''}`;
 
   return (
@@ -113,19 +117,34 @@ function FlagModal({
   setReason, setOtherReason, setNotes,
   isFlagged, onSubmit, onCancel, onUnflag,
 }: ModalProps) {
+  const t = useT();
+
+  // Labels only — the keys stay exactly as stored/synced.
+  const reasonLabels: Record<QualityFlagReason, string> = {
+    damaged_product: t('quality.reasonDamagedProduct', QUALITY_FLAG_REASONS.damaged_product),
+    wrong_or_missing_label: t('quality.reasonWrongLabel', QUALITY_FLAG_REASONS.wrong_or_missing_label),
+    wrong_batch_or_product_info: t('quality.reasonWrongBatch', QUALITY_FLAG_REASONS.wrong_batch_or_product_info),
+    quantity_discrepancy: t('quality.reasonQuantity', QUALITY_FLAG_REASONS.quantity_discrepancy),
+    other: t('quality.reasonOther', QUALITY_FLAG_REASONS.other),
+  };
+
   return (
     <div className="modal-backdrop" onClick={onCancel}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3 className="modal__title">{isFlagged ? 'Edit quality flag' : 'Flag quality issue'}</h3>
+        <h3 className="modal__title">
+          {isFlagged
+            ? t('quality.editTitle', 'Edit quality flag')
+            : t('quality.flagTitle', 'Flag quality issue')}
+        </h3>
         <p className="modal__sub">
-          {level === 'photo' && 'Flag this specific photo as a quality concern.'}
-          {level === 'pallet' && 'Flag this entire pallet as a quality concern.'}
-          {level === 'inspection' && 'Flag this entire load as a quality concern.'}
+          {level === 'photo' && t('quality.subPhoto', 'Flag this specific photo as a quality concern.')}
+          {level === 'pallet' && t('quality.subPallet', 'Flag this entire pallet as a quality concern.')}
+          {level === 'inspection' && t('quality.subInspection', 'Flag this entire load as a quality concern.')}
         </p>
 
         <fieldset className="modal__field modal__field--radio">
-          <legend>Reason (required)</legend>
-          {Object.entries(QUALITY_FLAG_REASONS).map(([key, label]) => (
+          <legend>{t('quality.reasonLegend', 'Reason (required)')}</legend>
+          {Object.keys(QUALITY_FLAG_REASONS).map((key) => (
             <label key={key} className="modal__radio">
               <input
                 type="radio"
@@ -133,44 +152,46 @@ function FlagModal({
                 checked={reason === key}
                 onChange={() => setReason(key as QualityFlagReason)}
               />
-              {label}
+              {reasonLabels[key as QualityFlagReason]}
             </label>
           ))}
         </fieldset>
 
         {reason === 'other' && (
           <div className="modal__field">
-            <label>Please specify (required)</label>
+            <label>{t('quality.specifyLabel', 'Please specify (required)')}</label>
             <input
               value={otherReason}
               onChange={(e) => setOtherReason(e.target.value)}
-              placeholder="Describe the issue"
+              placeholder={t('quality.specifyPlaceholder', 'Describe the issue')}
               autoFocus
             />
           </div>
         )}
 
         <div className="modal__field">
-          <label>Notes (optional)</label>
+          <label>{t('quality.notesLabel', 'Notes (optional)')}</label>
           <textarea
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            placeholder="Additional context..."
+            placeholder={t('quality.notesPlaceholder', 'Additional context...')}
             rows={3}
           />
         </div>
 
         <div className="modal__actions">
           {isFlagged && (
-            <button className="btn btn--ghost" onClick={onUnflag}>Remove flag</button>
+            <button className="btn btn--ghost" onClick={onUnflag}>
+              {t('quality.removeFlag', 'Remove flag')}
+            </button>
           )}
-          <button className="btn" onClick={onCancel}>Cancel</button>
+          <button className="btn" onClick={onCancel}>{t('quality.cancel', 'Cancel')}</button>
           <button
             className="btn btn--primary"
             onClick={onSubmit}
             disabled={!reason || (reason === 'other' && !otherReason.trim())}
           >
-            {isFlagged ? 'Update flag' : 'Save flag'}
+            {isFlagged ? t('quality.updateFlag', 'Update flag') : t('quality.saveFlag', 'Save flag')}
           </button>
         </div>
       </div>

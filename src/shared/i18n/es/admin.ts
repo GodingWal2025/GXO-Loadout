@@ -1,0 +1,220 @@
+export const admin: Record<string, string> = {
+  // ---- Admin gate ----
+  'adminGate.title': 'Acceso de administración',
+  'adminGate.sub': 'Ingrese la contraseña de administración para acceder a las pantallas de gestión.',
+  'adminGate.passwordPlaceholder': 'Contraseña de administración',
+  'adminGate.unlock': 'Desbloquear',
+  'adminGate.wrongPassword': 'Contraseña incorrecta. Intente de nuevo.',
+  'adminGate.defaultPasswordHint':
+    'La contraseña predeterminada aún no se ha cambiado. Gerente: cámbiela desde administración.',
+  'adminGate.back': '← Volver a inspecciones',
+
+  // ---- Admin header ----
+  'admin.title': 'Consola',
+  'admin.titleEm': 'de administración',
+  'admin.managerOnly': 'Solo gerentes',
+  'admin.noSiteAssigned': 'sin sitio asignado',
+  'admin.backToApp': '← Volver a la app',
+  'admin.logOut': 'Cerrar sesión',
+  'admin.noSiteBannerTitle': 'Este dispositivo aún no está asignado a un sitio.',
+  'admin.noSiteBannerBody':
+    'Cree un sitio abajo y luego vaya a Configuración del dispositivo (la pantalla de inicio lo redirigirá) para asignar este dispositivo a ese sitio.',
+
+  // ---- Tabs ----
+  'admin.tabInspectors': 'Inspectores',
+  'admin.tabSites': 'Sitios',
+  'admin.tabStaging': 'Ubicaciones de preparación',
+  'admin.tabReports': 'Informes y panel',
+  'admin.tabSecurity': 'Seguridad',
+  'admin.assignSiteFirst': 'Asigne primero este dispositivo a un sitio',
+
+  // ---- Shared table / status copy ----
+  'admin.colName': 'Nombre',
+  'admin.colStatus': 'Estado',
+  'admin.colAction': 'Acción',
+  'admin.colActions': 'Acciones',
+  'admin.colSite': 'Sitio',
+  'admin.colAddress': 'Dirección',
+  'admin.colLocation': 'Ubicación',
+  'admin.colId': 'ID',
+  'admin.colType': 'Tipo',
+  'admin.colState': 'Situación',
+  'admin.statusActive': 'Activo',
+  'admin.statusInactive': 'Inactivo',
+  'admin.stateArchived': 'Archivado',
+  'admin.deactivate': 'Desactivar',
+  'admin.reactivate': 'Reactivar',
+  'admin.delete': 'Eliminar',
+  'admin.activeCount': '{count} activos',
+
+  // ---- Inspectors tab ----
+  'admin.addInspector': 'Agregar',
+  'admin.addInspectorEm': 'inspector',
+  'admin.nameLabel': 'Nombre',
+  'admin.inspectorNamePlaceholder': 'ej. M. Jones',
+  'admin.addInspectorBtn': '+ Agregar inspector',
+  'admin.currentInspectors': 'Inspectores',
+  'admin.currentInspectorsEm': 'actuales',
+  'admin.inspectorsInfo':
+    'Los inspectores desactivados permanecen en los registros de inspecciones anteriores (para conservar el historial), pero no aparecen en la lista al iniciar cargas nuevas.',
+  'admin.noInspectors': 'Aún no hay inspectores',
+  'admin.noInspectorsSub': 'Agregue al menos un inspector antes de iniciar cualquier carga.',
+
+  // ---- Sites tab ----
+  'admin.addSite': 'Agregar',
+  'admin.addSiteEm': 'sitio',
+  'admin.siteNameLabel': 'Nombre del sitio',
+  'admin.siteNamePlaceholder': 'ej. Centro de Distribución Memphis',
+  'admin.addressLabel': 'Dirección (opcional)',
+  'admin.addressPlaceholder': '123 Main St, Memphis TN',
+  'admin.addSiteBtn': '+ Agregar sitio',
+  'admin.allSites': 'Todos los',
+  'admin.allSitesEm': 'sitios',
+  'admin.noSites': 'Aún no hay sitios',
+  'admin.noSitesSub': 'Agregue el primer sitio arriba.',
+  'admin.selectedSite': 'Sitio seleccionado',
+  'admin.confirmDeleteSite': '¿Eliminar el sitio "{name}"? Esta acción no se puede deshacer.',
+  'admin.deleteSiteFailed': 'No se pudo eliminar',
+
+  // ---- Staging locations tab ----
+  'admin.addStaging': 'Agregar',
+  'admin.addStagingEm': 'ubicación de preparación',
+  'admin.stagingInfo':
+    'Los inspectores eligen la ubicación de preparación al iniciar una carga nueva. Ejemplos: "Puerta 12", "Bahía 3-A", "Patio Sur". Son propias de cada sitio.',
+  'admin.locationNameLabel': 'Nombre de la ubicación',
+  'admin.locationNamePlaceholder': 'ej. Puerta 12',
+  'admin.addLocationBtn': '+ Agregar ubicación',
+  'admin.currentStaging': 'Ubicaciones de preparación',
+  'admin.currentStagingEm': 'actuales',
+  'admin.noStaging': 'Aún no hay ubicaciones de preparación',
+  'admin.noStagingSub': 'Agregue al menos una antes de que los inspectores inicien cargas aquí.',
+  'admin.confirmDeleteLocation': '¿Eliminar la ubicación "{name}"?',
+
+  // ---- Reports tab ----
+  'admin.reportsTitle': 'Informes y',
+  'admin.reportsTitleEm': 'panel',
+  'admin.reportsMeta': 'Datos de operaciones entre sitios',
+  'admin.reportsInfo':
+    'El panel de operaciones está restringido a gerentes. Muestra KPI entre sitios, carga de trabajo por inspector, tasas de marcado y tendencias de discrepancias.',
+  'admin.openDashboard': 'Abrir panel →',
+
+  // ---- Security tab ----
+  'admin.changePassword': 'Cambiar',
+  'admin.changePasswordEm': 'contraseña de administración',
+  'admin.defaultPwTitle': 'Todavía usa la contraseña predeterminada.',
+  'admin.defaultPwBody':
+    'Cámbiela ahora para mantener al personal del almacén fuera del área de administración.',
+  'admin.passwordScopeInfo':
+    'Esta contraseña se guarda en este dispositivo y la comparten todos los gerentes que lo usan. Para seguridad real se necesitarían cuentas Microsoft individuales.',
+  'admin.currentPasswordLabel': 'Contraseña actual',
+  'admin.newPasswordLabel': 'Contraseña nueva',
+  'admin.newPasswordPlaceholder': 'Al menos 6 caracteres',
+  'admin.confirmPasswordLabel': 'Confirmar contraseña nueva',
+  'admin.confirmPasswordPlaceholder': 'Repita la contraseña nueva',
+  'admin.updatePasswordBtn': 'Actualizar contraseña',
+  'admin.pwCurrentWrong': 'La contraseña actual es incorrecta.',
+  'admin.pwTooShort': 'La contraseña nueva debe tener al menos 6 caracteres.',
+  'admin.pwMismatch': 'La contraseña nueva y la confirmación no coinciden.',
+  'admin.pwUpdated': 'Contraseña actualizada.',
+
+  // ---- Reset all data ----
+  'admin.resetTitle': 'Borrar',
+  'admin.resetTitleEm': 'todos los datos',
+  'admin.dangerZone': 'Zona de riesgo',
+  'admin.resetWarnTitle': 'Esto borra todo en este dispositivo:',
+  'admin.resetWarnBody':
+    'todas las inspecciones, fotos, sitios, inspectores, ubicaciones de preparación y ajustes. El dispositivo volverá a su estado inicial.',
+  'admin.resetAllDataBtn': 'Borrar todos los datos',
+  'admin.resetting': 'Borrando…',
+  'admin.confirmReset':
+    '¿Borrar TODOS los datos? Esto elimina cada inspección, foto, sitio, inspector y ubicación de preparación de este dispositivo. No se puede deshacer.',
+  'admin.resetPasswordPrompt':
+    'Ingrese la contraseña de administración para confirmar el borrado:',
+  'admin.resetWrongPassword': 'Contraseña de administración incorrecta. Borrado cancelado.',
+
+  // ---- Inspection management ----
+  'admin.inspectionMgmt': 'Gestión de',
+  'admin.inspectionMgmtEm': 'inspecciones',
+  'admin.totalInspections': '{count} inspecciones en total',
+  'admin.loadingInspections': 'Cargando inspecciones...',
+  'admin.noInspectionsFound': 'No se encontraron inspecciones.',
+  'admin.confirmDeleteInspection':
+    '¿Eliminar esta inspección de forma permanente? No se puede deshacer.',
+  'admin.deleteRefused': 'El servidor rechazó la eliminación ({status}). No se eliminó nada; intente de nuevo.',
+  'admin.deleteOffline':
+    'No se pudo contactar el servidor. Eliminar requiere conexión, así que no se eliminó nada.',
+  'admin.previous': '← Anterior',
+  'admin.next': 'Siguiente →',
+  'admin.pageOf': 'Página {page} de {total}',
+
+  // ---- Operations dashboard ----
+  'dashboard.title': 'Panel de',
+  'dashboard.titleEm': 'operaciones',
+  'dashboard.sub': 'Diagnóstico entre sitios · datos en vivo',
+  'dashboard.home': '← Inicio',
+  'dashboard.quickRange': 'Rango rápido',
+  'dashboard.custom': 'Personalizado',
+  'dashboard.from': 'Desde',
+  'dashboard.to': 'Hasta',
+  'dashboard.siteFilter': 'Sitio',
+  'dashboard.allSites': 'Todos los sitios',
+  'dashboard.allSitesLower': 'todos los sitios',
+  'dashboard.exportCsv': '⇣ Exportar CSV',
+  'dashboard.exportPdf': '⎙ Exportar PDF',
+  'dashboard.loadFailed': 'No se pudieron cargar las métricas en vivo:',
+  'dashboard.loading': 'Cargando estadísticas...',
+  'dashboard.loadingSub': 'Leyendo de la base de datos local.',
+  'dashboard.rangeBannerFrom': 'Mostrando datos agregados en vivo desde',
+  'dashboard.rangeBannerTo': 'hasta',
+  'dashboard.rangeBannerFor': 'para',
+
+  'dashboard.glance': 'Vista',
+  'dashboard.glanceEm': 'general',
+  'dashboard.glanceMeta': 'KPI locales',
+
+  'dashboard.throughput': 'Tendencias de',
+  'dashboard.throughputEm': 'volumen',
+  'dashboard.throughputMeta': 'Inspecciones de cargas por día',
+  'dashboard.loadsPerDay': 'Cargas inspeccionadas por día',
+  'dashboard.loadsPerDayAria': 'Gráfico de barras apiladas de cargas inspeccionadas por día y sitio',
+  'dashboard.loadsBySite': 'Desglose de cargas por sitio',
+  'dashboard.loadsBySiteAria': 'Gráfico de anillo con el desglose de cargas por sitio',
+
+  'dashboard.quality': 'Calidad y',
+  'dashboard.qualityEm': 'precisión',
+  'dashboard.qualityMeta': 'Marcas de calidad inspeccionadas',
+  'dashboard.flagRate': 'Tasa de marcado',
+  'dashboard.flagRateOverTime': 'Tasa de marcado en el tiempo',
+  'dashboard.flagRateOverTimeSub': 'Porcentaje de inspecciones marcadas por día',
+  'dashboard.flagRateAria': 'Gráfico de líneas de la tasa de marcado en el tiempo',
+  'dashboard.flagReasons': 'Motivos de marcado',
+  'dashboard.flagReasonsSub': 'Problemas categorizados registrados por VLM e inspectores',
+  'dashboard.flagReasonsAria': 'Gráfico de barras horizontales de motivos de marcado',
+
+  'dashboard.bySite': 'Por',
+  'dashboard.bySiteEm': 'sitio',
+  'dashboard.bySiteMeta': 'Estadísticas por sitio',
+  'dashboard.byInspector': 'Por',
+  'dashboard.byInspectorEm': 'inspector',
+  'dashboard.byInspectorMeta': 'Ordenado por volumen',
+  'dashboard.noInspectors': 'Ningún inspector activo en el período seleccionado.',
+
+  'dashboard.openFlags': 'Marcas',
+  'dashboard.openFlagsEm': 'abiertas',
+  'dashboard.openFlagsMeta': 'Problemas de calidad sin resolver',
+  'dashboard.noOpenFlags': 'Todo en orden. Sin marcas abiertas en el período seleccionado.',
+
+  'dashboard.colSite': 'Sitio',
+  'dashboard.colLoads': 'Cargas',
+  'dashboard.colFlagRate': 'Tasa marcado',
+  'dashboard.colCycle': 'Ciclo',
+  'dashboard.colDisc': 'Discr.',
+  'dashboard.colInsp': 'Insp.',
+  'dashboard.colStatus': 'Estado',
+  'dashboard.colInspector': 'Inspector',
+  'dashboard.colWorkload': 'Carga trabajo',
+  'dashboard.colLoadNo': 'Carga n.º',
+  'dashboard.colReason': 'Motivo',
+  'dashboard.colSeverity': 'Gravedad',
+  'dashboard.colFlagged': 'Marcado',
+};

@@ -5,6 +5,7 @@ import { getDeviceConfig } from '../lib/deviceConfig';
 import { dbListAllInspections, PhotoLightbox } from '../shared';
 import { resolvePhotoUrl } from '../shared/services/resolvePhotoUrls';
 import type { InspectionPhoto } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 /** Which pallet of which search result is being previewed inline. */
 interface Glimpse {
@@ -14,6 +15,7 @@ interface Glimpse {
 
 export function InvestigationRoute() {
   const navigate = useNavigate();
+  const t = useT();
   const deviceConfig = getDeviceConfig();
   const sites = listActiveSites();
   const [selectedSite, setSelectedSite] = useState(deviceConfig?.siteId || sites[0]?.id || 'all');
@@ -24,6 +26,14 @@ export function InvestigationRoute() {
   const [photoUrls, setPhotoUrls] = useState<Map<string, string>>(new Map());
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [glimpse, setGlimpse] = useState<Glimpse | null>(null);
+
+  // Display-only labels for the stored inspection type values.
+  const typeLabels: Record<string, string> = {
+    outbound: t('investigation.typeOutbound', 'Outbound'),
+    inbound: t('investigation.typeInbound', 'Inbound'),
+    returns: t('investigation.typeReturns', 'Returns'),
+    retag: t('investigation.typeRetag', 'Retag'),
+  };
 
   // Default to device site if not already set and sites list is loaded
   useEffect(() => {
@@ -118,15 +128,18 @@ export function InvestigationRoute() {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            <em>Investigation</em>
+            <em>{t('investigation.title', 'Investigation')}</em>
           </h1>
           <div className="page-head__sub">
-            Trace shipments, verify final packaging, and search matching batch codes
+            {t(
+              'investigation.subtitle',
+              'Trace shipments, verify final packaging, and search matching batch codes'
+            )}
           </div>
         </div>
         <div className="page-head__actions">
           <Link to="/" className="btn btn--ghost">
-            ← Home
+            {t('investigation.home', '← Home')}
           </Link>
         </div>
       </div>
@@ -135,13 +148,15 @@ export function InvestigationRoute() {
         <form onSubmit={handleSearch} className="card" style={{ padding: '20px', background: 'var(--surface)' }}>
           <div className="field-row" style={{ marginBottom: '16px' }}>
             <div className="field" style={{ flex: '1 1 200px' }}>
-              <label className="field__label" htmlFor="site-select">Site Filter</label>
+              <label className="field__label" htmlFor="site-select">
+                {t('investigation.siteFilter', 'Site Filter')}
+              </label>
               <select
                 id="site-select"
                 value={selectedSite}
                 onChange={(e) => setSelectedSite(e.target.value)}
               >
-                <option value="all">All Sites</option>
+                <option value="all">{t('investigation.allSites', 'All Sites')}</option>
                 {sites.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -150,11 +165,16 @@ export function InvestigationRoute() {
               </select>
             </div>
             <div className="field" style={{ flex: '2 1 300px' }}>
-              <label className="field__label" htmlFor="search-input">Search Query</label>
+              <label className="field__label" htmlFor="search-input">
+                {t('investigation.searchQuery', 'Search Query')}
+              </label>
               <input
                 id="search-input"
                 type="text"
-                placeholder="Search batch code, load #, or delivery #..."
+                placeholder={t(
+                  'investigation.searchPlaceholder',
+                  'Search batch code, load #, or delivery #...'
+                )}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 autoFocus
@@ -167,7 +187,9 @@ export function InvestigationRoute() {
             style={{ width: '100%' }}
             disabled={loading || !query.trim()}
           >
-            {loading ? 'Searching...' : 'Search Local Database'}
+            {loading
+              ? t('investigation.searching', 'Searching...')
+              : t('investigation.searchButton', 'Search Local Database')}
           </button>
         </form>
       </section>
@@ -175,31 +197,38 @@ export function InvestigationRoute() {
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
-            Search <em>results</em>
+            {t('investigation.resultsLead', 'Search')} <em>{t('investigation.resultsEm', 'results')}</em>
           </h2>
           {searched && (
             <span className="section__meta">
-              {results.length} match{results.length === 1 ? '' : 'es'} found
+              {results.length === 1
+                ? t('investigation.matchCountOne', '{count} match found', { count: results.length })
+                : t('investigation.matchCountMany', '{count} matches found', {
+                    count: results.length,
+                  })}
             </span>
           )}
         </div>
 
         {loading ? (
           <div className="empty">
-            <div className="empty__sub">Searching local data…</div>
+            <div className="empty__sub">{t('investigation.searchingData', 'Searching local data…')}</div>
           </div>
         ) : !searched ? (
           <div className="empty">
-            <div className="empty__title">Ready to search</div>
+            <div className="empty__title">{t('investigation.readyTitle', 'Ready to search')}</div>
             <div className="empty__sub">
-              Enter a batch code, load number, or delivery number to look up historical records.
+              {t(
+                'investigation.readySub',
+                'Enter a batch code, load number, or delivery number to look up historical records.'
+              )}
             </div>
           </div>
         ) : results.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No shipments found</div>
+            <div className="empty__title">{t('investigation.noResultsTitle', 'No shipments found')}</div>
             <div className="empty__sub">
-              Check the spelling or try searching across all sites.
+              {t('investigation.noResultsSub', 'Check the spelling or try searching across all sites.')}
             </div>
           </div>
         ) : (
@@ -233,20 +262,33 @@ export function InvestigationRoute() {
                       <div className="row-start gap-8" style={{ marginBottom: '4px' }}>
                         <span className="mono fw-500" style={{ fontSize: '18px' }}>#{loadNum}</span>
                         <span className={`pill pill--${item.type === 'returns' ? 'info' : 'success'}`} style={{ textTransform: 'uppercase', fontSize: '11px' }}>
-                          {item.type}
+                          {typeLabels[item.type as keyof typeof typeLabels] ?? item.type}
                         </span>
                         {item.flaggedItemsCount > 0 && (
-                          <span className="pill pill--danger">⚑ {item.flaggedItemsCount} flagged</span>
+                          <span className="pill pill--danger">
+                            ⚑ {t('investigation.flagged', '{count} flagged', {
+                              count: item.flaggedItemsCount,
+                            })}
+                          </span>
                         )}
                       </div>
                       <div className="xs soft">
-                        Site: <strong>{item.siteId}</strong> · Completed: {completedTime} · Inspector: {item.completedBy || item.startedBy || '—'}
+                        {t('investigation.siteLabel', 'Site:')} <strong>{item.siteId}</strong> ·{' '}
+                        {t('investigation.completedLabel', 'Completed:')} {completedTime} ·{' '}
+                        {t('investigation.inspectorLabel', 'Inspector:')}{' '}
+                        {item.completedBy || item.startedBy || '—'}
                       </div>
                     </div>
                     <div className="row-start gap-12">
                       <div style={{ textAlign: 'right' }}>
-                        <div className="fw-500" style={{ fontSize: '15px' }}>{totalBags} bags</div>
-                        <div className="xs soft">{item.pallets?.length || 0} pallets</div>
+                        <div className="fw-500" style={{ fontSize: '15px' }}>
+                          {t('investigation.bagsCount', '{count} bags', { count: totalBags })}
+                        </div>
+                        <div className="xs soft">
+                          {t('investigation.palletsCount', '{count} pallets', {
+                            count: item.pallets?.length || 0,
+                          })}
+                        </div>
                       </div>
                       <span style={{ transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform .15s', fontSize: '18px' }}>
                         →
@@ -260,19 +302,23 @@ export function InvestigationRoute() {
                       {/* Section 1: Overview */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
                         <div>
-                          <div className="xs soft">Ship Date</div>
+                          <div className="xs soft">{t('investigation.shipDate', 'Ship Date')}</div>
                           <div className="fw-500">{shipDate}</div>
                         </div>
                         <div>
-                          <div className="xs soft">Carrier</div>
+                          <div className="xs soft">{t('investigation.carrier', 'Carrier')}</div>
                           <div className="fw-500">{item.bolCarrier || '—'}</div>
                         </div>
                         <div>
-                          <div className="xs soft">Staging Location</div>
+                          <div className="xs soft">
+                            {t('investigation.stagingLocation', 'Staging Location')}
+                          </div>
                           <div className="fw-500">{item.stagingLocation || '—'}</div>
                         </div>
                         <div>
-                          <div className="xs soft">Inspector Sign-off</div>
+                          <div className="xs soft">
+                            {t('investigation.inspectorSignOff', 'Inspector Sign-off')}
+                          </div>
                           <div className="fw-500">{item.completedBy || item.startedBy || '—'}</div>
                         </div>
                       </div>
@@ -280,17 +326,18 @@ export function InvestigationRoute() {
                       {/* Section 2: Tallies / Deliveries */}
                       <div style={{ marginBottom: '20px' }}>
                         <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-                          Deliveries &amp; Picklist Items
+                          {t('investigation.deliveriesAndItems', 'Deliveries & Picklist Items')}
                         </div>
                         <div className="table-card">
                           <table className="data" style={{ width: '100%', fontSize: '13px' }}>
                             <thead>
                               <tr>
-                                <th>Delivery #</th>
-                                <th>Batch Code</th>
-                                <th>Product</th>
-                                <th className="right">Expected</th>
-                                <th className="right">Actual</th>
+                                <th>{t('investigation.colDelivery', 'Delivery #')}</th>
+                                <th>{t('investigation.colBatchCode', 'Batch Code')}</th>
+                                <th>{t('investigation.colSku', 'SKU')}</th>
+                                <th>{t('investigation.colDescription', 'Description')}</th>
+                                <th className="right">{t('investigation.colExpected', 'Expected')}</th>
+                                <th className="right">{t('investigation.colActual', 'Actual')}</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -300,7 +347,8 @@ export function InvestigationRoute() {
                                   <tr key={li.id}>
                                     <td className="mono">{del?.deliveryNumber || '—'}</td>
                                     <td className="mono fw-500">{li.batchCode?.value || '—'}</td>
-                                    <td className="soft">{li.productName?.value || '—'}</td>
+                                    <td className="mono">{li.sku?.value || '—'}</td>
+                                    <td className="soft">{li.description?.value || '—'}</td>
                                     <td className="right num">{li.expectedQuantity?.value || 0}</td>
                                     <td className="right num fw-500">{li.actualQuantity || 0}</td>
                                   </tr>
@@ -314,7 +362,7 @@ export function InvestigationRoute() {
                       {/* Section 3: Pallet details */}
                       <div style={{ marginBottom: '20px' }}>
                         <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-                          Scanned Pallets
+                          {t('investigation.scannedPallets', 'Scanned Pallets')}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                           {item.pallets?.map((p: any) => (
@@ -330,19 +378,35 @@ export function InvestigationRoute() {
                               onClick={() => setGlimpse({ item, pallet: p })}
                             >
                               <div className="row-between" style={{ marginBottom: '6px' }}>
-                                <span className="fw-500">Pallet #{p.palletNumber} · <span className="soft" style={{ fontSize: '13px' }}>{p.palletType}</span></span>
-                                <span className="xs soft">Scanned by: {p.scannedBy || '—'}</span>
+                                <span className="fw-500">
+                                  {t('investigation.palletNumber', 'Pallet #{number}', {
+                                    number: p.palletNumber,
+                                  })}{' '}
+                                  · <span className="soft" style={{ fontSize: '13px' }}>{p.palletType}</span>
+                                </span>
+                                <span className="xs soft">
+                                  {t('investigation.scannedBy', 'Scanned by:')} {p.scannedBy || '—'}
+                                </span>
                               </div>
                               <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', marginBottom: '6px' }}>
                                 {p.batchSections?.map((bs: any) => (
                                   <div key={bs.id} className="small mono">
-                                    Batch: <strong>{bs.batchCode?.value || '—'}</strong> ({bs.actualBagCount?.value || 0} bags)
+                                    {t('investigation.batchLabel', 'Batch:')}{' '}
+                                    <strong>{bs.batchCode?.value || '—'}</strong> (
+                                    {t('investigation.bagsCount', '{count} bags', {
+                                      count: bs.actualBagCount?.value || 0,
+                                    })}
+                                    )
                                   </div>
                                 ))}
                               </div>
                               {p.rejectedBagCount > 0 && (
                                 <div className="xs" style={{ color: 'var(--danger)' }}>
-                                  ⚠️ Rejected: {p.rejectedBagCount} bags ({p.rejectedNotes || 'no reason'})
+                                  ⚠️{' '}
+                                  {t('investigation.rejectedBags', 'Rejected: {count} bags ({reason})', {
+                                    count: p.rejectedBagCount,
+                                    reason: p.rejectedNotes || t('investigation.noReason', 'no reason'),
+                                  })}
                                 </div>
                               )}
                               {/* Pallet photos */}
@@ -362,7 +426,7 @@ export function InvestigationRoute() {
                                         </a>
                                       ) : (
                                         <div style={{ width: '100%', aspectRatio: '1', background: 'var(--rule-soft)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px', color: 'var(--ink-soft)' }}>
-                                          No Photo
+                                          {t('investigation.noPhoto', 'No Photo')}
                                         </div>
                                       )}
                                       <div className="xs soft" style={{ fontSize: '8px', textAlign: 'center', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -382,33 +446,35 @@ export function InvestigationRoute() {
                       {item.type !== 'returns' && (
                         <div style={{ marginBottom: '12px' }}>
                           <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-                            Packaging Used &amp; Final Staging Lane
+                            {t('investigation.packagingUsed', 'Packaging Used & Final Staging Lane')}
                           </div>
                           <div className="card" style={{ padding: '12px', background: 'var(--surface-tint)' }}>
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '8px' }}>
                               <div>
-                                <span className="xs soft">40×40 Pallets:</span>{' '}
+                                <span className="xs soft">{t('investigation.pallets40', '40×40 Pallets:')}</span>{' '}
                                 <strong className="small">{item.staging?.pallets40x40Used ?? 0}</strong>
                               </div>
                               <div>
-                                <span className="xs soft">48×40 Pallets:</span>{' '}
+                                <span className="xs soft">{t('investigation.pallets48', '48×40 Pallets:')}</span>{' '}
                                 <strong className="small">{item.staging?.pallets48x40Used ?? 0}</strong>
                               </div>
                               <div>
-                                <span className="xs soft">Seedpaks:</span>{' '}
+                                <span className="xs soft">{t('investigation.seedpaks', 'Seedpaks:')}</span>{' '}
                                 <strong className="small">{item.staging?.seedpaksUsed ?? 0}</strong>
                               </div>
                             </div>
                             {item.staging?.otherPackagingNotes && (
                               <div className="xs soft" style={{ borderTop: '1px solid var(--rule-soft)', paddingTop: '6px' }}>
-                                <strong>Notes:</strong> {item.staging.otherPackagingNotes}
+                                <strong>{t('investigation.notesLabel', 'Notes:')}</strong> {item.staging.otherPackagingNotes}
                               </div>
                             )}
 
                             {/* Final staging lane photos */}
                             {item.photos?.filter((ph: any) => ph.category === 'Staging_Final_Lane').length > 0 && (
                               <div style={{ marginTop: '12px' }}>
-                                <div className="xs soft" style={{ marginBottom: '6px' }}>Final Staging Lane Photos:</div>
+                                <div className="xs soft" style={{ marginBottom: '6px' }}>
+                                  {t('investigation.finalLanePhotos', 'Final Staging Lane Photos:')}
+                                </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
                                   {item.photos
                                     .filter((ph: any) => ph.category === 'Staging_Final_Lane')
@@ -420,13 +486,13 @@ export function InvestigationRoute() {
                                           <a href={photoSrc} target="_blank" rel="noopener noreferrer">
                                             <img
                                               src={photoSrc}
-                                              alt="Staging lane"
+                                              alt={t('investigation.stagingLaneAlt', 'Staging lane')}
                                               style={{ width: '100%', aspectRatio: '1.33', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)' }}
                                             />
                                           </a>
                                         ) : (
                                           <div style={{ width: '100%', aspectRatio: '1.33', background: 'var(--rule-soft)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'var(--ink-soft)' }}>
-                                            No Photo
+                                            {t('investigation.noPhoto', 'No Photo')}
                                           </div>
                                         )}
                                       </div>
@@ -467,6 +533,7 @@ function PalletGlimpse({
   onBack: () => void;
   onOpenFull: () => void;
 }) {
+  const t = useT();
   const [lightbox, setLightbox] = useState<{ url?: string; label: string } | null>(null);
 
   const loadNum = item.picklistLoadNumber || item.bolLoadNumber || item.id.slice(0, 8);
@@ -494,20 +561,21 @@ function PalletGlimpse({
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Pallet <em>{pallet.palletNumber}</em>
+            {t('investigation.palletLead', 'Pallet')} <em>{pallet.palletNumber}</em>
           </h1>
           <div className="page-head__sub">
-            Load <span className="mono">#{loadNum}</span> · {pallet.palletType}
+            {t('investigation.loadLabel', 'Load')} <span className="mono">#{loadNum}</span> · {pallet.palletType}
             {delivery && (
               <>
-                {' '}· Delivery <span className="mono">{delivery.deliveryNumber}</span>
+                {' '}· {t('investigation.deliveryLabel', 'Delivery')}{' '}
+                <span className="mono">{delivery.deliveryNumber}</span>
               </>
             )}
           </div>
         </div>
         <div className="page-head__actions">
           <button className="btn btn--ghost" onClick={onBack}>
-            ← Back to results
+            {t('investigation.backToResults', '← Back to results')}
           </button>
         </div>
       </div>
@@ -522,21 +590,21 @@ function PalletGlimpse({
           }}
         >
           <div>
-            <div className="xs soft">Total bags</div>
+            <div className="xs soft">{t('investigation.totalBags', 'Total bags')}</div>
             <div className="fw-500" style={{ fontSize: '20px' }}>{totalBags}</div>
           </div>
           <div>
-            <div className="xs soft">Result</div>
+            <div className="xs soft">{t('investigation.result', 'Result')}</div>
             <div className="fw-500" style={{ color: pallet.passInspection === 'Fail' ? 'var(--danger)' : undefined }}>
               {pallet.passInspection || '—'}
             </div>
           </div>
           <div>
-            <div className="xs soft">LPN</div>
+            <div className="xs soft">{t('investigation.lpn', 'LPN')}</div>
             <div className="fw-500 mono">{pallet.lpnNumber || '—'}</div>
           </div>
           <div>
-            <div className="xs soft">Scanned by</div>
+            <div className="xs soft">{t('investigation.scannedByLabel', 'Scanned by')}</div>
             <div className="fw-500">{pallet.scannedBy || '—'}</div>
           </div>
         </div>
@@ -545,9 +613,9 @@ function PalletGlimpse({
           <table className="data" style={{ width: '100%', fontSize: '13px' }}>
             <thead>
               <tr>
-                <th>Batch Code</th>
-                <th className="right">Expected</th>
-                <th className="right">Actual</th>
+                <th>{t('investigation.colBatchCode', 'Batch Code')}</th>
+                <th className="right">{t('investigation.colExpected', 'Expected')}</th>
+                <th className="right">{t('investigation.colActual', 'Actual')}</th>
               </tr>
             </thead>
             <tbody>
@@ -566,10 +634,12 @@ function PalletGlimpse({
           <div className="banner banner--warn" style={{ marginBottom: '20px' }}>
             <span className="banner__icon">⚠</span>
             <div className="banner__body">
-              <strong>Findings:</strong> {findings.join(', ')}
+              <strong>{t('investigation.findingsLabel', 'Findings:')}</strong> {findings.join(', ')}
               {pallet.rejectedBagCount > 0 && (
                 <div style={{ marginTop: 4 }}>
-                  Rejected {pallet.rejectedBagCount} bags
+                  {t('investigation.rejectedCount', 'Rejected {count} bags', {
+                    count: pallet.rejectedBagCount,
+                  })}
                   {pallet.rejectedNotes ? ` — ${pallet.rejectedNotes}` : ''}
                 </div>
               )}
@@ -578,7 +648,7 @@ function PalletGlimpse({
         )}
 
         <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-          Photos
+          {t('investigation.photos', 'Photos')}
         </div>
         {pallet.photos?.length > 0 ? (
           <div
@@ -621,7 +691,7 @@ function PalletGlimpse({
                         color: 'var(--ink-soft)',
                       }}
                     >
-                      No Photo
+                      {t('investigation.noPhoto', 'No Photo')}
                     </div>
                   )}
                   <div className="xs soft" style={{ textAlign: 'center', marginTop: '3px' }}>
@@ -633,7 +703,9 @@ function PalletGlimpse({
           </div>
         ) : (
           <div className="empty" style={{ padding: 16 }}>
-            <div className="empty__sub">No photos on this pallet.</div>
+            <div className="empty__sub">
+              {t('investigation.noPalletPhotos', 'No photos on this pallet.')}
+            </div>
           </div>
         )}
       </section>
@@ -649,10 +721,10 @@ function PalletGlimpse({
         }}
       >
         <button className="btn btn--ghost" onClick={onBack}>
-          ← Back to results
+          {t('investigation.backToResults', '← Back to results')}
         </button>
         <button className="btn btn--accent" onClick={onOpenFull}>
-          Open full inspection →
+          {t('investigation.openFull', 'Open full inspection →')}
         </button>
       </div>
 

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { Suggestable } from '../types/inspection';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
+import { useT } from '../i18n/LanguageContext';
 
 interface Props<T extends string | number> {
   label: string;
@@ -24,6 +25,7 @@ export function SuggestableField<T extends string | number>({
   uppercase = false,
   onChange,
 }: Props<T>) {
+  const t = useT();
   const [scanning, setScanning] = useState(false);
 
   const handleChange = (rawInput: string) => {
@@ -75,7 +77,10 @@ export function SuggestableField<T extends string | number>({
         {isMlSuggested && (
           <span
             className="field__ml-badge"
-            title="Auto-filled from a scanned document. Confirm or correct it."
+            title={t(
+              'suggest.mlHint',
+              'Auto-filled from a scanned document. Confirm or correct it.'
+            )}
             style={{
               marginLeft: 8,
               fontSize: '0.7rem',
@@ -87,7 +92,9 @@ export function SuggestableField<T extends string | number>({
               verticalAlign: 'middle',
             }}
           >
-            ✨ AI{confidencePct !== null ? ` ${confidencePct}%` : ''} · confirm
+            {t('suggest.aiConfirm', '✨ AI{pct} · confirm', {
+              pct: confidencePct !== null ? ` ${confidencePct}%` : '',
+            })}
           </span>
         )}
       </div>
@@ -106,7 +113,7 @@ export function SuggestableField<T extends string | number>({
             className="btn btn--outline" 
             onClick={() => setScanning(true)}
             style={{ padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title="Scan Barcode"
+            title={t('suggest.scanBarcode', 'Scan Barcode')}
           >
             📷
           </button>

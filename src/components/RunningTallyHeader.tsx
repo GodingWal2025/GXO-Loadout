@@ -1,10 +1,13 @@
 import type { Picklist } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
   picklist: Picklist;
 }
 
 export function RunningTallyHeader({ picklist }: Props) {
+  const t = useT();
+
   if (!picklist.lineItems || picklist.lineItems.length === 0) return null;
 
   const totalExpected = picklist.lineItems.reduce(
@@ -20,7 +23,7 @@ export function RunningTallyHeader({ picklist }: Props) {
       <div className="tally__inner">
         <div className="tally__total">
           <div className="tally__total-lbl">
-            {allFulfilled ? 'Complete' : 'Total bags'}
+            {allFulfilled ? t('tally.complete', 'Complete') : t('tally.totalBags', 'Total bags')}
           </div>
           <div className="tally__total-num tnum">
             {totalActual}
@@ -45,12 +48,12 @@ export function RunningTallyHeader({ picklist }: Props) {
 
             const statusText =
               status === 'full'
-                ? '✓ Complete'
+                ? t('tally.barComplete', '✓ Complete')
                 : status === 'over'
-                ? `Over by ${actual - expected}`
+                ? t('tally.barOver', 'Over by {count}', { count: actual - expected })
                 : status === 'empty'
-                ? `${expected} needed`
-                : `${expected - actual} more`;
+                ? t('tally.barNeeded', '{count} needed', { count: expected })
+                : t('tally.barMore', '{count} more', { count: expected - actual });
 
             return (
               <div key={li.id} className={`tally__bar ${cls}`}>

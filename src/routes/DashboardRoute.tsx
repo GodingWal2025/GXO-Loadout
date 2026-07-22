@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
+import { useT } from '../shared/i18n/LanguageContext';
 
 const COLORS = ['#1e5635', '#b8860b', '#8b1f1f', '#5a5a5a', '#999'];
 
 export function DashboardRoute() {
+  const t = useT();
   const throughputRef = useRef<HTMLCanvasElement | null>(null);
   const donutRef = useRef<HTMLCanvasElement | null>(null);
   const flagTrendRef = useRef<HTMLCanvasElement | null>(null);
@@ -124,7 +126,7 @@ export function DashboardRoute() {
         data: {
           labels: dateLabels,
           datasets: [{
-            label: 'Flag rate',
+            label: t('dashboard.flagRate', 'Flag rate'),
             data: stats.charts.flagTrend,
             borderColor: COLORS[0],
             backgroundColor: 'rgba(30,86,53,0.08)',
@@ -205,10 +207,14 @@ export function DashboardRoute() {
       <div className="page-head">
         <div className="row-between">
           <div>
-            <h1 className="page-head__title">Operations <em>dashboard</em></h1>
-            <div className="page-head__sub">Cross-site edge diagnostics · live database stats</div>
+            <h1 className="page-head__title">
+              {t('dashboard.title', 'Operations')} <em>{t('dashboard.titleEm', 'dashboard')}</em>
+            </h1>
+            <div className="page-head__sub">
+              {t('dashboard.sub', 'Cross-site edge diagnostics · live database stats')}
+            </div>
           </div>
-          <Link to="/" className="btn btn--ghost no-print">← Home</Link>
+          <Link to="/" className="btn btn--ghost no-print">{t('dashboard.home', '← Home')}</Link>
         </div>
       </div>
 
@@ -227,7 +233,7 @@ export function DashboardRoute() {
       >
         <div>
           <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-            Quick range
+            {t('dashboard.quickRange', 'Quick range')}
           </div>
           <div className="flex gap-4">
             {(['7', '14', '30', '90'] as const).map((d) => (
@@ -243,13 +249,13 @@ export function DashboardRoute() {
               className={`btn btn--sm ${presetRange === 'custom' ? 'btn--accent' : ''}`}
               onClick={() => setPresetRange('custom')}
             >
-              Custom
+              {t('dashboard.custom', 'Custom')}
             </button>
           </div>
         </div>
         <div>
           <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-            From
+            {t('dashboard.from', 'From')}
           </div>
           <input
             type="date"
@@ -260,7 +266,7 @@ export function DashboardRoute() {
         </div>
         <div>
           <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-            To
+            {t('dashboard.to', 'To')}
           </div>
           <input
             type="date"
@@ -271,14 +277,14 @@ export function DashboardRoute() {
         </div>
         <div>
           <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6 }}>
-            Site
+            {t('dashboard.siteFilter', 'Site')}
           </div>
           <select 
             style={{ minHeight: 36 }} 
             value={selectedSite} 
             onChange={(e) => setSelectedSite(e.target.value)}
           >
-            <option value="all">All sites</option>
+            <option value="all">{t('dashboard.allSites', 'All sites')}</option>
             {stats && stats.siteRows && stats.siteRows.filter((s: any) => s.name !== "No Data" && s.name !== "No data").map((s: any) => (
               <option key={s.name} value={s.name.toLowerCase().replace(/ /g, '-')}>{s.name}</option>
             ))}
@@ -295,21 +301,25 @@ export function DashboardRoute() {
           </select>
         </div>
         <div style={{ flex: 1 }} />
-        <button className="btn" onClick={handleExportCSV} disabled={loading || !stats}>⇣ Export CSV</button>
-        <button className="btn" onClick={handleExportPDF} disabled={loading || !stats}>⎙ Export PDF</button>
+        <button className="btn" onClick={handleExportCSV} disabled={loading || !stats}>{t('dashboard.exportCsv', '⇣ Export CSV')}</button>
+        <button className="btn" onClick={handleExportPDF} disabled={loading || !stats}>{t('dashboard.exportPdf', '⎙ Export PDF')}</button>
       </div>
 
       {error && (
         <div className="banner banner--danger" style={{ marginBottom: 24 }}>
           <span className="banner__icon">✕</span>
-          <div className="banner__body">Failed to load live metrics: {error}</div>
+          <div className="banner__body">
+            {t('dashboard.loadFailed', 'Failed to load live metrics:')} {error}
+          </div>
         </div>
       )}
 
       {loading && !stats && (
         <div className="empty">
-          <div className="empty__title">Loading statistics...</div>
-          <div className="empty__sub">Reading from edge SQLite database.</div>
+          <div className="empty__title">{t('dashboard.loading', 'Loading statistics...')}</div>
+          <div className="empty__sub">
+            {t('dashboard.loadingSub', 'Reading from edge SQLite database.')}
+          </div>
         </div>
       )}
 
@@ -318,14 +328,24 @@ export function DashboardRoute() {
           <div className="banner banner--info mb-24 no-print">
             <span className="banner__icon">i</span>
             <div className="banner__body">
-              Displaying live aggregated edge data from <strong>{startDate}</strong> to <strong>{endDate}</strong> for <strong>{selectedSite === 'all' ? 'all sites' : selectedSite.replace(/-/g, ' ').toUpperCase()}</strong>.
+              {t('dashboard.rangeBannerFrom', 'Displaying live aggregated edge data from')}{' '}
+              <strong>{startDate}</strong> {t('dashboard.rangeBannerTo', 'to')}{' '}
+              <strong>{endDate}</strong> {t('dashboard.rangeBannerFor', 'for')}{' '}
+              <strong>
+                {selectedSite === 'all'
+                  ? t('dashboard.allSitesLower', 'all sites')
+                  : selectedSite.replace(/-/g, ' ').toUpperCase()}
+              </strong>
+              .
             </div>
           </div>
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">At a <em>glance</em></h2>
-              <span className="section__meta">Edge KPIs</span>
+              <h2 className="section__title">
+                {t('dashboard.glance', 'At a')} <em>{t('dashboard.glanceEm', 'glance')}</em>
+              </h2>
+              <span className="section__meta">{t('dashboard.glanceMeta', 'Edge KPIs')}</span>
             </div>
             <div
               style={{
@@ -354,27 +374,32 @@ export function DashboardRoute() {
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">Throughput <em>trends</em></h2>
-              <span className="section__meta">Daily load inspections</span>
+              <h2 className="section__title">
+                {t('dashboard.throughput', 'Throughput')} <em>{t('dashboard.throughputEm', 'trends')}</em>
+              </h2>
+              <span className="section__meta">{t('dashboard.throughputMeta', 'Daily load inspections')}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20 }}>
               <div className="card">
-                <div className="fw-500 small mb-12">Loads inspected per day</div>
+                <div className="fw-500 small mb-12">{t('dashboard.loadsPerDay', 'Loads inspected per day')}</div>
                 <div style={{ position: 'relative', height: 240 }}>
                   <canvas
                     ref={throughputRef}
                     role="img"
-                    aria-label="Stacked bar chart of daily loads inspected per site"
+                    aria-label={t(
+                      'dashboard.loadsPerDayAria',
+                      'Stacked bar chart of daily loads inspected per site'
+                    )}
                   />
                 </div>
               </div>
               <div className="card">
-                <div className="fw-500 small mb-12">Loads breakdown by site</div>
+                <div className="fw-500 small mb-12">{t('dashboard.loadsBySite', 'Loads breakdown by site')}</div>
                 <div style={{ position: 'relative', height: 180 }}>
                   <canvas
                     ref={donutRef}
                     role="img"
-                    aria-label="Donut chart breakdown of loads by site"
+                    aria-label={t('dashboard.loadsBySiteAria', 'Donut chart breakdown of loads by site')}
                   />
                 </div>
                 <div className="flex-col gap-8 mt-12">
@@ -394,29 +419,35 @@ export function DashboardRoute() {
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">Quality &amp; <em>accuracy</em></h2>
-              <span className="section__meta">Inspected quality flags</span>
+              <h2 className="section__title">
+                {t('dashboard.quality', 'Quality &')} <em>{t('dashboard.qualityEm', 'accuracy')}</em>
+              </h2>
+              <span className="section__meta">{t('dashboard.qualityMeta', 'Inspected quality flags')}</span>
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               <div className="card">
-                <div className="fw-500 small mb-12">Flag rate over time</div>
-                <div className="xs soft mb-12">Percentage of inspects flagged per day</div>
+                <div className="fw-500 small mb-12">{t('dashboard.flagRateOverTime', 'Flag rate over time')}</div>
+                <div className="xs soft mb-12">
+                  {t('dashboard.flagRateOverTimeSub', 'Percentage of inspects flagged per day')}
+                </div>
                 <div style={{ position: 'relative', height: 220 }}>
                   <canvas
                     ref={flagTrendRef}
                     role="img"
-                    aria-label="Line chart of flag rate over time"
+                    aria-label={t('dashboard.flagRateAria', 'Line chart of flag rate over time')}
                   />
                 </div>
               </div>
               <div className="card">
-                <div className="fw-500 small mb-12">Flag reasons</div>
-                <div className="xs soft mb-12">Categorized issues logged by VLM &amp; inspectors</div>
+                <div className="fw-500 small mb-12">{t('dashboard.flagReasons', 'Flag reasons')}</div>
+                <div className="xs soft mb-12">
+                  {t('dashboard.flagReasonsSub', 'Categorized issues logged by VLM & inspectors')}
+                </div>
                 <div style={{ position: 'relative', height: 220 }}>
                   <canvas
                     ref={flagReasonsRef}
                     role="img"
-                    aria-label="Horizontal bar chart of flag reasons"
+                    aria-label={t('dashboard.flagReasonsAria', 'Horizontal bar chart of flag reasons')}
                   />
                 </div>
               </div>
@@ -425,20 +456,22 @@ export function DashboardRoute() {
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">By <em>site</em></h2>
-              <span className="section__meta">Local site statistics</span>
+              <h2 className="section__title">
+                {t('dashboard.bySite', 'By')} <em>{t('dashboard.bySiteEm', 'site')}</em>
+              </h2>
+              <span className="section__meta">{t('dashboard.bySiteMeta', 'Local site statistics')}</span>
             </div>
             <div className="table-card">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Site</th>
-                    <th className="right">Loads</th>
-                    <th className="right">Flag rate</th>
-                    <th className="right">Cycle</th>
-                    <th className="right">Disc.</th>
-                    <th className="right">Insp.</th>
-                    <th className="right">Status</th>
+                    <th>{t('dashboard.colSite', 'Site')}</th>
+                    <th className="right">{t('dashboard.colLoads', 'Loads')}</th>
+                    <th className="right">{t('dashboard.colFlagRate', 'Flag rate')}</th>
+                    <th className="right">{t('dashboard.colCycle', 'Cycle')}</th>
+                    <th className="right">{t('dashboard.colDisc', 'Disc.')}</th>
+                    <th className="right">{t('dashboard.colInsp', 'Insp.')}</th>
+                    <th className="right">{t('dashboard.colStatus', 'Status')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -462,19 +495,21 @@ export function DashboardRoute() {
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">By <em>inspector</em></h2>
-              <span className="section__meta">Ranked by volume</span>
+              <h2 className="section__title">
+                {t('dashboard.byInspector', 'By')} <em>{t('dashboard.byInspectorEm', 'inspector')}</em>
+              </h2>
+              <span className="section__meta">{t('dashboard.byInspectorMeta', 'Ranked by volume')}</span>
             </div>
             <div className="table-card">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Inspector</th>
-                    <th>Site</th>
-                    <th className="right">Loads</th>
-                    <th className="right">Flag rate</th>
-                    <th className="right">Cycle</th>
-                    <th className="right">Workload</th>
+                    <th>{t('dashboard.colInspector', 'Inspector')}</th>
+                    <th>{t('dashboard.colSite', 'Site')}</th>
+                    <th className="right">{t('dashboard.colLoads', 'Loads')}</th>
+                    <th className="right">{t('dashboard.colFlagRate', 'Flag rate')}</th>
+                    <th className="right">{t('dashboard.colCycle', 'Cycle')}</th>
+                    <th className="right">{t('dashboard.colWorkload', 'Workload')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -494,7 +529,7 @@ export function DashboardRoute() {
                   ))}
                   {stats.inspectorRows.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center' }} className="soft">No inspectors active in selected period.</td>
+                      <td colSpan={6} style={{ textAlign: 'center' }} className="soft">{t('dashboard.noInspectors', 'No inspectors active in selected period.')}</td>
                     </tr>
                   )}
                 </tbody>
@@ -504,19 +539,21 @@ export function DashboardRoute() {
 
           <section className="section">
             <div className="section__head">
-              <h2 className="section__title">Open <em>flags</em></h2>
-              <span className="section__meta">Unresolved quality issues</span>
+              <h2 className="section__title">
+                {t('dashboard.openFlags', 'Open')} <em>{t('dashboard.openFlagsEm', 'flags')}</em>
+              </h2>
+              <span className="section__meta">{t('dashboard.openFlagsMeta', 'Unresolved quality issues')}</span>
             </div>
             <div className="table-card">
               <table className="data">
                 <thead>
                   <tr>
-                    <th>Load #</th>
-                    <th>Site</th>
-                    <th>Inspector</th>
-                    <th>Reason</th>
-                    <th>Severity</th>
-                    <th className="right">Flagged</th>
+                    <th>{t('dashboard.colLoadNo', 'Load #')}</th>
+                    <th>{t('dashboard.colSite', 'Site')}</th>
+                    <th>{t('dashboard.colInspector', 'Inspector')}</th>
+                    <th>{t('dashboard.colReason', 'Reason')}</th>
+                    <th>{t('dashboard.colSeverity', 'Severity')}</th>
+                    <th className="right">{t('dashboard.colFlagged', 'Flagged')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -534,7 +571,7 @@ export function DashboardRoute() {
                   ))}
                   {stats.openFlags.length === 0 && (
                     <tr>
-                      <td colSpan={6} style={{ textAlign: 'center' }} className="soft">All clear! No open flags in selected period.</td>
+                      <td colSpan={6} style={{ textAlign: 'center' }} className="soft">{t('dashboard.noOpenFlags', 'All clear! No open flags in selected period.')}</td>
                     </tr>
                   )}
                 </tbody>

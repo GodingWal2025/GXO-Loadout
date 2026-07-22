@@ -7,7 +7,10 @@ const apiBase = import.meta.env.VITE_API_URL || '';
 
 export interface OcrLineItem {
   batchCode: string | null;
-  productName: string | null;
+  /** Material / SKU number, e.g. "91007244". */
+  sku: string | null;
+  /** Material description, e.g. "C.CL.201-40VT4PRIB.SF2.40USP.UB.US". */
+  description: string | null;
   expectedQuantity: number | null;
   uom: 'BAG' | 'SP' | 'PCE';
 }

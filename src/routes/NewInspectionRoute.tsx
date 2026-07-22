@@ -1,13 +1,13 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { getDeviceConfig } from '../lib/deviceConfig';
 import { InspectorPicker } from '../shared';
 import { emptyInspection } from '../shared';
-import { dbSaveInspection } from '../shared';
+import { dbGetInspection, dbSaveInspection } from '../shared';
 import { listActiveStagingLocations, type StagingLocation } from '../services/stagingLocations';
 import { listInspectorsForSite } from '../shared';
-import type { InspectionType } from '../shared';
-import { INSPECTION_TYPE_LABELS, INSPECTION_TYPE_DESCRIPTIONS } from '../shared';
+import type { Inspection, InspectionType } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 function SearchableMultiSelect({
   label,
@@ -22,6 +22,7 @@ function SearchableMultiSelect({
   onChange: (s: string[]) => void;
   placeholder?: string;
 }) {
+  const t = useT();
   const [query, setQuery] = useState('');
   const [isOpen, setIsOpen] = useState(false);
 
@@ -89,7 +90,7 @@ function SearchableMultiSelect({
       {/* Search Input */}
       <input
         type="text"
-        placeholder={placeholder || "Search & select..."}
+        placeholder={placeholder || t('newInspection.searchSelect', 'Search & select...')}
         value={query}
         onChange={(e) => {
           setQuery(e.target.value);
@@ -146,9 +147,36 @@ function SearchableMultiSelect({
 
 export function NewInspectionRoute() {
   const navigate = useNavigate();
-  const params = useParams<{ type: string }>();
+  const location = useLocation();
+  const t = useT();
+  // Two modes on one screen: no :id → create a new inspection; :id → edit the
+  // names and location of an inspection that already exists (step 1 revisited
+  // from a later step). Editing must never mint a second record.
+  const params = useParams<{ type?: string; id?: string }>();
   const config = useMemo(() => getDeviceConfig(), []);
-  
+  // Where the inspector came from, planted by StepBackLink, so "Save changes"
+  // returns them to that exact step.
+  const cameFrom = (location.state as { from?: string } | null)?.from;
+
+  // Display-only labels/descriptions for each inspection type. The stored
+  // `inspectionType` value stays the untranslated English enum.
+  const typeLabels: Record<InspectionType, string> = {
+    outbound: t('newInspection.typeOutbound', 'Outbound'),
+    inbound: t('newInspection.typeInbound', 'Inbound'),
+    returns: t('newInspection.typeReturns', 'Returns'),
+    retag: t('newInspection.typeRetag', 'Retag'),
+  };
+  const typeDescriptions: Record<InspectionType, string> = {
+    outbound: t(
+      'newInspection.descOutbound',
+      'Verify a load against the printed picklist before it ships.'
+    ),
+    inbound: t('newInspection.descInbound', 'Receive and verify incoming loads.'),
+    returns: t('newInspection.descReturns', 'Process returned product back into inventory.'),
+    retag: t('newInspection.descRetag', 'Re-label or correct existing inventory.'),
+  };
+
+
   const [pickerName, setPickerName] = useState('');
   const [selectedInspectors, setSelectedInspectors] = useState<string[]>([]);
   const [selectedLocations, setSelectedLocations] = useState<string[]>([]);
@@ -157,6 +185,26 @@ export function NewInspectionRoute() {
   const [stagingLocations, setStagingLocations] = useState<StagingLocation[]>([]);
   const [creating, setCreating] = useState(false);
   const [returnsBrand, setReturnsBrand] = useState<'Dekalb' | 'Channel' | ''>('');
+  const [editing, setEditing] = useState<Inspection | null>(null);
+
+  // Edit mode: load the existing record and prefill every field from it.
+  // `startedBy` and `stagingLocation` are ', ' joined strings on the record.
+  useEffect(() => {
+    if (!params.id) return;
+    dbGetInspection(params.id).then((i) => {
+      if (!i) {
+        navigate('/');
+        return;
+      }
+      setEditing(i);
+      setPickerName(i.pickerName || '');
+      setSelectedInspectors(i.startedBy ? i.startedBy.split(', ').filter(Boolean) : []);
+      setSelectedLocations(
+        i.stagingLocation ? i.stagingLocation.split(', ').filter(Boolean) : []
+      );
+      setReturnsBrand(i.returnsBrand || '');
+    });
+  }, [params.id, navigate]);
 
   useEffect(() => {
     if (!config) return;
@@ -179,16 +227,22 @@ export function NewInspectionRoute() {
     return null;
   }
 
-  const inspectionType = (params.type as InspectionType) || 'outbound';
+  // Nothing to render until the record being edited is in hand.
+  if (params.id && !editing) return null;
+
+  // In edit mode the type comes off the record, never off the URL.
+  const inspectionType = editing
+    ? editing.type
+    : (params.type as InspectionType) || 'outbound';
   const validType = ['outbound', 'inbound', 'returns', 'retag'].includes(inspectionType);
 
   if (!validType) {
     return (
       <main style={{ maxWidth: 560 }}>
         <div className="page-head">
-          <h1 className="page-head__title">Unknown workflow</h1>
+          <h1 className="page-head__title">{t('newInspection.unknownWorkflow', 'Unknown workflow')}</h1>
         </div>
-        <Link to="/" className="btn">← Back to home</Link>
+        <Link to="/" className="btn">{t('newInspection.backToHome', '← Back to home')}</Link>
       </main>
     );
   }
@@ -200,34 +254,42 @@ export function NewInspectionRoute() {
         <div className="page-head">
           <div>
             <h1 className="page-head__title">
-              {INSPECTION_TYPE_LABELS[inspectionType]} <em>workflow</em>
+              {t('newInspection.workflowTitle', '{type} workflow', {
+                type: typeLabels[inspectionType],
+              })}
             </h1>
-            <div className="page-head__sub">{INSPECTION_TYPE_DESCRIPTIONS[inspectionType]}</div>
+            <div className="page-head__sub">{typeDescriptions[inspectionType]}</div>
           </div>
         </div>
 
         <div className="banner banner--info">
           <span className="banner__icon">🚧</span>
           <div className="banner__body">
-            <strong>Coming soon.</strong> The {INSPECTION_TYPE_LABELS[inspectionType]} workflow
-            isn't built yet. Spec out the workflow with us and we'll build it.
+            <strong>{t('newInspection.comingSoon', 'Coming soon.')}</strong>{' '}
+            {t(
+              'newInspection.comingSoonBody',
+              "The {type} workflow isn't built yet. Spec out the workflow with us and we'll build it.",
+              { type: typeLabels[inspectionType] }
+            )}
           </div>
         </div>
 
         <div className="empty" style={{ marginTop: 16 }}>
-          <div className="empty__title">What we need from you to build this</div>
+          <div className="empty__title">
+            {t('newInspection.needFromYou', 'What we need from you to build this')}
+          </div>
           <div className="empty__sub" style={{ marginTop: 8 }}>
             <ul style={{ textAlign: 'left', listStylePosition: 'inside' }}>
-              <li>What fields are captured?</li>
-              <li>What photos are required?</li>
-              <li>What's the step-by-step workflow?</li>
-              <li>What does "complete" look like?</li>
+              <li>{t('newInspection.q1', 'What fields are captured?')}</li>
+              <li>{t('newInspection.q2', 'What photos are required?')}</li>
+              <li>{t('newInspection.q3', "What's the step-by-step workflow?")}</li>
+              <li>{t('newInspection.q4', 'What does "complete" look like?')}</li>
             </ul>
           </div>
         </div>
 
         <div className="flex gap-8 mt-24">
-          <Link to="/" className="btn">← Back to home</Link>
+          <Link to="/" className="btn">{t('newInspection.backToHome', '← Back to home')}</Link>
         </div>
       </main>
     );
@@ -264,7 +326,35 @@ export function NewInspectionRoute() {
     } catch (e: any) {
       console.error(e);
       const msg = e && e.message ? e.message : String(e);
-      alert('Error starting inspection: ' + msg);
+      alert(t('newInspection.startError', 'Error starting inspection: {message}', { message: msg }));
+      setCreating(false);
+    }
+  };
+
+  // Edit mode: patch the loaded record in place. Everything not on this screen
+  // (pallets, picklist, bol, photos) rides along untouched via the spread.
+  const saveChanges = async () => {
+    if (!canStart || !editing) return;
+    setCreating(true);
+    try {
+      const updated: Inspection = {
+        ...editing,
+        pickerName: inspectionType === 'returns' ? undefined : pickerName,
+        startedBy: selectedInspectors.join(', '),
+        currentInspector: selectedInspectors.join(', '),
+        lastEditedBy: selectedInspectors.join(', '),
+        stagingLocation: selectedLocations.join(', '),
+        returnsBrand: inspectionType === 'returns' ? (returnsBrand as 'Dekalb' | 'Channel') : undefined,
+        lastEditedAt: new Date().toISOString(),
+      };
+      await dbSaveInspection(updated);
+
+      if (cameFrom) navigate(cameFrom);
+      else navigate(-1);
+    } catch (e: any) {
+      console.error(e);
+      const msg = e && e.message ? e.message : String(e);
+      alert(t('newInspection.saveError', 'Error saving inspection: {message}', { message: msg }));
       setCreating(false);
     }
   };
@@ -274,19 +364,32 @@ export function NewInspectionRoute() {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            New <em>{INSPECTION_TYPE_LABELS[inspectionType]} inspection</em>
+            {editing
+              ? t('newInspection.editTitleLead', 'Edit')
+              : t('newInspection.titleLead', 'New')}{' '}
+            <em>
+              {t('newInspection.titleEm', '{type} inspection', {
+                type: typeLabels[inspectionType],
+              })}
+            </em>
           </h1>
-          <div className="page-head__sub">Step 1 of {inspectionType === 'returns' ? 5 : 4} · Names and location</div>
+          <div className="page-head__sub">
+            {t('newInspection.stepLine', 'Step 1 of {total} · Names and location', {
+              total: inspectionType === 'returns' ? 5 : 4,
+            })}
+          </div>
         </div>
       </div>
 
       {inspectionType !== 'returns' && (
         <div className="field">
-          <div className="field__label">Picker (who pulled the load)</div>
+          <div className="field__label">
+            {t('newInspection.pickerLabel', 'Picker (who pulled the load)')}
+          </div>
           <InspectorPicker
             siteId={config.siteId}
             value={pickerName}
-            placeholder="Select picker…"
+            placeholder={t('newInspection.pickerPlaceholder', 'Select picker…')}
             onChange={setPickerName}
           />
         </div>
@@ -294,20 +397,23 @@ export function NewInspectionRoute() {
 
       <div className="field">
         <SearchableMultiSelect 
-          label="Inspector(s)"
+          label={t('newInspection.inspectorsLabel', 'Inspector(s)')}
           options={inspectors.map(i => i.name)}
           selected={selectedInspectors}
           onChange={setSelectedInspectors}
-          placeholder="Search and select inspectors..."
+          placeholder={t('newInspection.inspectorsPlaceholder', 'Search and select inspectors...')}
         />
         <div className="field__hint" style={{ marginTop: 8 }}>
-          Select all inspectors working on this load. If you don't see your name, ask a manager to add you.
+          {t(
+            'newInspection.inspectorsHint',
+            "Select all inspectors working on this load. If you don't see your name, ask a manager to add you."
+          )}
         </div>
       </div>
 
       {inspectionType === 'returns' && (
         <div className="field">
-          <div className="field__label">Returns Brand</div>
+          <div className="field__label">{t('newInspection.returnsBrandLabel', 'Returns Brand')}</div>
           <div style={{ display: 'flex', gap: 16 }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
               <input 
@@ -336,33 +442,55 @@ export function NewInspectionRoute() {
       <div className="field">
         {stagingLocations.length === 0 ? (
           <div>
-            <div className="field__label">Staging location(s)</div>
+            <div className="field__label">
+              {t('newInspection.stagingLabel', 'Staging location(s)')}
+            </div>
             <div className="banner banner--warn" style={{ marginBottom: 0 }}>
               <span className="banner__icon">⚠</span>
               <div className="banner__body">
-                No staging locations defined for this site. Ask a manager to add them.
+                {t(
+                  'newInspection.noStagingLocations',
+                  'No staging locations defined for this site. Ask a manager to add them.'
+                )}
               </div>
             </div>
           </div>
         ) : (
-          <SearchableMultiSelect 
-            label="Staging location(s)"
+          <SearchableMultiSelect
+            label={t('newInspection.stagingLabel', 'Staging location(s)')}
             options={stagingLocations.map(l => l.name)}
             selected={selectedLocations}
             onChange={setSelectedLocations}
-            placeholder="Search and select lanes..."
+            placeholder={t('newInspection.stagingPlaceholder', 'Search and select lanes...')}
           />
         )}
       </div>
 
       <div className="flex gap-8 mt-24">
-        <Link to="/" className="btn btn--ghost">Cancel</Link>
+        {editing ? (
+          <button
+            className="btn btn--ghost"
+            onClick={() => (cameFrom ? navigate(cameFrom) : navigate(-1))}
+          >
+            {t('newInspection.cancel', 'Cancel')}
+          </button>
+        ) : (
+          <Link to="/" className="btn btn--ghost">{t('newInspection.cancel', 'Cancel')}</Link>
+        )}
         <button
           className="btn btn--accent btn--lg"
-          onClick={start}
+          onClick={editing ? saveChanges : start}
           disabled={!canStart || creating}
         >
-          {creating ? 'Starting…' : `Continue → Capture ${inspectionType === 'returns' ? 'Returns BOL' : 'BOL'}`}
+          {editing
+            ? creating
+              ? t('newInspection.saving', 'Saving…')
+              : t('newInspection.saveChanges', 'Save changes')
+            : creating
+              ? t('newInspection.starting', 'Starting…')
+              : inspectionType === 'returns'
+                ? t('newInspection.continueReturnsBol', 'Continue → Capture Returns BOL')
+                : t('newInspection.continueBol', 'Continue → Capture BOL')}
         </button>
       </div>
     </main>

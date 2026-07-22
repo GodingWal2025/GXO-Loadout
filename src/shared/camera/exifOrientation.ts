@@ -130,41 +130,40 @@ export function setOrientationTransform(
 }
 
 // ============================================================
-// Browser probe — does createImageBitmap auto-apply EXIF?
+// Browser probe — does createImageBitmap apply EXIF by default?
 // ============================================================
 
-// We decode captured photos with `{ imageOrientation: 'none' }` and rotate them
-// ourselves. But that option is not honoured everywhere — notably older iPad
-// Safari, which silently auto-rotates regardless. There the pixels arrive
-// already upright, our transform rotates them a SECOND time, and the saved
-// photo lands sideways. So probe the behaviour once and skip our transform when
-// the browser has already done the work.
-let autoOrientProbe: Promise<boolean> | null = null;
+// Rotating the photo ourselves means trusting our own EXIF parser, and a parse
+// miss saves the raw sideways sensor frame. Every current browser already
+// applies EXIF orientation when decoding, and it reads the tag natively, so
+// prefer letting it do the work. We only fall back to our own transform on a
+// browser that demonstrably does NOT orient by default.
+//
+// The probe is a 2x1 JPEG tagged EXIF Orientation=6 (rotate 90°): upright it
+// measures 1x2, so swapped dimensions prove the browser applied the tag.
+let defaultOrientProbe: Promise<boolean> | null = null;
 
-export function browserAutoOrientsBitmaps(): Promise<boolean> {
-  if (!autoOrientProbe) autoOrientProbe = probeAutoOrient();
-  return autoOrientProbe;
+export function browserOrientsByDefault(): Promise<boolean> {
+  if (!defaultOrientProbe) defaultOrientProbe = probeDefaultOrient();
+  return defaultOrientProbe;
 }
 
 /** Test-only: forget the cached probe result. */
-export function resetAutoOrientProbe(): void {
-  autoOrientProbe = null;
+export function resetOrientProbe(): void {
+  defaultOrientProbe = null;
 }
 
-async function probeAutoOrient(): Promise<boolean> {
+async function probeDefaultOrient(): Promise<boolean> {
   try {
     const jpeg = await makeProbeJpeg();
     if (!jpeg) return false;
-    const bitmap = await createImageBitmap(jpeg, { imageOrientation: 'none' });
-    // The probe image is 2x1 pixels tagged EXIF orientation 6 (rotate 90°).
-    // Upright it would be 1x2, so swapped dimensions mean the browser rotated
-    // it for us and ignored our request not to.
+    const bitmap = await createImageBitmap(jpeg);
     const swapped = bitmap.height > bitmap.width;
     bitmap.close?.();
     return swapped;
   } catch {
-    // Can't tell (no canvas, decode failure). Assume the option is honoured,
-    // which is the behaviour every modern browser has.
+    // Can't tell (no canvas, decode failure). Fall back to handling it
+    // ourselves, which is the behaviour that predates this probe.
     return false;
   }
 }

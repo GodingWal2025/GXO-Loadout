@@ -5,6 +5,7 @@ import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import { InspectorPicker } from '../shared';
 import { MultiPhotoCapture } from '../shared';
 import type { Inspection } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function ReviewAndCompleteRoute() {
   const { id } = useParams<{ id: string }>();
@@ -26,6 +27,7 @@ export function ReviewAndCompleteRoute() {
 function ReviewInner({ initial }: { initial: Inspection }) {
   const { inspection, dispatch } = useInspection(initial);
   const { locked, editing, readOnly, setEditing } = useInspectionMode(inspection);
+  const t = useT();
   const navigate = useNavigate();
   const [confirmed, setConfirmed] = useState(false);
   const [completedBy, setCompletedBy] = useState(
@@ -61,11 +63,15 @@ function ReviewInner({ initial }: { initial: Inspection }) {
 
   const complete = () => {
     if (!completedBy) {
-      setValidationError('Please select an inspector before completing.');
+      setValidationError(
+        t('review.errNoInspector', 'Please select an inspector before completing.')
+      );
       return;
     }
     if (!confirmed) {
-      setValidationError('You must verify the load and check the confirmation box.');
+      setValidationError(
+        t('review.errNotConfirmed', 'You must verify the load and check the confirmation box.')
+      );
       return;
     }
     setValidationError('');
@@ -81,16 +87,37 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            {readOnly ? <>Inspection <em>summary</em></> : <>Review &amp; <em>complete</em></>}
+            {readOnly ? (
+              <>
+                {t('review.summaryLead', 'Inspection')} <em>{t('review.summaryEm', 'summary')}</em>
+              </>
+            ) : (
+              <>
+                {t('review.titleLead', 'Review &')} <em>{t('review.titleEm', 'complete')}</em>
+              </>
+            )}
           </h1>
           <div className="page-head__sub">
-            Load <span className="mono">#{loadNum}</span> ·{' '}
-            {isReturns 
-              ? `${inspection.pallets.length} total pallets returned`
+            {t('review.load', 'Load')} <span className="mono">#{loadNum}</span> ·{' '}
+            {isReturns
+              ? t('review.subReturns', '{pallets} total pallets returned', {
+                  pallets: inspection.pallets.length,
+                })
               : totalExpected > 0
-                ? `${totalActual} of ${totalExpected} bags · ${inspection.pallets.length} pallets · ${inspection.bol.deliveries.length} deliveries`
-                : `${inspection.pallets.length} pallets · ${inspection.bol.deliveries.length} deliveries`
-            }
+                ? t(
+                    'review.subWithBags',
+                    '{actual} of {expected} bags · {pallets} pallets · {deliveries} deliveries',
+                    {
+                      actual: totalActual,
+                      expected: totalExpected,
+                      pallets: inspection.pallets.length,
+                      deliveries: inspection.bol.deliveries.length,
+                    }
+                  )
+                : t('review.subNoBags', '{pallets} pallets · {deliveries} deliveries', {
+                    pallets: inspection.pallets.length,
+                    deliveries: inspection.bol.deliveries.length,
+                  })}
           </div>
         </div>
         {locked && (
@@ -104,9 +131,16 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         <div className="banner banner--info">
           <span className="banner__icon">👁</span>
           <div className="banner__body">
-            Completed {inspection.completedAt ? new Date(inspection.completedAt).toLocaleString() : ''}
-            {inspection.completedBy ? ` by ${inspection.completedBy}` : ''}. Open in{' '}
-            <strong>view mode</strong> — switch to Edit in the corner to change anything.
+            {t('review.completedOn', 'Completed {when}', {
+              when: inspection.completedAt
+                ? new Date(inspection.completedAt).toLocaleString()
+                : '',
+            })}
+            {inspection.completedBy
+              ? t('review.completedBy', ' by {name}', { name: inspection.completedBy })
+              : ''}
+            {t('review.openInPrefix', '. Open in')} <strong>{t('review.viewMode', 'view mode')}</strong>{' '}
+            {t('review.viewModeHint', '— switch to Edit in the corner to change anything.')}
           </div>
         </div>
       )}
@@ -116,16 +150,22 @@ function ReviewInner({ initial }: { initial: Inspection }) {
           <div className="banner banner--success">
             <span className="banner__icon">✓</span>
             <div className="banner__body">
-              <strong>Picklist fulfilled.</strong> All {totalExpected} bags accounted for across{' '}
-              {inspection.pallets.length} pallets.
+              <strong>{t('review.fulfilledTitle', 'Picklist fulfilled.')}</strong>{' '}
+              {t('review.fulfilledBody', 'All {expected} bags accounted for across {pallets} pallets.', {
+                expected: totalExpected,
+                pallets: inspection.pallets.length,
+              })}
             </div>
           </div>
         ) : (
           <div className="banner banner--warn">
             <span className="banner__icon">⚠</span>
             <div className="banner__body">
-              <strong>Picklist not fulfilled.</strong> {totalActual} of {totalExpected} bags scanned.
-              You can still complete the inspection with quality flags noting the discrepancy.
+              <strong>{t('review.notFulfilledTitle', 'Picklist not fulfilled.')}</strong>{' '}
+              {t('review.notFulfilledBody', '{actual} of {expected} bags scanned. You can still complete the inspection with quality flags noting the discrepancy.', {
+                actual: totalActual,
+                expected: totalExpected,
+              })}
             </div>
           </div>
         )
@@ -134,28 +174,30 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {isReturns && returnsBol && (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Returns <em>tally</em></h2>
-            <span className="section__meta">Expected vs Scanned</span>
+            <h2 className="section__title">
+              {t('review.returnsTallyLead', 'Returns')} <em>{t('review.returnsTallyEm', 'tally')}</em>
+            </h2>
+            <span className="section__meta">{t('review.expectedVsScanned', 'Expected vs Scanned')}</span>
           </div>
           <div className="table-card">
             <table className="data">
               <thead>
                 <tr>
-                  <th>Category</th>
-                  <th className="right">Actual Scanned</th>
+                  <th>{t('review.colCategory', 'Category')}</th>
+                  <th className="right">{t('review.colActualScanned', 'Actual Scanned')}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="fw-500">Total Pallets</td>
+                  <td className="fw-500">{t('review.totalPallets', 'Total Pallets')}</td>
                   <td className="right num fw-500">{returnsActuals.pallets}</td>
                 </tr>
                 <tr>
-                  <td className="fw-500">Product SeedPaks</td>
+                  <td className="fw-500">{t('review.productSeedPaks', 'Product SeedPaks')}</td>
                   <td className="right num fw-500">{returnsActuals.seedPaks}</td>
                 </tr>
                 <tr>
-                  <td className="fw-500">Bagged Product (Pallets)</td>
+                  <td className="fw-500">{t('review.baggedProduct', 'Bagged Product (Pallets)')}</td>
                   <td className="right num fw-500">{returnsActuals.bagPallets}</td>
                 </tr>
               </tbody>
@@ -167,19 +209,22 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {!isReturns && (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Final <em>tally</em></h2>
-            <span className="section__meta">All deliveries</span>
+            <h2 className="section__title">
+              {t('review.finalTallyLead', 'Final')} <em>{t('review.finalTallyEm', 'tally')}</em>
+            </h2>
+            <span className="section__meta">{t('review.allDeliveries', 'All deliveries')}</span>
           </div>
           <div className="table-card">
             <table className="data">
               <thead>
                 <tr>
-                  <th>Batch</th>
-                  <th>Product</th>
-                  <th>Delivery</th>
-                  <th className="right">Expected</th>
-                  <th className="right">Actual</th>
-                  <th className="right">Status</th>
+                  <th>{t('review.colBatch', 'Batch')}</th>
+                  <th>{t('review.colSku', 'SKU')}</th>
+                  <th>{t('review.colDescription', 'Description')}</th>
+                  <th>{t('review.colDelivery', 'Delivery')}</th>
+                  <th className="right">{t('review.colExpected', 'Expected')}</th>
+                  <th className="right">{t('review.colActual', 'Actual')}</th>
+                  <th className="right">{t('review.colStatus', 'Status')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,7 +235,8 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                   return (
                     <tr key={li.id}>
                       <td className="mono">{li.batchCode.value || '—'}</td>
-                      <td className="small soft">{li.productName.value || '—'}</td>
+                      <td className="mono small">{li.sku.value || '—'}</td>
+                      <td className="small soft">{li.description.value || '—'}</td>
                       <td className="mono small">{delivery?.deliveryNumber || '—'}</td>
                       <td className="right num">
                         {li.expectedQuantity.value || 0} {li.uom}
@@ -200,9 +246,9 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                       </td>
                       <td className="right">
                         {li.fulfilled ? (
-                          <span className="pill pill--success">✓ match</span>
+                          <span className="pill pill--success">{t('review.statusMatch', '✓ match')}</span>
                         ) : (
-                          <span className="pill pill--warn">short</span>
+                          <span className="pill pill--warn">{t('review.statusShort', 'short')}</span>
                         )}
                       </td>
                     </tr>
@@ -218,9 +264,13 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         <section className="section">
           <div className="section__head">
             <h2 className="section__title">
-              <em>Flags</em>
+              <em>{t('review.flags', 'Flags')}</em>
             </h2>
-            <span className="section__meta">{inspection.flaggedItemsCount} quality issue(s)</span>
+            <span className="section__meta">
+              {t('review.qualityIssues', '{count} quality issue(s)', {
+                count: inspection.flaggedItemsCount,
+              })}
+            </span>
           </div>
           {inspection.qualityFlag && (
             <div
@@ -228,7 +278,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
               style={{ borderLeft: '3px solid var(--danger)', background: 'var(--danger-bg)' }}
             >
               <div className="small" style={{ color: 'var(--danger)' }}>
-                ⚑ Inspection-level: {inspection.qualityFlag.reason}
+                {t('review.inspectionLevelFlag', '⚑ Inspection-level:')} {inspection.qualityFlag.reason}
                 {inspection.qualityFlag.otherReason && <> — {inspection.qualityFlag.otherReason}</>}
               </div>
               {inspection.qualityFlag.notes && (
@@ -247,7 +297,8 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                 style={{ borderLeft: '3px solid var(--danger)', background: 'var(--danger-bg)' }}
               >
                 <div className="small" style={{ color: 'var(--danger)' }}>
-                  ⚑ Pallet {p.palletNumber}: {p.qualityFlag!.reason}
+                  {t('review.palletFlag', '⚑ Pallet {n}:', { n: p.palletNumber })}{' '}
+                  {p.qualityFlag!.reason}
                   {p.qualityFlag!.otherReason && <> — {p.qualityFlag!.otherReason}</>}
                 </div>
                 {p.qualityFlag!.notes && (
@@ -263,13 +314,17 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {!isReturns && (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Packaging <em>used</em></h2>
-            <span className="section__meta">Materials consumed for this load</span>
+            <h2 className="section__title">
+              {t('review.packagingLead', 'Packaging')} <em>{t('review.packagingEm', 'used')}</em>
+            </h2>
+            <span className="section__meta">
+              {t('review.packagingMeta', 'Materials consumed for this load')}
+            </span>
           </div>
           <fieldset className="readonly-fieldset card" disabled={readOnly}>
             <div className="field-row" style={{ marginBottom: 12 }}>
               <div className="field">
-                <div className="field__label">40×40 pallets</div>
+                <div className="field__label">{t('review.pallets40x40', '40×40 pallets')}</div>
                 <input
                   type="number"
                   min="0"
@@ -281,7 +336,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                 />
               </div>
               <div className="field">
-                <div className="field__label">48×40 pallets</div>
+                <div className="field__label">{t('review.pallets48x40', '48×40 pallets')}</div>
                 <input
                   type="number"
                   min="0"
@@ -293,7 +348,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                 />
               </div>
               <div className="field">
-                <div className="field__label">Seedpaks</div>
+                <div className="field__label">{t('review.seedpaks', 'Seedpaks')}</div>
                 <input
                   type="number"
                   min="0"
@@ -306,14 +361,20 @@ function ReviewInner({ initial }: { initial: Inspection }) {
               </div>
             </div>
             <div className="field">
-              <div className="field__label">Other packaging notes</div>
+              <div className="field__label">
+                {t('review.otherPackagingNotes', 'Other packaging notes')}
+              </div>
               <textarea
                 rows={2}
                 value={inspection.staging.otherPackagingNotes ?? ''}
                 onChange={(e) =>
                   dispatch({ type: 'SET_STAGING', field: 'otherPackagingNotes', value: e.target.value })
                 }
-                placeholder={readOnly ? '—' : 'Any additional packaging details…'}
+                placeholder={
+                  readOnly
+                    ? '—'
+                    : t('review.packagingNotesPlaceholder', 'Any additional packaging details…')
+                }
                 style={{ width: '100%', resize: 'vertical' }}
               />
             </div>
@@ -324,38 +385,40 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {!isReturns && (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Staging <em>checklist</em></h2>
+            <h2 className="section__title">
+              {t('review.stagingLead', 'Staging')} <em>{t('review.stagingEm', 'checklist')}</em>
+            </h2>
           </div>
 
           {[
             {
               field: 'stagedCorrectly',
-              label: '* Is the load staged correctly on the dock?',
+              label: t('review.qStagedCorrectly', '* Is the load staged correctly on the dock?'),
               options: ['Yes', 'No'] as const
             },
             {
               field: 'paperBagsProperlyStacked',
-              label: '* Are all bag pallets properly stacked, securely wrapped with no breaks or gaps in the wrapping, and not leaning more than 5 inches?',
+              label: t('review.qBagsStacked', '* Are all bag pallets properly stacked, securely wrapped with no breaks or gaps in the wrapping, and not leaning more than 5 inches?'),
               options: ['Yes', 'No', 'N/A'] as const
             },
             {
               field: 'ltlPalletsSecured',
-              label: '* Are all LTL pallets secured with cardboard?',
+              label: t('review.qLtlSecured', '* Are all LTL pallets secured with cardboard?'),
               options: ['Yes', 'No', 'N/A'] as const
             },
             {
               field: 'mixedPalletsLabeled',
-              label: '* Do all mixed pallets have proper labels?',
+              label: t('review.qMixedLabeled', '* Do all mixed pallets have proper labels?'),
               options: ['Yes', 'No', 'N/A'] as const
             },
             {
               field: 'multiStopStickersAttached',
-              label: '* Are all multi-stop stickers attached to the first pallet of each stop?',
+              label: t('review.qMultiStopStickers', '* Are all multi-stop stickers attached to the first pallet of each stop?'),
               options: ['Yes', 'No', 'N/A'] as const
             },
             {
               field: 'palletQuantityMatchesBOL',
-              label: '* Does the quantity of pallets and physical product staged for the order match the final BOL?',
+              label: t('review.qPalletQtyMatchesBol', '* Does the quantity of pallets and physical product staged for the order match the final BOL?'),
               options: ['Yes', 'No'] as const
             }
           ].map((q) => (
@@ -382,7 +445,11 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                         dispatch({ type: 'SET_STAGING', field: q.field as any, value: opt })
                       }
                     >
-                      {opt}
+                      {opt === 'Yes'
+                        ? t('review.yes', 'Yes')
+                        : opt === 'No'
+                          ? t('review.no', 'No')
+                          : t('review.na', 'N/A')}
                     </button>
                   );
                 })}
@@ -395,9 +462,15 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {!isReturns && (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Final <em>staging lane</em> photos</h2>
+            <h2 className="section__title">
+              {t('review.finalLaneLead', 'Final')}{' '}
+              <em>{t('review.finalLaneEm', 'staging lane')}</em>{' '}
+              {t('review.finalLaneTail', 'photos')}
+            </h2>
             <span className="section__meta">
-              {readOnly ? 'Tap a photo to enlarge' : 'Capture the finished staging lane with product'}
+              {readOnly
+                ? t('review.finalLaneMetaView', 'Tap a photo to enlarge')
+                : t('review.finalLaneMeta', 'Capture the finished staging lane with product')}
             </span>
           </div>
           <MultiPhotoCapture
@@ -410,7 +483,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
             onPhotoQualityFlag={(photoId, flag) =>
               dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })
             }
-            label="Final staging lane"
+            label={t('review.finalLaneLabel', 'Final staging lane')}
             currentUser={inspection.currentInspector || inspection.startedBy || 'unknown'}
             readOnly={readOnly}
           />
@@ -420,10 +493,12 @@ function ReviewInner({ initial }: { initial: Inspection }) {
       {readOnly ? (
         <section className="section">
           <div className="section__head">
-            <h2 className="section__title">Inspector <em>sign-off</em></h2>
+            <h2 className="section__title">
+              {t('review.signOffLead', 'Inspector')} <em>{t('review.signOffEm', 'sign-off')}</em>
+            </h2>
           </div>
           <div className="card">
-            <div className="xs soft">Completed by</div>
+            <div className="xs soft">{t('review.completedByLabel', 'Completed by')}</div>
             <div className="fw-500" style={{ fontSize: 18 }}>
               {inspection.completedBy || inspection.startedBy || '—'}
             </div>
@@ -442,22 +517,27 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         <div className="banner banner--info">
           <span className="banner__icon">i</span>
           <div className="banner__body">
-            <strong>You are completing this inspection.</strong> Your name will be recorded as the
-            inspector who finalized this load.
+            <strong>{t('review.signOffTitle', 'You are completing this inspection.')}</strong>{' '}
+            {t(
+              'review.signOffBody',
+              'Your name will be recorded as the inspector who finalized this load.'
+            )}
             {inspection.startedBy && inspection.startedBy !== completedBy && (
               <span>
-                {' '}This load was started by <strong>{inspection.startedBy}</strong>.
+                {' '}
+                {t('review.startedByPrefix', 'This load was started by')}{' '}
+                <strong>{inspection.startedBy}</strong>.
               </span>
             )}
           </div>
         </div>
 
         <div className="field">
-          <div className="field__label">Completed by</div>
+          <div className="field__label">{t('review.completedByLabel', 'Completed by')}</div>
           <InspectorPicker
             siteId={inspection.siteId}
             value={completedBy}
-            placeholder="Select your name…"
+            placeholder={t('review.selectName', 'Select your name…')}
             onChange={setCompletedBy}
           />
         </div>
@@ -471,10 +551,15 @@ function ReviewInner({ initial }: { initial: Inspection }) {
               style={{ marginTop: 4 }}
             />
             <span className="small">
-              {isReturns 
-                ? 'I have personally verified this return. All product photos, batch, and product have been reviewed and are accurate.'
-                : 'I have personally verified this load against the BOL and final paperwork. All pallet photos, batch codes, and bag counts have been reviewed and are accurate.'
-              }
+              {isReturns
+                ? t(
+                    'review.attestReturns',
+                    'I have personally verified this return. All product photos, batch, and product have been reviewed and are accurate.'
+                  )
+                : t(
+                    'review.attestLoad',
+                    'I have personally verified this load against the BOL and final paperwork. All pallet photos, batch codes, and bag counts have been reviewed and are accurate.'
+                  )}
             </span>
           </label>
         </div>
@@ -503,14 +588,18 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         )}
         <div className="row-between">
           <button className="btn btn--ghost" onClick={() => navigate(`/inspection/${inspection.id}`)}>
-            {readOnly ? '← Back to load' : '← Continue editing'}
+            {readOnly
+              ? t('review.backToLoad', '← Back to load')
+              : t('review.continueEditing', '← Continue editing')}
           </button>
           {!readOnly && (
             <button
               className="btn btn--accent btn--lg"
               onClick={complete}
             >
-              {inspection.flaggedItemsCount > 0 ? '⚑ Complete (flagged)' : '✓ Complete inspection'}
+              {inspection.flaggedItemsCount > 0
+                ? t('review.completeFlagged', '⚑ Complete (flagged)')
+                : t('review.complete', '✓ Complete inspection')}
             </button>
           )}
         </div>

@@ -35,7 +35,8 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
   const productByBatch: Record<string, string> = {};
   for (const li of inspection.picklist.lineItems) {
     const code = li.batchCode.value;
-    if (code && li.productName.value) productByBatch[code] = li.productName.value;
+    const label = [li.sku.value, li.description.value].filter(Boolean).join(' — ');
+    if (code && label) productByBatch[code] = label;
   }
 
   // Flatten batch rows (same shape as the progress modal)

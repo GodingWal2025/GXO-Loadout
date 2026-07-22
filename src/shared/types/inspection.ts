@@ -188,7 +188,19 @@ export interface Picklist {
 export interface PicklistLineItemEntry {
   id: string;
   batchCode: Suggestable<string>;
-  productName: Suggestable<string>;
+  /**
+   * Material / SKU number — the picklist calls it "Material", the floor calls
+   * it "SKU", they are the same value. e.g. "91007244".
+   */
+  sku: Suggestable<string>;
+  /** Material description. e.g. "C.CL.201-40VT4PRIB.SF2.40USP.UB.US". */
+  description: Suggestable<string>;
+  /**
+   * @deprecated Records written before SKU and description were separate
+   * fields. Migrated into `description` on load (see migratePicklistLine);
+   * never written by new code, kept only so old rows still open.
+   */
+  productName?: Suggestable<string>;
   expectedQuantity: Suggestable<number>;
   uom: 'BAG' | 'SP' | 'PCE';
   deliveryId?: string; // which delivery does this line belong to (after picklist/BOL cross-ref)

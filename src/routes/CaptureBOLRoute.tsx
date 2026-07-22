@@ -7,10 +7,13 @@ import { useEffect } from 'react';
 
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
+import { StepBackLink } from '../shared';
 import type { Inspection, InspectionPhoto } from '../shared';
 import { CapturedPageThumb } from '../components/CapturedPageThumb';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function CaptureBOLRoute() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -97,13 +100,15 @@ export function CaptureBOLRoute() {
 
   return (
     <main style={{ maxWidth: 560 }}>
+      <StepBackLink to={`/inspection/${inspection.id}/details`} />
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Capture <em>BOL</em>
+            {t('bol.titleLead', 'Capture')} <em>{t('bol.titleEm', 'BOL')}</em>
           </h1>
           <div className="page-head__sub">
-            Step 2 of 4 · Photograph the Bill of Lading first
+            {t('bol.subtitle', 'Step 2 of 4 · Photograph the Bill of Lading first')}
           </div>
         </div>
       </div>
@@ -123,16 +128,25 @@ export function CaptureBOLRoute() {
           }}
         >
           <div style={{ fontSize: 48, color: 'var(--ink-faint)', marginBottom: 8 }}>⌗</div>
-          <div className="small soft">{saving ? 'Saving…' : 'No pages yet'}</div>
+          <div className="small soft">
+            {saving ? t('bol.saving', 'Saving…') : t('bol.noPages', 'No pages yet')}
+          </div>
         </div>
       ) : (
         <div className="field" style={{ marginBottom: 20 }}>
           <div className="field__label">
-            {pageIds.length} page{pageIds.length === 1 ? '' : 's'} captured
+            {pageIds.length === 1
+              ? t('bol.pageCaptured', '{count} page captured', { count: pageIds.length })
+              : t('bol.pagesCaptured', '{count} pages captured', { count: pageIds.length })}
           </div>
           <div className="photo-grid">
             {pageIds.map((pid, i) => (
-              <CapturedPageThumb key={pid} photoId={pid} label={`Page ${i + 1}`} />
+              <CapturedPageThumb
+                key={pid}
+                photoId={pid}
+                inspectionId={inspection.id}
+                label={t('bol.pageLabel', 'Page {n}', { n: i + 1 })}
+              />
             ))}
           </div>
         </div>
@@ -141,8 +155,10 @@ export function CaptureBOLRoute() {
       <div className="banner banner--info">
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          Photograph the BOL first — it determines how many stops and deliveries are on this
-          load. Add a page for each sheet, then continue.
+          {t(
+            'bol.hint',
+            'Photograph the BOL first — it determines how many stops and deliveries are on this load. Add a page for each sheet, then continue.'
+          )}
         </div>
       </div>
 
@@ -152,7 +168,10 @@ export function CaptureBOLRoute() {
         disabled={saving}
         style={{ width: '100%' }}
       >
-        📷 {pageIds.length === 0 ? 'Take photo' : 'Add another page'}
+        📷{' '}
+        {pageIds.length === 0
+          ? t('bol.takePhoto', 'Take photo')
+          : t('bol.addPage', 'Add another page')}
       </button>
 
       {pageIds.length > 0 && (
@@ -162,13 +181,15 @@ export function CaptureBOLRoute() {
           disabled={saving}
           style={{ width: '100%' }}
         >
-          Continue → Capture picklist
+          {t('bol.continue', 'Continue → Capture picklist')}
         </button>
       )}
 
       <div className="center mt-16">
         <button className="btn btn--ghost" onClick={goNext}>
-          {pageIds.length === 0 ? 'Skip — enter BOL data manually' : 'Skip rest'}
+          {pageIds.length === 0
+            ? t('bol.skipManual', 'Skip — enter BOL data manually')
+            : t('bol.skipRest', 'Skip rest')}
         </button>
       </div>
 

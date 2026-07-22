@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StagingLaneObject } from '../types/ontology';
+import { useT } from '../i18n/LanguageContext';
 import './StagingLanesMap.css';
 
 interface StagingLanesMapProps {
@@ -53,6 +54,7 @@ const mockDocks: Record<string, MockDockDetail> = {
 };
 
 export function StagingLanesMap({ onLaneClick }: StagingLanesMapProps) {
+  const t = useT();
   const [activeTab, setActiveTab] = useState<'east' | 'west'>('west');
   const [selectedLane, setSelectedLane] = useState<string | null>(null);
 
@@ -127,19 +129,19 @@ export function StagingLanesMap({ onLaneClick }: StagingLanesMapProps) {
           className={`warehouse-tab ${activeTab === 'east' ? 'active' : ''}`}
           onClick={() => setActiveTab('east')}
         >
-          <span className="warehouse-tab-icon">📦</span> East Warehouse
+          <span className="warehouse-tab-icon">📦</span> {t('lanes.eastWarehouse', 'East Warehouse')}
         </button>
         <button 
           className={`warehouse-tab ${activeTab === 'west' ? 'active' : ''}`}
           onClick={() => setActiveTab('west')}
         >
-          <span className="warehouse-tab-icon">📦</span> West Warehouse
+          <span className="warehouse-tab-icon">📦</span> {t('lanes.westWarehouse', 'West Warehouse')}
         </button>
       </div>
 
       {activeTab === 'west' && (
         <div className="warehouse-layout west-layout">
-          <div className="warehouse-title">West Warehouse</div>
+          <div className="warehouse-title">{t('lanes.westWarehouse', 'West Warehouse')}</div>
           
           <div className="dock-doors-row">
             {Array.from({ length: 17 }).map((_, i) => renderDockDoor(`A${i}`))}
@@ -164,7 +166,7 @@ export function StagingLanesMap({ onLaneClick }: StagingLanesMapProps) {
 
       {activeTab === 'east' && (
         <div className="warehouse-layout east-layout">
-          <div className="warehouse-title" style={{ left: '50%' }}>East Warehouse</div>
+          <div className="warehouse-title" style={{ left: '50%' }}>{t('lanes.eastWarehouse', 'East Warehouse')}</div>
           
           <div className="east-left-column">
             {['C6', 'C5', 'C4', 'C3', 'C2', 'C1'].map(name => renderDockDoor(name, 'east-dock-door'))}
@@ -197,38 +199,38 @@ export function StagingLanesMap({ onLaneClick }: StagingLanesMapProps) {
         <div className="lane-modal-overlay" onClick={() => setSelectedLane(null)}>
           <div className="lane-modal-content" onClick={e => e.stopPropagation()}>
             <div className="lane-modal-header">
-              <h3 className="lane-modal-title">Lane {selectedLane}</h3>
+              <h3 className="lane-modal-title">{t('lanes.laneTitle', 'Lane {name}', { name: selectedLane })}</h3>
               <button className="lane-modal-close" onClick={() => setSelectedLane(null)}>×</button>
             </div>
             <div className="lane-modal-body">
               {mockLoadDetails[selectedLane] ? (
                 <>
                   <div className="modal-detail-row">
-                    <span className="modal-detail-label">Load Type</span>
+                    <span className="modal-detail-label">{t('lanes.loadType', 'Load Type')}</span>
                     <span className={`modal-badge type-${mockLoadDetails[selectedLane].type.toLowerCase()}`}>
                       {mockLoadDetails[selectedLane].type}
                     </span>
                   </div>
                   <div className="modal-detail-row">
-                    <span className="modal-detail-label">Status</span>
+                    <span className="modal-detail-label">{t('lanes.status', 'Status')}</span>
                     <span className="modal-detail-value">{mockLoadDetails[selectedLane].status}</span>
                   </div>
                   <div className="modal-detail-row">
-                    <span className="modal-detail-label">Load ID</span>
+                    <span className="modal-detail-label">{t('lanes.loadId', 'Load ID')}</span>
                     <span className="modal-detail-value">{mockLoadDetails[selectedLane].currentLoadId}</span>
                   </div>
                   <div className="modal-detail-row">
-                    <span className="modal-detail-label">Carrier</span>
+                    <span className="modal-detail-label">{t('lanes.carrier', 'Carrier')}</span>
                     <span className="modal-detail-value">{mockLoadDetails[selectedLane].carrier}</span>
                   </div>
                   <div className="modal-detail-row">
-                    <span className="modal-detail-label">Expected Pallets</span>
+                    <span className="modal-detail-label">{t('lanes.expectedPallets', 'Expected Pallets')}</span>
                     <span className="modal-detail-value">{mockLoadDetails[selectedLane].expectedPalletCount}</span>
                   </div>
                 </>
               ) : (
                 <div className="modal-detail-row" style={{ justifyContent: 'center', padding: '20px', color: '#6b7280' }}>
-                  This lane is currently empty.
+                  {t('lanes.empty', 'This lane is currently empty.')}
                 </div>
               )}
             </div>

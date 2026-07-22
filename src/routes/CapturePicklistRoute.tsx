@@ -6,10 +6,13 @@ import { useCameraCapture } from '../shared';
 
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
+import { StepBackLink } from '../shared';
 import type { Inspection, InspectionPhoto, PicklistLineItemEntry } from '../shared';
 import { CapturedPageThumb } from '../components/CapturedPageThumb';
+import { useT } from '../shared/i18n/LanguageContext';
 
 export function CapturePicklistRoute() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -76,7 +79,8 @@ export function CapturePicklistRoute() {
           const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
             id: generateId(),
             batchCode: mlSuggestable(li.batchCode),
-            productName: mlSuggestable(li.productName),
+            sku: mlSuggestable(li.sku),
+            description: mlSuggestable(li.description),
             expectedQuantity: mlSuggestable(li.expectedQuantity),
             uom: li.uom,
             actualQuantity: 0,
@@ -122,13 +126,15 @@ export function CapturePicklistRoute() {
 
   return (
     <main style={{ maxWidth: 560 }}>
+      <StepBackLink to={`/inspection/${inspection.id}/capture-bol`} />
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Capture <em>picklist</em>
+            {t('picklist.titleLead', 'Capture')} <em>{t('picklist.titleEm', 'picklist')}</em>
           </h1>
           <div className="page-head__sub">
-            Step 3 of 4 · Photograph the printed picklist
+            {t('picklist.subtitle', 'Step 3 of 4 · Photograph the printed picklist')}
           </div>
         </div>
       </div>
@@ -148,17 +154,28 @@ export function CapturePicklistRoute() {
           }}
         >
           <div style={{ fontSize: 48, color: 'var(--ink-faint)', marginBottom: 8 }}>⌗</div>
-          <div className="small soft">{analyzing ? 'Analyzing picklist…' : 'No pages yet'}</div>
+          <div className="small soft">
+            {analyzing
+              ? t('picklist.analyzing', 'Analyzing picklist…')
+              : t('picklist.noPages', 'No pages yet')}
+          </div>
         </div>
       ) : (
         <div className="field" style={{ marginBottom: 20 }}>
           <div className="field__label">
-            {pageIds.length} page{pageIds.length === 1 ? '' : 's'} captured
-            {analyzing ? ' · analyzing…' : ''}
+            {pageIds.length === 1
+              ? t('picklist.pageCaptured', '{count} page captured', { count: pageIds.length })
+              : t('picklist.pagesCaptured', '{count} pages captured', { count: pageIds.length })}
+            {analyzing ? t('picklist.analyzingSuffix', ' · analyzing…') : ''}
           </div>
           <div className="photo-grid">
             {pageIds.map((pid, i) => (
-              <CapturedPageThumb key={pid} photoId={pid} label={`Page ${i + 1}`} />
+              <CapturedPageThumb
+                key={pid}
+                photoId={pid}
+                inspectionId={inspection.id}
+                label={t('picklist.pageLabel', 'Page {n}', { n: i + 1 })}
+              />
             ))}
           </div>
         </div>
@@ -168,8 +185,15 @@ export function CapturePicklistRoute() {
         <div className="banner banner--info">
           <span className="banner__icon">✨</span>
           <div className="banner__body">
-            <strong>{lineCount} line item{lineCount === 1 ? '' : 's'}</strong> read from the
-            picklist. You'll confirm each one on the next screen.
+            <strong>
+              {lineCount === 1
+                ? t('picklist.lineItem', '{count} line item', { count: lineCount })
+                : t('picklist.lineItems', '{count} line items', { count: lineCount })}
+            </strong>{' '}
+            {t(
+              'picklist.lineItemsRead',
+              "read from the picklist. You'll confirm each one on the next screen."
+            )}
           </div>
         </div>
       )}
@@ -177,8 +201,10 @@ export function CapturePicklistRoute() {
       <div className="banner banner--info">
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          Photograph the printed picklist. Add a page for each sheet — every page is read
-          for line items, then continue.
+          {t(
+            'picklist.hint',
+            'Photograph the printed picklist. Add a page for each sheet — every page is read for line items, then continue.'
+          )}
         </div>
       </div>
 
@@ -188,7 +214,10 @@ export function CapturePicklistRoute() {
         disabled={analyzing}
         style={{ width: '100%' }}
       >
-        📷 {pageIds.length === 0 ? 'Take photo' : 'Add another page'}
+        📷{' '}
+        {pageIds.length === 0
+          ? t('picklist.takePhoto', 'Take photo')
+          : t('picklist.addPage', 'Add another page')}
       </button>
 
       {pageIds.length > 0 && (
@@ -198,13 +227,15 @@ export function CapturePicklistRoute() {
           disabled={analyzing}
           style={{ width: '100%' }}
         >
-          Continue → Verify
+          {t('picklist.continue', 'Continue → Verify')}
         </button>
       )}
 
       <div className="center mt-16">
         <button className="btn btn--ghost" onClick={goNext}>
-          {pageIds.length === 0 ? 'Skip — enter picklist manually' : 'Skip rest'}
+          {pageIds.length === 0
+            ? t('picklist.skipManual', 'Skip — enter picklist manually')
+            : t('picklist.skipRest', 'Skip rest')}
         </button>
       </div>
 

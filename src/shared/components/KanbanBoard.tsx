@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useT } from '../i18n/LanguageContext';
 import './KanbanBoard.css';
 
 export interface KanbanColumnDef {
@@ -24,6 +25,7 @@ export interface KanbanBoardProps {
 }
 
 export function KanbanBoard({ columns, cards, onMoveCard }: KanbanBoardProps) {
+  const t = useT();
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
   const [dragOverColId, setDragOverColId] = useState<string | null>(null);
 
@@ -102,7 +104,7 @@ export function KanbanBoard({ columns, cards, onMoveCard }: KanbanBoardProps) {
 
                   {card.user && (
                     <div className="mt-3">
-                      <div className="kanban-card-log-header">Activity Log</div>
+                      <div className="kanban-card-log-header">{t('kanban.activityLog', 'Activity Log')}</div>
                       <div className="kanban-card-user-info">
                         <div className="kanban-card-avatar">
                           {card.user.avatar ? (
@@ -112,7 +114,7 @@ export function KanbanBoard({ columns, cards, onMoveCard }: KanbanBoardProps) {
                           )}
                         </div>
                         <div className="kanban-card-meta">
-                          Created by <strong>{card.user.name}</strong>,<br />
+                          {t('kanban.createdBy', 'Created by')} <strong>{card.user.name}</strong>,<br />
                           {card.user.time}
                         </div>
                       </div>

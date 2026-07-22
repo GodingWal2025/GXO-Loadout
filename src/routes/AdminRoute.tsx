@@ -29,11 +29,13 @@ import {
   isAdminPasswordCustomized,
 } from '../services/adminAuth';
 import { wipeAllData } from '../services/appReset';
+import { useT } from '../shared/i18n/LanguageContext';
 import type { Inspector, Site } from '../shared';
 
 type Tab = 'inspectors' | 'sites' | 'staging' | 'security' | 'reports';
 
 export function AdminRoute() {
+  const t = useT();
   const navigate = useNavigate();
   const config = getDeviceConfig();
   // When there's no site configured yet, default to the Sites tab so the
@@ -66,10 +68,13 @@ export function AdminRoute() {
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Admin <em>console</em>
+            {t('admin.title', 'Admin')} <em>{t('admin.titleEm', 'console')}</em>
           </h1>
           <div className="page-head__sub">
-            Manager-only{config ? ` · ${config.siteName}` : ' · no site assigned yet'}
+            {t('admin.managerOnly', 'Manager-only')}
+            {config
+              ? ` · ${config.siteName}`
+              : ` · ${t('admin.noSiteAssigned', 'no site assigned yet')}`}
           </div>
         </div>
         <div className="page-head__actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -84,8 +89,8 @@ export function AdminRoute() {
               ))}
             </select>
           )}
-          <Link to="/" className="btn btn--ghost">← Back to app</Link>
-          <button className="btn btn--danger" onClick={logout}>Log out</button>
+          <Link to="/" className="btn btn--ghost">{t('admin.backToApp', '← Back to app')}</Link>
+          <button className="btn btn--danger" onClick={logout}>{t('admin.logOut', 'Log out')}</button>
         </div>
       </div>
 
@@ -93,9 +98,11 @@ export function AdminRoute() {
         <div className="banner banner--warn">
           <span className="banner__icon">⚠</span>
           <div className="banner__body">
-            <strong>This device isn't assigned to a site yet.</strong> Create a site below, then
-            go to Device setup (the home screen will redirect you) to assign this device to that
-            site.
+            <strong>{t('admin.noSiteBannerTitle', "This device isn't assigned to a site yet.")}</strong>{' '}
+            {t(
+              'admin.noSiteBannerBody',
+              'Create a site below, then go to Device setup (the home screen will redirect you) to assign this device to that site.'
+            )}
           </div>
         </div>
       )}
@@ -105,36 +112,36 @@ export function AdminRoute() {
           className={`admin-tab ${tab === 'inspectors' ? 'active' : ''}`}
           onClick={() => setTab('inspectors')}
           disabled={!config}
-          title={!config ? 'Assign this device to a site first' : undefined}
+          title={!config ? t('admin.assignSiteFirst', 'Assign this device to a site first') : undefined}
         >
-          Inspectors
+          {t('admin.tabInspectors', 'Inspectors')}
         </button>
         <button
           className={`admin-tab ${tab === 'sites' ? 'active' : ''}`}
           onClick={() => setTab('sites')}
         >
-          Sites
+          {t('admin.tabSites', 'Sites')}
         </button>
         <button
           className={`admin-tab ${tab === 'staging' ? 'active' : ''}`}
           onClick={() => setTab('staging')}
           disabled={!config}
-          title={!config ? 'Assign this device to a site first' : undefined}
+          title={!config ? t('admin.assignSiteFirst', 'Assign this device to a site first') : undefined}
         >
-          Staging locations
+          {t('admin.tabStaging', 'Staging locations')}
         </button>
         <button
           className={`admin-tab ${tab === 'reports' ? 'active' : ''}`}
           onClick={() => setTab('reports')}
         >
-          Reports &amp; Dashboard
+          {t('admin.tabReports', 'Reports & Dashboard')}
         </button>
 
         <button
           className={`admin-tab ${tab === 'security' ? 'active' : ''}`}
           onClick={() => setTab('security')}
         >
-          Security
+          {t('admin.tabSecurity', 'Security')}
         </button>
       </div>
 
@@ -151,6 +158,7 @@ export function AdminRoute() {
 // ----- Inspectors tab -----
 
 function InspectorsPanel({ siteId }: { siteId: string }) {
+  const t = useT();
   const [inspectors, setInspectors] = useState<Inspector[]>([]);
   const [newName, setNewName] = useState('');
 
@@ -179,15 +187,17 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
     <>
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Add <em>inspector</em></h2>
+          <h2 className="section__title">
+            {t('admin.addInspector', 'Add')} <em>{t('admin.addInspectorEm', 'inspector')}</em>
+          </h2>
         </div>
         <div className="field-row">
           <div className="field">
-            <div className="field__label">Name</div>
+            <div className="field__label">{t('admin.nameLabel', 'Name')}</div>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. M. Jones"
+              placeholder={t('admin.inspectorNamePlaceholder', 'e.g. M. Jones')}
               onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>
@@ -197,7 +207,7 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
               onClick={add}
               disabled={!newName.trim()}
             >
-              + Add inspector
+              {t('admin.addInspectorBtn', '+ Add inspector')}
             </button>
           </div>
         </div>
@@ -205,25 +215,31 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
 
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Current <em>inspectors</em></h2>
+          <h2 className="section__title">
+            {t('admin.currentInspectors', 'Current')} <em>{t('admin.currentInspectorsEm', 'inspectors')}</em>
+          </h2>
           <span className="section__meta">
-            {inspectors.filter((i) => i.active).length} active
+            {t('admin.activeCount', '{count} active', {
+              count: inspectors.filter((i) => i.active).length,
+            })}
           </span>
         </div>
 
         <div className="banner banner--info">
           <span className="banner__icon">i</span>
           <div className="banner__body">
-            Deactivated inspectors stay in past inspection records (so historical attribution is
-            preserved) but don't appear in the dropdown when starting new loads.
+            {t(
+              'admin.inspectorsInfo',
+              "Deactivated inspectors stay in past inspection records (so historical attribution is preserved) but don't appear in the dropdown when starting new loads."
+            )}
           </div>
         </div>
 
         {inspectors.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No inspectors yet</div>
+            <div className="empty__title">{t('admin.noInspectors', 'No inspectors yet')}</div>
             <div className="empty__sub">
-              Add at least one inspector before any load can be started.
+              {t('admin.noInspectorsSub', 'Add at least one inspector before any load can be started.')}
             </div>
           </div>
         ) : (
@@ -231,9 +247,9 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>Status</th>
-                  <th className="right">Action</th>
+                  <th>{t('admin.colName', 'Name')}</th>
+                  <th>{t('admin.colStatus', 'Status')}</th>
+                  <th className="right">{t('admin.colAction', 'Action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -242,14 +258,16 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
                     <td className="fw-500">{i.name}</td>
                     <td>
                       {i.active ? (
-                        <span className="pill pill--success">Active</span>
+                        <span className="pill pill--success">{t('admin.statusActive', 'Active')}</span>
                       ) : (
-                        <span className="pill pill--neutral">Inactive</span>
+                        <span className="pill pill--neutral">{t('admin.statusInactive', 'Inactive')}</span>
                       )}
                     </td>
                     <td className="right">
                       <button className="btn btn--sm" onClick={() => toggleActive(i)}>
-                        {i.active ? 'Deactivate' : 'Reactivate'}
+                        {i.active
+                          ? t('admin.deactivate', 'Deactivate')
+                          : t('admin.reactivate', 'Reactivate')}
                       </button>
                     </td>
                   </tr>
@@ -266,6 +284,7 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
 // ----- Sites tab -----
 
 function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
+  const t = useT();
   const [sites, setSites] = useState<Site[]>([]);
   const [newName, setNewName] = useState('');
   const [newAddress, setNewAddress] = useState('');
@@ -289,10 +308,17 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
   };
 
   const remove = (s: Site) => {
-    if (!window.confirm(`Delete site "${s.name}"? This cannot be undone.`)) return;
+    if (
+      !window.confirm(
+        t('admin.confirmDeleteSite', 'Delete site "{name}"? This cannot be undone.', {
+          name: s.name,
+        })
+      )
+    )
+      return;
     const result = deleteSite(s.id);
     if (!result.ok) {
-      setDeleteError(result.reason || 'Failed to delete');
+      setDeleteError(result.reason || t('admin.deleteSiteFailed', 'Failed to delete'));
       return;
     }
     setDeleteError(null);
@@ -303,24 +329,26 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
     <>
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Add <em>site</em></h2>
+          <h2 className="section__title">
+            {t('admin.addSite', 'Add')} <em>{t('admin.addSiteEm', 'site')}</em>
+          </h2>
         </div>
         <div className="field-row">
           <div className="field">
-            <div className="field__label">Site name</div>
+            <div className="field__label">{t('admin.siteNameLabel', 'Site name')}</div>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Memphis Distribution Center"
+              placeholder={t('admin.siteNamePlaceholder', 'e.g. Memphis Distribution Center')}
               onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>
           <div className="field">
-            <div className="field__label">Address (optional)</div>
+            <div className="field__label">{t('admin.addressLabel', 'Address (optional)')}</div>
             <input
               value={newAddress}
               onChange={(e) => setNewAddress(e.target.value)}
-              placeholder="123 Main St, Memphis TN"
+              placeholder={t('admin.addressPlaceholder', '123 Main St, Memphis TN')}
             />
           </div>
           <div className="field" style={{ alignSelf: 'flex-end' }}>
@@ -329,7 +357,7 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
               onClick={add}
               disabled={!newName.trim()}
             >
-              + Add site
+              {t('admin.addSiteBtn', '+ Add site')}
             </button>
           </div>
         </div>
@@ -337,8 +365,14 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
 
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">All <em>sites</em></h2>
-          <span className="section__meta">{sites.filter((s) => s.active).length} active</span>
+          <h2 className="section__title">
+            {t('admin.allSites', 'All')} <em>{t('admin.allSitesEm', 'sites')}</em>
+          </h2>
+          <span className="section__meta">
+            {t('admin.activeCount', '{count} active', {
+              count: sites.filter((s) => s.active).length,
+            })}
+          </span>
         </div>
 
         {deleteError && (
@@ -350,18 +384,18 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
 
         {sites.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No sites yet</div>
-            <div className="empty__sub">Add the first site above.</div>
+            <div className="empty__title">{t('admin.noSites', 'No sites yet')}</div>
+            <div className="empty__sub">{t('admin.noSitesSub', 'Add the first site above.')}</div>
           </div>
         ) : (
           <div className="table-card">
             <table className="data">
               <thead>
                 <tr>
-                  <th>Site</th>
-                  <th>Address</th>
-                  <th>Status</th>
-                  <th className="right">Actions</th>
+                  <th>{t('admin.colSite', 'Site')}</th>
+                  <th>{t('admin.colAddress', 'Address')}</th>
+                  <th>{t('admin.colStatus', 'Status')}</th>
+                  <th className="right">{t('admin.colActions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -371,29 +405,31 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
                       {s.name}
                       {s.id === currentSiteId && (
                         <span className="pill pill--info" style={{ marginLeft: 8 }}>
-                          Selected Site
+                          {t('admin.selectedSite', 'Selected Site')}
                         </span>
                       )}
                     </td>
                     <td className="small soft">{s.address || '—'}</td>
                     <td>
                       {s.active ? (
-                        <span className="pill pill--success">Active</span>
+                        <span className="pill pill--success">{t('admin.statusActive', 'Active')}</span>
                       ) : (
-                        <span className="pill pill--neutral">Inactive</span>
+                        <span className="pill pill--neutral">{t('admin.statusInactive', 'Inactive')}</span>
                       )}
                     </td>
                     <td className="right">
                       <div className="flex gap-8" style={{ justifyContent: 'flex-end' }}>
                         <button className="btn btn--sm" onClick={() => toggleActive(s)}>
-                          {s.active ? 'Deactivate' : 'Reactivate'}
+                          {s.active
+                            ? t('admin.deactivate', 'Deactivate')
+                            : t('admin.reactivate', 'Reactivate')}
                         </button>
                         {s.id !== currentSiteId && (
                           <button
                             className="btn btn--sm btn--danger"
                             onClick={() => remove(s)}
                           >
-                            Delete
+                            {t('admin.delete', 'Delete')}
                           </button>
                         )}
                       </div>
@@ -412,6 +448,7 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
 // ----- Staging Locations tab -----
 
 function StagingPanel({ siteId }: { siteId: string }) {
+  const t = useT();
   const [locations, setLocations] = useState<StagingLocation[]>([]);
   const [newName, setNewName] = useState('');
 
@@ -437,7 +474,12 @@ function StagingPanel({ siteId }: { siteId: string }) {
   };
 
   const remove = (l: StagingLocation) => {
-    if (!window.confirm(`Delete location "${l.name}"?`)) return;
+    if (
+      !window.confirm(
+        t('admin.confirmDeleteLocation', 'Delete location "{name}"?', { name: l.name })
+      )
+    )
+      return;
     deleteStagingLocation(l.id);
     refresh();
   };
@@ -446,22 +488,26 @@ function StagingPanel({ siteId }: { siteId: string }) {
     <>
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Add <em>staging location</em></h2>
+          <h2 className="section__title">
+            {t('admin.addStaging', 'Add')} <em>{t('admin.addStagingEm', 'staging location')}</em>
+          </h2>
         </div>
         <div className="banner banner--info">
           <span className="banner__icon">i</span>
           <div className="banner__body">
-            Staging locations are picked by inspectors when they start a new load. Examples:
-            "Door 12", "Bay 3-A", "South Yard". These are per-site.
+            {t(
+              'admin.stagingInfo',
+              'Staging locations are picked by inspectors when they start a new load. Examples: "Door 12", "Bay 3-A", "South Yard". These are per-site.'
+            )}
           </div>
         </div>
         <div className="field-row">
           <div className="field">
-            <div className="field__label">Location name</div>
+            <div className="field__label">{t('admin.locationNameLabel', 'Location name')}</div>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder="e.g. Door 12"
+              placeholder={t('admin.locationNamePlaceholder', 'e.g. Door 12')}
               onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>
@@ -471,7 +517,7 @@ function StagingPanel({ siteId }: { siteId: string }) {
               onClick={add}
               disabled={!newName.trim()}
             >
-              + Add location
+              {t('admin.addLocationBtn', '+ Add location')}
             </button>
           </div>
         </div>
@@ -479,17 +525,22 @@ function StagingPanel({ siteId }: { siteId: string }) {
 
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Current <em>staging locations</em></h2>
+          <h2 className="section__title">
+            {t('admin.currentStaging', 'Current')}{' '}
+            <em>{t('admin.currentStagingEm', 'staging locations')}</em>
+          </h2>
           <span className="section__meta">
-            {locations.filter((l) => l.active).length} active
+            {t('admin.activeCount', '{count} active', {
+              count: locations.filter((l) => l.active).length,
+            })}
           </span>
         </div>
 
         {locations.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">No staging locations yet</div>
+            <div className="empty__title">{t('admin.noStaging', 'No staging locations yet')}</div>
             <div className="empty__sub">
-              Add at least one before inspectors can start new loads here.
+              {t('admin.noStagingSub', 'Add at least one before inspectors can start new loads here.')}
             </div>
           </div>
         ) : (
@@ -497,9 +548,9 @@ function StagingPanel({ siteId }: { siteId: string }) {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Location</th>
-                  <th>Status</th>
-                  <th className="right">Actions</th>
+                  <th>{t('admin.colLocation', 'Location')}</th>
+                  <th>{t('admin.colStatus', 'Status')}</th>
+                  <th className="right">{t('admin.colActions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -508,18 +559,20 @@ function StagingPanel({ siteId }: { siteId: string }) {
                     <td className="fw-500">{l.name}</td>
                     <td>
                       {l.active ? (
-                        <span className="pill pill--success">Active</span>
+                        <span className="pill pill--success">{t('admin.statusActive', 'Active')}</span>
                       ) : (
-                        <span className="pill pill--neutral">Inactive</span>
+                        <span className="pill pill--neutral">{t('admin.statusInactive', 'Inactive')}</span>
                       )}
                     </td>
                     <td className="right">
                       <div className="flex gap-8" style={{ justifyContent: 'flex-end' }}>
                         <button className="btn btn--sm" onClick={() => toggleActive(l)}>
-                          {l.active ? 'Deactivate' : 'Reactivate'}
+                          {l.active
+                            ? t('admin.deactivate', 'Deactivate')
+                            : t('admin.reactivate', 'Reactivate')}
                         </button>
                         <button className="btn btn--sm btn--danger" onClick={() => remove(l)}>
-                          Delete
+                          {t('admin.delete', 'Delete')}
                         </button>
                       </div>
                     </td>
@@ -537,18 +590,23 @@ function StagingPanel({ siteId }: { siteId: string }) {
 // ----- Reports tab -----
 
 function ReportsPanel() {
+  const t = useT();
   return (
     <section className="section">
       <div className="section__head">
-        <h2 className="section__title">Reports &amp; <em>dashboard</em></h2>
-        <span className="section__meta">Cross-site operations data</span>
+        <h2 className="section__title">
+          {t('admin.reportsTitle', 'Reports &')} <em>{t('admin.reportsTitleEm', 'dashboard')}</em>
+        </h2>
+        <span className="section__meta">{t('admin.reportsMeta', 'Cross-site operations data')}</span>
       </div>
 
       <div className="banner banner--info">
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          The operations dashboard is restricted to managers. It shows cross-site KPIs, inspector
-          workload, flag rates, and discrepancy trends.
+          {t(
+            'admin.reportsInfo',
+            'The operations dashboard is restricted to managers. It shows cross-site KPIs, inspector workload, flag rates, and discrepancy trends.'
+          )}
         </div>
       </div>
 
@@ -557,7 +615,7 @@ function ReportsPanel() {
         className="btn btn--accent btn--lg"
         style={{ marginTop: 12 }}
       >
-        Open dashboard →
+        {t('admin.openDashboard', 'Open dashboard →')}
       </Link>
     </section>
   );
@@ -566,6 +624,7 @@ function ReportsPanel() {
 // ----- Security tab -----
 
 function SecurityPanel() {
+  const t = useT();
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -574,19 +633,28 @@ function SecurityPanel() {
 
   const submitPasswordChange = () => {
     if (currentPw !== getAdminPassword()) {
-      setMessage({ type: 'error', text: 'Current password is incorrect.' });
+      setMessage({
+        type: 'error',
+        text: t('admin.pwCurrentWrong', 'Current password is incorrect.'),
+      });
       return;
     }
     if (newPw.length < 6) {
-      setMessage({ type: 'error', text: 'New password must be at least 6 characters.' });
+      setMessage({
+        type: 'error',
+        text: t('admin.pwTooShort', 'New password must be at least 6 characters.'),
+      });
       return;
     }
     if (newPw !== confirmPw) {
-      setMessage({ type: 'error', text: 'New password and confirmation do not match.' });
+      setMessage({
+        type: 'error',
+        text: t('admin.pwMismatch', 'New password and confirmation do not match.'),
+      });
       return;
     }
     setAdminPassword(newPw);
-    setMessage({ type: 'success', text: 'Password updated.' });
+    setMessage({ type: 'success', text: t('admin.pwUpdated', 'Password updated.') });
     setCurrentPw('');
     setNewPw('');
     setConfirmPw('');
@@ -594,13 +662,18 @@ function SecurityPanel() {
 
   const resetAllData = async () => {
     const sure1 = window.confirm(
-      'Reset ALL data? This deletes every inspection, photo, site, inspector, and staging location on this device. This cannot be undone.'
+      t(
+        'admin.confirmReset',
+        'Reset ALL data? This deletes every inspection, photo, site, inspector, and staging location on this device. This cannot be undone.'
+      )
     );
     if (!sure1) return;
-    const pw = window.prompt('Please enter the admin password to confirm the reset:');
+    const pw = window.prompt(
+      t('admin.resetPasswordPrompt', 'Please enter the admin password to confirm the reset:')
+    );
     if (pw === null) return;
     if (pw !== getAdminPassword()) {
-      alert('Incorrect admin password. Reset aborted.');
+      alert(t('admin.resetWrongPassword', 'Incorrect admin password. Reset aborted.'));
       return;
     }
 
@@ -615,15 +688,20 @@ function SecurityPanel() {
     <>
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Change <em>admin password</em></h2>
+          <h2 className="section__title">
+            {t('admin.changePassword', 'Change')} <em>{t('admin.changePasswordEm', 'admin password')}</em>
+          </h2>
         </div>
 
         {!isAdminPasswordCustomized() && (
           <div className="banner banner--warn">
             <span className="banner__icon">⚠</span>
             <div className="banner__body">
-              <strong>You're still using the default password.</strong> Change it now to keep
-              warehouse workers out of the admin area.
+              <strong>{t('admin.defaultPwTitle', "You're still using the default password.")}</strong>{' '}
+              {t(
+                'admin.defaultPwBody',
+                'Change it now to keep warehouse workers out of the admin area.'
+              )}
             </div>
           </div>
         )}
@@ -631,13 +709,15 @@ function SecurityPanel() {
         <div className="banner banner--info">
           <span className="banner__icon">i</span>
           <div className="banner__body">
-            This password is stored on this device and shared across all managers using it.
-            For real-world security you'd want individual Microsoft accounts.
+            {t(
+              'admin.passwordScopeInfo',
+              "This password is stored on this device and shared across all managers using it. For real-world security you'd want individual Microsoft accounts."
+            )}
           </div>
         </div>
 
         <div className="field">
-          <div className="field__label">Current password</div>
+          <div className="field__label">{t('admin.currentPasswordLabel', 'Current password')}</div>
           <input
             type="password"
             value={currentPw}
@@ -646,21 +726,21 @@ function SecurityPanel() {
           />
         </div>
         <div className="field">
-          <div className="field__label">New password</div>
+          <div className="field__label">{t('admin.newPasswordLabel', 'New password')}</div>
           <input
             type="password"
             value={newPw}
             onChange={(e) => setNewPw(e.target.value)}
-            placeholder="At least 6 characters"
+            placeholder={t('admin.newPasswordPlaceholder', 'At least 6 characters')}
           />
         </div>
         <div className="field">
-          <div className="field__label">Confirm new password</div>
+          <div className="field__label">{t('admin.confirmPasswordLabel', 'Confirm new password')}</div>
           <input
             type="password"
             value={confirmPw}
             onChange={(e) => setConfirmPw(e.target.value)}
-            placeholder="Repeat new password"
+            placeholder={t('admin.confirmPasswordPlaceholder', 'Repeat new password')}
           />
         </div>
 
@@ -676,7 +756,7 @@ function SecurityPanel() {
           onClick={submitPasswordChange}
           disabled={!currentPw || !newPw || !confirmPw}
         >
-          Update password
+          {t('admin.updatePasswordBtn', 'Update password')}
         </button>
       </section>
 
@@ -684,16 +764,20 @@ function SecurityPanel() {
 
       <section className="section">
         <div className="section__head">
-          <h2 className="section__title">Reset <em>all data</em></h2>
-          <span className="section__meta">Danger zone</span>
+          <h2 className="section__title">
+            {t('admin.resetTitle', 'Reset')} <em>{t('admin.resetTitleEm', 'all data')}</em>
+          </h2>
+          <span className="section__meta">{t('admin.dangerZone', 'Danger zone')}</span>
         </div>
 
         <div className="banner banner--danger">
           <span className="banner__icon">⚠</span>
           <div className="banner__body">
-            <strong>This deletes everything on this device:</strong> all inspections, all photos,
-            all sites, all inspectors, all staging locations, all settings. The device will return
-            to its first-launch state.
+            <strong>{t('admin.resetWarnTitle', 'This deletes everything on this device:')}</strong>{' '}
+            {t(
+              'admin.resetWarnBody',
+              'all inspections, all photos, all sites, all inspectors, all staging locations, all settings. The device will return to its first-launch state.'
+            )}
           </div>
         </div>
 
@@ -702,7 +786,9 @@ function SecurityPanel() {
           onClick={resetAllData}
           disabled={resetting}
         >
-          {resetting ? 'Resetting…' : 'Reset all data'}
+          {resetting
+            ? t('admin.resetting', 'Resetting…')
+            : t('admin.resetAllDataBtn', 'Reset all data')}
         </button>
       </section>
     </>
@@ -710,6 +796,7 @@ function SecurityPanel() {
 }
 
 function InspectionManagementPanel() {
+  const t = useT();
   const [inspections, setInspections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -750,7 +837,12 @@ function InspectionManagementPanel() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Permanently delete this inspection? This cannot be undone.')) return;
+    if (
+      !window.confirm(
+        t('admin.confirmDeleteInspection', 'Permanently delete this inspection? This cannot be undone.')
+      )
+    )
+      return;
 
     // Delete on the server FIRST. Deleting locally first only clears this
     // device — the next pull would hand the record straight back, so a failure
@@ -761,11 +853,22 @@ function InspectionManagementPanel() {
         method: 'DELETE',
       });
       if (!res.ok && res.status !== 404) {
-        setDeleteError(`Server refused the delete (${res.status}). Nothing was removed — try again.`);
+        setDeleteError(
+          t(
+            'admin.deleteRefused',
+            'Server refused the delete ({status}). Nothing was removed — try again.',
+            { status: res.status }
+          )
+        );
         return;
       }
     } catch {
-      setDeleteError('Could not reach the server. Deleting needs a connection, so nothing was removed.');
+      setDeleteError(
+        t(
+          'admin.deleteOffline',
+          'Could not reach the server. Deleting needs a connection, so nothing was removed.'
+        )
+      );
       return;
     }
 
@@ -778,8 +881,12 @@ function InspectionManagementPanel() {
   return (
     <section className="section">
       <div className="section__head">
-        <h2 className="section__title">Inspection <em>management</em></h2>
-        <span className="section__meta">{total} total inspections</span>
+        <h2 className="section__title">
+          {t('admin.inspectionMgmt', 'Inspection')} <em>{t('admin.inspectionMgmtEm', 'management')}</em>
+        </h2>
+        <span className="section__meta">
+          {t('admin.totalInspections', '{count} total inspections', { count: total })}
+        </span>
       </div>
 
       {deleteError && (
@@ -790,20 +897,20 @@ function InspectionManagementPanel() {
       )}
 
       {loading ? (
-        <div className="soft">Loading inspections...</div>
+        <div className="soft">{t('admin.loadingInspections', 'Loading inspections...')}</div>
       ) : inspections.length === 0 ? (
-        <div className="soft">No inspections found.</div>
+        <div className="soft">{t('admin.noInspectionsFound', 'No inspections found.')}</div>
       ) : (
         <>
           <div className="table-card">
             <table className="data">
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>State</th>
-                  <th className="right">Actions</th>
+                  <th>{t('admin.colId', 'ID')}</th>
+                  <th>{t('admin.colType', 'Type')}</th>
+                  <th>{t('admin.colStatus', 'Status')}</th>
+                  <th>{t('admin.colState', 'State')}</th>
+                  <th className="right">{t('admin.colActions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -812,9 +919,9 @@ function InspectionManagementPanel() {
                     <td className="mono">{i.id.slice(0, 8)}</td>
                     <td>{i.type}</td>
                     <td>{i.status}</td>
-                    <td>{i.archived ? <span className="pill pill--warn">Archived</span> : <span className="pill pill--success">Active</span>}</td>
+                    <td>{i.archived ? <span className="pill pill--warn">{t('admin.stateArchived', 'Archived')}</span> : <span className="pill pill--success">{t('admin.statusActive', 'Active')}</span>}</td>
                     <td className="right">
-                      <button className="btn btn--sm btn--danger" onClick={() => handleDelete(i.id)}>Delete</button>
+                      <button className="btn btn--sm btn--danger" onClick={() => handleDelete(i.id)}>{t('admin.delete', 'Delete')}</button>
                     </td>
                   </tr>
                 ))}
@@ -824,13 +931,13 @@ function InspectionManagementPanel() {
           {totalPages > 1 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16 }}>
               <button className="btn btn--sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-                ← Previous
+                {t('admin.previous', '← Previous')}
               </button>
               <span className="small soft">
-                Page {page} of {totalPages}
+                {t('admin.pageOf', 'Page {page} of {total}', { page, total: totalPages })}
               </span>
               <button className="btn btn--sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
-                Next →
+                {t('admin.next', 'Next →')}
               </button>
             </div>
           )}

@@ -1,5 +1,6 @@
 import { PALLET_PHOTO_REQUIREMENTS, RETURNS_PALLET_PHOTO_REQUIREMENTS, getPhotoLabel, type PalletType, type InspectionPhoto, type QualityFlag } from '../shared';
 import { SlotPhotoCapture } from '../shared';
+import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
   palletType: PalletType;
@@ -26,6 +27,7 @@ export function DynamicPhotoChecklist({
   readOnly = false,
   batchCount
 }: Props) {
+  const t = useT();
   // 1. Instantly pull the correct group of requirements from the SDK
   let requiredShots = PALLET_PHOTO_REQUIREMENTS[palletType];
   
@@ -50,10 +52,17 @@ export function DynamicPhotoChecklist({
     <div className="photo-checklist">
       <div className="section__head">
         <h2 className="section__title" style={{ textTransform: 'none' }}>
-          {readOnly ? `Photos for ${palletType}` : `* Take pictures as required for ${palletType}`}
+          {readOnly
+            ? t('photoChecklist.photosFor', 'Photos for {type}', { type: palletType })
+            : t('photoChecklist.takeRequired', '* Take pictures as required for {type}', {
+                type: palletType,
+              })}
         </h2>
         <span className="section__meta">
-          {capturedCount} of {requiredShots.length} captured
+          {t('photoChecklist.capturedCount', '{done} of {total} captured', {
+            done: capturedCount,
+            total: requiredShots.length,
+          })}
         </span>
       </div>
 

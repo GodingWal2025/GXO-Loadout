@@ -1,0 +1,215 @@
+export const verify: Record<string, string> = {
+  // ---- VerifyRoute: header ----
+  'verify.titleLead': 'Verificar',
+  'verify.titleEm': 'datos de carga',
+  'verify.subtitle': 'Paso 4 de 4 · Confirme los datos y concilie la lista de surtido con el BOL',
+  'verify.warnLead': 'Verifique cada fila con cuidado.',
+  'verify.warnStrong': 'Los errores aquí afectan toda la inspección.',
+  'verify.warnTail': 'Los conteos de bolsas y los códigos de lote rigen cada revisión por tarima.',
+  'verify.loadMismatchTitle': 'Discrepancia en el # de carga.',
+  'verify.loadMismatchPicklist': 'La lista de surtido indica',
+  'verify.loadMismatchBol': 'el BOL indica',
+  'verify.loadMismatchTail': 'Deben ser iguales — elija el correcto.',
+
+  // ---- VerifyRoute: load header ----
+  'verify.loadHeaderLead': 'Encabezado',
+  'verify.loadHeaderEm': 'de carga',
+  'verify.loadNumberLabel': '# de carga (coincide con # de BOL)',
+  'verify.shipDate': 'Fecha de envío',
+
+  // ---- VerifyRoute: picklist line items ----
+  'verify.picklistLead': 'Lista de surtido',
+  'verify.picklistEm': 'líneas ({count})',
+  'verify.addLine': '+ Agregar línea',
+  'verify.lineItemsHint':
+    'Ingrese cada código de lote y la cantidad que pide la lista de surtido. Estos conteos esperados rigen la conciliación por tarima y el total "por surtir".',
+  'verify.noLineItems': 'Aún no hay líneas',
+  'verify.noLineItemsHint': 'Toque "+ Agregar línea" para ingresar las cantidades de la lista de surtido.',
+  'verify.batchCode': 'Código de lote',
+  'verify.sku': 'SKU / Material',
+  'verify.description': 'Descripción del material',
+  'verify.descriptionPlaceholder': 'Descripción del material',
+  'verify.expectedQty': 'Cant. esperada',
+  'verify.unit': 'Unidad',
+  'verify.removeLine': 'Quitar línea',
+  'verify.totalExpectedLabel': 'Total esperado:',
+  'verify.acrossLine': 'en {count} línea',
+  'verify.acrossLines': 'en {count} líneas',
+
+  // ---- VerifyRoute: deliveries ----
+  'verify.deliveries': 'Entregas',
+  'verify.addDelivery': '+ Agregar entrega',
+  'verify.deliveriesHint':
+    'Una carga puede tener varios # de entrega (para una o varias paradas). Cada línea de abajo se asigna a una entrega específica.',
+  'verify.deliveriesHintReturns':
+    'Una carga puede tener varios # de entrega. Cada línea de abajo se asigna a una entrega específica.',
+  'verify.noDeliveries': 'Aún no hay entregas',
+  'verify.noDeliveriesHint': 'Toque "+ Agregar entrega" para ingresar al menos una.',
+  'verify.deliveryNumber': '# de entrega',
+  'verify.stopNumber': '# de parada',
+  'verify.removeDelivery': 'Quitar entrega',
+  'verify.removeDeliveryConfirm':
+    '¿Quitar esta entrega? Las líneas asignadas a ella deberán reasignarse.',
+
+  // ---- VerifyRoute: order verification ----
+  'verify.orderVerificationLead': 'Verificación',
+  'verify.orderVerificationEm': 'del pedido',
+  'verify.multiStopQuestion': '* ¿Es una carga de varias paradas?',
+  'verify.placardQuestion': '* ¿La información del cartel coincide con el BOL inicial?',
+  'verify.yes': 'Sí',
+  'verify.no': 'No',
+  'verify.confirmStart': '✓ Confirmar y escanear',
+
+  // ---- VerifyReturnsRoute ----
+  'verifyReturns.titleLead': 'Verificar',
+  'verifyReturns.titleEm': 'datos de devoluciones',
+  'verifyReturns.subtitle': 'Paso 4 de 5 · Confirme las cantidades esperadas',
+  'verifyReturns.warn':
+    'Verifique cada cantidad con cuidado. Estos números se compararán con sus conteos físicos durante el escaneo.',
+  'verifyReturns.bolLead': 'Detalles',
+  'verifyReturns.bolEm': 'del BOL',
+  'verifyReturns.bolNumber': '# de BOL de devoluciones',
+  'verifyReturns.receivedDate': 'Fecha de recepción',
+  'verifyReturns.expectedLead': 'Cantidades',
+  'verifyReturns.expectedEm': 'esperadas',
+  'verifyReturns.pallets54x40': 'Tarimas de madera (54x40)',
+  'verifyReturns.pallets40x40': 'Tarimas de madera (40x40)',
+  'verifyReturns.emptySeedPaks': 'SeedPaks vacíos',
+  'verifyReturns.productSeedPaks': 'SeedPaks con producto',
+  'verifyReturns.baggedProduct': 'Producto en bolsas (tarimas)',
+  'verifyReturns.back': '← Atrás',
+  'verifyReturns.confirmStart': '✓ Confirmar y escanear',
+
+  // ---- ReviewAndCompleteRoute: header ----
+  'review.titleLead': 'Revisar y',
+  'review.titleEm': 'completar',
+  'review.summaryLead': 'Resumen',
+  'review.summaryEm': 'de inspección',
+  'review.load': 'Carga',
+  'review.subReturns': '{pallets} tarimas devueltas en total',
+  'review.subWithBags': '{actual} de {expected} bolsas · {pallets} tarimas · {deliveries} entregas',
+  'review.subNoBags': '{pallets} tarimas · {deliveries} entregas',
+  'review.completedOn': 'Completada {when}',
+  'review.completedBy': ' por {name}',
+  'review.openInPrefix': '. Abierta en',
+  'review.viewMode': 'modo de vista',
+  'review.viewModeHint': '— cambie a Editar en la esquina para modificar algo.',
+
+  // ---- ReviewAndCompleteRoute: picklist banners ----
+  'review.fulfilledTitle': 'Lista de surtido completa.',
+  'review.fulfilledBody': 'Las {expected} bolsas están contabilizadas en {pallets} tarimas.',
+  'review.notFulfilledTitle': 'Lista de surtido incompleta.',
+  'review.notFulfilledBody':
+    '{actual} de {expected} bolsas escaneadas. Puede completar la inspección con marcas de calidad que indiquen la discrepancia.',
+
+  // ---- ReviewAndCompleteRoute: tallies ----
+  'review.returnsTallyLead': 'Conteo',
+  'review.returnsTallyEm': 'de devoluciones',
+  'review.expectedVsScanned': 'Esperado vs real',
+  'review.colCategory': 'Categoría',
+  'review.colActualScanned': 'Real escaneado',
+  'review.totalPallets': 'Tarimas totales',
+  'review.productSeedPaks': 'SeedPaks con producto',
+  'review.baggedProduct': 'Producto en bolsas (tarimas)',
+  'review.finalTallyLead': 'Conteo',
+  'review.finalTallyEm': 'final',
+  'review.allDeliveries': 'Todas las entregas',
+  'review.colBatch': 'Lote',
+  'review.colSku': 'SKU',
+  'review.colDescription': 'Descripción',
+  'review.colDelivery': 'Entrega',
+  'review.colExpected': 'Esperado',
+  'review.colActual': 'Real',
+  'review.colStatus': 'Estado',
+  'review.statusMatch': '✓ coincide',
+  'review.statusShort': 'faltante',
+
+  // ---- ReviewAndCompleteRoute: flags ----
+  'review.flags': 'Marcas',
+  'review.qualityIssues': '{count} problema(s) de calidad',
+  'review.inspectionLevelFlag': '⚑ Nivel de inspección:',
+  'review.palletFlag': '⚑ Tarima {n}:',
+
+  // ---- ReviewAndCompleteRoute: packaging ----
+  'review.packagingLead': 'Empaque',
+  'review.packagingEm': 'utilizado',
+  'review.packagingMeta': 'Materiales usados en esta carga',
+  'review.pallets40x40': 'Tarimas 40×40',
+  'review.pallets48x40': 'Tarimas 48×40',
+  'review.seedpaks': 'Seedpaks',
+  'review.otherPackagingNotes': 'Otras notas de empaque',
+  'review.packagingNotesPlaceholder': 'Detalles adicionales de empaque…',
+
+  // ---- ReviewAndCompleteRoute: staging checklist ----
+  'review.stagingLead': 'Revisión de',
+  'review.stagingEm': 'preparación',
+  'review.qStagedCorrectly': '* ¿La carga está preparada correctamente en el andén?',
+  'review.qBagsStacked':
+    '* ¿Todas las tarimas de bolsas están bien apiladas, envueltas de forma segura, sin roturas ni huecos en la envoltura y sin inclinarse más de 5 pulgadas?',
+  'review.qLtlSecured': '* ¿Todas las tarimas LTL están aseguradas con cartón?',
+  'review.qMixedLabeled': '* ¿Todas las tarimas mixtas tienen las etiquetas correctas?',
+  'review.qMultiStopStickers':
+    '* ¿Todas las calcomanías de varias paradas están pegadas en la primera tarima de cada parada?',
+  'review.qPalletQtyMatchesBol':
+    '* ¿La cantidad de tarimas y el producto físico preparados para el pedido coinciden con el BOL final?',
+  'review.yes': 'Sí',
+  'review.no': 'No',
+  'review.na': 'N/A',
+
+  // ---- ReviewAndCompleteRoute: final lane photos ----
+  'review.finalLaneLead': 'Fotos',
+  'review.finalLaneEm': 'del carril de preparación',
+  'review.finalLaneTail': 'final',
+  'review.finalLaneMetaView': 'Toque una foto para ampliar',
+  'review.finalLaneMeta': 'Tome fotos del carril de preparación terminado con producto',
+  'review.finalLaneLabel': 'Carril de preparación final',
+
+  // ---- ReviewAndCompleteRoute: sign-off ----
+  'review.signOffLead': 'Firma',
+  'review.signOffEm': 'del inspector',
+  'review.completedByLabel': 'Completada por',
+  'review.signOffTitle': 'Usted está completando esta inspección.',
+  'review.signOffBody': 'Su nombre quedará registrado como el inspector que finalizó esta carga.',
+  'review.startedByPrefix': 'Esta carga fue iniciada por',
+  'review.selectName': 'Seleccione su nombre…',
+  'review.attestReturns':
+    'He verificado personalmente esta devolución. Todas las fotos de producto, el lote y el producto se revisaron y son correctos.',
+  'review.attestLoad':
+    'He verificado personalmente esta carga contra el BOL y el papeleo final. Todas las fotos de tarimas, los códigos de lote y los conteos de bolsas se revisaron y son correctos.',
+  'review.errNoInspector': 'Seleccione un inspector antes de completar.',
+  'review.errNotConfirmed': 'Debe verificar la carga y marcar la casilla de confirmación.',
+  'review.backToLoad': '← Volver a la carga',
+  'review.continueEditing': '← Seguir editando',
+  'review.completeFlagged': '⚑ Completar (marcada)',
+  'review.complete': '✓ Completar inspección',
+
+  // ---- InspectionProgressModal ----
+  'progress.titleLead': 'Progreso',
+  'progress.titleEm': 'de la inspección',
+  'progress.downloadPdf': '⤓ Descargar PDF',
+  'progress.downloadPdfTitle': 'Descargar el resumen de lotes en PDF',
+  'progress.palletsScanned': '{count} tarimas escaneadas',
+  'progress.totalBags': '{count} bolsas en total',
+  'progress.uniqueBatches': '{count} lotes únicos',
+  'progress.flagged': '⚑ {count} marcadas',
+  'progress.searchPlaceholder': 'Buscar código de lote o número de tarima…',
+  'progress.allDeliveries': 'Todas las entregas',
+  'progress.deliveryOption': 'Entrega {n}',
+  'progress.allStops': 'Todas las paradas',
+  'progress.stopOption': 'Parada {n}',
+  'progress.allPalletTypes': 'Todos los tipos de tarima',
+  'progress.noMatches': 'Sin lotes coincidentes',
+  'progress.noMatchesHint': 'Pruebe con menos filtros.',
+  'progress.noPallets': 'Aún no hay tarimas escaneadas',
+  'progress.noPalletsHint': 'Escanee tarimas para ver el progreso aquí.',
+  'progress.colPallet': 'Tarima',
+  'progress.colDelivery': 'Entrega',
+  'progress.colStop': 'Parada',
+  'progress.colType': 'Tipo',
+  'progress.colBatchCode': 'Código de lote',
+  'progress.colBags': 'Bolsas',
+  'progress.colScannedBy': 'Escaneado por',
+  'progress.handoffTimeline': 'Historial de relevos',
+  'progress.started': 'Inicio',
+  'progress.completedPallets': '· tarimas completadas {list}',
+};

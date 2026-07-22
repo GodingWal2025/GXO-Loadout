@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { tryAdminLogin, isAdminPasswordCustomized } from '../services/adminAuth';
+import { useT } from '../shared/i18n/LanguageContext';
 
 /**
  * Soft password gate for the admin area. Workers see this if they tap on
@@ -11,6 +12,7 @@ import { tryAdminLogin, isAdminPasswordCustomized } from '../services/adminAuth'
  * screens by accident, not a security boundary.
  */
 export function AdminGateRoute() {
+  const t = useT();
   const navigate = useNavigate();
   const location = useLocation();
   const [password, setPassword] = useState('');
@@ -26,7 +28,7 @@ export function AdminGateRoute() {
       // reactive, the simplest reliable approach is a hard reload
       window.location.reload();
     } else {
-      setError('Incorrect password. Try again.');
+      setError(t('adminGate.wrongPassword', 'Incorrect password. Try again.'));
       setPassword('');
     }
   };
@@ -35,9 +37,9 @@ export function AdminGateRoute() {
     <main>
       <div className="admin-gate">
         <div className="admin-gate__lock">🔒</div>
-        <h1 className="admin-gate__title">Admin access</h1>
+        <h1 className="admin-gate__title">{t('adminGate.title', 'Admin access')}</h1>
         <p className="admin-gate__sub">
-          Enter the admin password to access management screens.
+          {t('adminGate.sub', 'Enter the admin password to access management screens.')}
         </p>
 
         <form onSubmit={submit}>
@@ -48,7 +50,7 @@ export function AdminGateRoute() {
               setPassword(e.target.value);
               setError('');
             }}
-            placeholder="Admin password"
+            placeholder={t('adminGate.passwordPlaceholder', 'Admin password')}
             autoFocus
             autoComplete="off"
             style={{ textAlign: 'center', letterSpacing: '0.1em' }}
@@ -60,13 +62,16 @@ export function AdminGateRoute() {
             disabled={!password}
             style={{ width: '100%', marginTop: 12 }}
           >
-            Unlock
+            {t('adminGate.unlock', 'Unlock')}
           </button>
         </form>
 
         {!isAdminPasswordCustomized() && (
           <div className="admin-gate__hint">
-            Default password not yet changed. Manager: change it from inside admin.
+            {t(
+              'adminGate.defaultPasswordHint',
+              'Default password not yet changed. Manager: change it from inside admin.'
+            )}
           </div>
         )}
 
@@ -76,7 +81,7 @@ export function AdminGateRoute() {
           onClick={() => navigate('/')}
           style={{ marginTop: 16 }}
         >
-          ← Back to inspections
+          {t('adminGate.back', '← Back to inspections')}
         </button>
       </div>
     </main>

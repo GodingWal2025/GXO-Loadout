@@ -72,18 +72,42 @@ function getDocClient(): DocumentAnalysisClient | null {
 
 type OcrLineItem = {
     batchCode: string | null;
-    productName: string | null;
+    /** Material / SKU number — the two terms mean the same thing here. e.g. "91007244". */
+    sku: string | null;
+    /** Material description. e.g. "C.CL.201-40VT4PRIB.SF2.40USP.UB.US". */
+    description: string | null;
     expectedQuantity: number | null;
     uom: "BAG" | "SP" | "PCE";
 };
 
-// Header keyword → semantic column. First match wins, checked in order.
+// Header keyword → semantic column. First match wins, so ORDER MATTERS:
+// "Material Description" must be tested against the description words before
+// the sku words, otherwise the sku rule swallows it and the real material
+// number is dropped. That collision is what previously put a description into
+// the SKU field on some picklists.
 const COLUMN_KEYWORDS: Array<{ key: keyof OcrLineItem; words: string[] }> = [
     { key: "batchCode", words: ["batch", "lot"] },
     { key: "expectedQuantity", words: ["qty", "quantity", "cases", "bags", "count", "pieces", "ordered", "pick"] },
     { key: "uom", words: ["uom", "unit"] },
-    { key: "productName", words: ["product", "description", "item", "material", "sku", "commodity"] },
+    { key: "description", words: ["description", "desc", "product name", "commodity", "product"] },
+    { key: "sku", words: ["sku", "material", "item", "part", "article"] },
 ];
+
+/**
+ * A batch code is a compact alphanumeric token containing at least one letter
+ * and one digit (e.g. "H18MYD9JX") — distinct from a pure material number
+ * ("91007244") and from a dotted description ("C.CL.201-40VT4...").
+ */
+function looksLikeBatchCode(value: string): boolean {
+    const v = value.trim().toUpperCase();
+    if (!/^[A-Z0-9]{5,20}$/.test(v)) return false;
+    return /[A-Z]/.test(v) && /[0-9]/.test(v);
+}
+
+/** A material/SKU number is essentially all digits. */
+function looksLikeSku(value: string): boolean {
+    return /^\d[\d\s-]{3,}$/.test(value.trim());
+}
 
 function normalizeUom(raw: string | null): "BAG" | "SP" | "PCE" {
     const v = (raw || "").toUpperCase();
@@ -101,7 +125,7 @@ function parseQuantity(raw: string | null): number | null {
 // Map a prebuilt-layout table into line items by matching header cells to the
 // keyword table above. Layout preserves cell row/column indices, so we detect
 // the header row (row 0), build a column→field map, then read each data row.
-function extractLineItemsFromTables(tables: any[] | undefined): OcrLineItem[] {
+export function extractLineItemsFromTables(tables: any[] | undefined): OcrLineItem[] {
     if (!tables || !tables.length) return [];
     const items: OcrLineItem[] = [];
 
@@ -124,10 +148,35 @@ function extractLineItemsFromTables(tables: any[] | undefined): OcrLineItem[] {
         }
         // Need at least a quantity column plus one identifier to be useful.
         const mappedFields = new Set(colToField.values());
-        const hasIdentifier = mappedFields.has("batchCode") || mappedFields.has("productName");
+        const hasIdentifier =
+            mappedFields.has("batchCode") || mappedFields.has("sku") || mappedFields.has("description");
         if (!mappedFields.has("expectedQuantity") || !hasIdentifier) continue;
 
         const maxRow = Math.max(...cells.map((c) => c.rowIndex));
+
+        // Not every picklist labels its batch column ("Batch"/"Lot"). When the
+        // header gave us nothing, look for an unmapped column whose data rows
+        // are consistently batch-code shaped and adopt it.
+        if (!mappedFields.has("batchCode")) {
+            const candidates = new Map<number, { hits: number; total: number }>();
+            for (const cell of cells) {
+                if (cell.rowIndex === 0 || colToField.has(cell.columnIndex)) continue;
+                const text = String(cell.content || "").trim();
+                if (!text) continue;
+                const stat = candidates.get(cell.columnIndex) || { hits: 0, total: 0 };
+                stat.total++;
+                if (looksLikeBatchCode(text)) stat.hits++;
+                candidates.set(cell.columnIndex, stat);
+            }
+            let best: { col: number; ratio: number } | null = null;
+            for (const [col, { hits, total }] of candidates) {
+                const ratio = total ? hits / total : 0;
+                // Majority of the column must look like a batch code.
+                if (ratio > 0.6 && (!best || ratio > best.ratio)) best = { col, ratio };
+            }
+            if (best) colToField.set(best.col, "batchCode");
+        }
+
         for (let r = 1; r <= maxRow; r++) {
             const rowCells = cells.filter((c) => c.rowIndex === r);
             if (!rowCells.length) continue;
@@ -138,14 +187,30 @@ function extractLineItemsFromTables(tables: any[] | undefined): OcrLineItem[] {
                 if (field) raw[field] = String(cell.content || "").trim() || null;
             }
 
+            let sku = raw.sku ?? null;
+            let description = raw.description ?? null;
+
+            // Header matching can still land these the wrong way round on
+            // picklists with unusual labels. The shapes are unambiguous, so
+            // correct an obvious swap rather than passing it to the verifier.
+            if (sku && !looksLikeSku(sku) && !description) {
+                description = sku;
+                sku = null;
+            }
+            if (description && looksLikeSku(description) && !sku) {
+                sku = description;
+                description = null;
+            }
+
             const item: OcrLineItem = {
                 batchCode: raw.batchCode ? raw.batchCode.toUpperCase() : null,
-                productName: raw.productName ?? null,
+                sku,
+                description,
                 expectedQuantity: parseQuantity(raw.expectedQuantity ?? null),
                 uom: normalizeUom(raw.uom ?? null),
             };
             // Skip empty/subtotal rows.
-            if (item.batchCode || item.productName || item.expectedQuantity !== null) {
+            if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
                 items.push(item);
             }
         }

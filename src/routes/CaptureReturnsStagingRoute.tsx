@@ -5,8 +5,10 @@ import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
 import { useCameraCapture } from '../shared';
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
+import { StepBackLink } from '../shared';
 import type { Inspection, InspectionPhoto } from '../shared';
 import { normalizeCloudPhotoUrl } from '../shared/services/resolvePhotoUrls';
+import { useT } from '../shared/i18n/LanguageContext';
 
 // Prefer the in-session object URL (fresh capture), then the cloud URL
 // (normalized to /api/photo so it works on any device).
@@ -17,6 +19,7 @@ function photoSrc(p: InspectionPhoto): string | undefined {
 }
 
 export function CaptureReturnsStagingRoute() {
+  const t = useT();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [inspection, setInspection] = useState<Inspection | null>(null);
@@ -137,13 +140,19 @@ export function CaptureReturnsStagingRoute() {
 
   return (
     <main style={{ maxWidth: 560 }}>
+      <StepBackLink to={`/inspection/${inspection.id}/capture-returns-bol`} />
+
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
-            Capture <em>Returns Staging</em>
+            {t('returnsStaging.titleLead', 'Capture')}{' '}
+            <em>{t('returnsStaging.titleEm', 'Returns Staging')}</em>
           </h1>
           <div className="page-head__sub">
-            Step 3 of 5 · Photograph the returns product in its final staging lane
+            {t(
+              'returnsStaging.subtitle',
+              'Step 3 of 5 · Photograph the returns product in its final staging lane'
+            )}
           </div>
         </div>
       </div>
@@ -152,7 +161,7 @@ export function CaptureReturnsStagingRoute() {
         <div style={{ position: 'relative', marginBottom: 20 }}>
           <img
             src={photoSrc(latestPhoto)}
-            alt="Latest staging lane"
+            alt={t('returnsStaging.latestPhotoAlt', 'Latest staging lane')}
             style={{
               width: '100%',
               aspectRatio: '4 / 3',
@@ -173,7 +182,7 @@ export function CaptureReturnsStagingRoute() {
               borderRadius: '4px',
             }}
           >
-            Latest Photo
+            {t('returnsStaging.latestPhoto', 'Latest Photo')}
           </div>
         </div>
       ) : (
@@ -192,7 +201,9 @@ export function CaptureReturnsStagingRoute() {
         >
           <div style={{ fontSize: 48, color: 'var(--ink-faint)', marginBottom: 8 }}>⌗</div>
           <div className="small soft">
-            {analyzing ? 'Processing photo…' : 'No photos taken yet'}
+            {analyzing
+              ? t('returnsStaging.processing', 'Processing photo…')
+              : t('returnsStaging.noPhotos', 'No photos taken yet')}
           </div>
         </div>
       )}
@@ -201,7 +212,9 @@ export function CaptureReturnsStagingRoute() {
       {existingPhotos.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div className="xs soft" style={{ marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            Captured Photos ({existingPhotos.length})
+            {t('returnsStaging.capturedPhotos', 'Captured Photos ({count})', {
+              count: existingPhotos.length,
+            })}
           </div>
           <div
             style={{
@@ -214,7 +227,7 @@ export function CaptureReturnsStagingRoute() {
               <div key={p.id} style={{ position: 'relative' }}>
                 <img
                   src={photoSrc(p)}
-                  alt={`Staging ${idx + 1}`}
+                  alt={t('returnsStaging.thumbAlt', 'Staging {n}', { n: idx + 1 })}
                   style={{
                     width: '100%',
                     aspectRatio: '1',
@@ -241,7 +254,7 @@ export function CaptureReturnsStagingRoute() {
                     justifyContent: 'center',
                     cursor: 'pointer',
                   }}
-                  title="Delete photo"
+                  title={t('returnsStaging.deletePhoto', 'Delete photo')}
                 >
                   ✕
                 </button>
@@ -254,7 +267,10 @@ export function CaptureReturnsStagingRoute() {
       <div className="banner banner--info" style={{ marginBottom: 20 }}>
         <span className="banner__icon">i</span>
         <div className="banner__body">
-          Please take photos of the staging lane containing the returned product. You can take as many pictures as needed.
+          {t(
+            'returnsStaging.hint',
+            'Please take photos of the staging lane containing the returned product. You can take as many pictures as needed.'
+          )}
         </div>
       </div>
 
@@ -264,12 +280,17 @@ export function CaptureReturnsStagingRoute() {
         disabled={analyzing}
         style={{ width: '100%' }}
       >
-        📷 {existingPhotos.length > 0 ? 'Take another photo' : 'Take photo'}
+        📷{' '}
+        {existingPhotos.length > 0
+          ? t('returnsStaging.takeAnotherPhoto', 'Take another photo')
+          : t('returnsStaging.takePhoto', 'Take photo')}
       </button>
 
       <div className="center mt-16">
         <button className="btn btn--ghost" onClick={continueToVerify}>
-          {existingPhotos.length > 0 ? 'Continue to verify →' : 'Skip — verify without photos'}
+          {existingPhotos.length > 0
+            ? t('returnsStaging.continue', 'Continue to verify →')
+            : t('returnsStaging.skipNoPhotos', 'Skip — verify without photos')}
         </button>
       </div>
 

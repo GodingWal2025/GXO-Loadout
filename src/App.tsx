@@ -26,6 +26,8 @@ import { startBackgroundSync } from './shared';
 import { startSitesSync } from './services/sites';
 import { startInspectorsSync } from './shared/services/inspectors';
 import { startStagingLocationsSync } from './services/stagingLocations';
+import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
+import { LanguageToggle } from './shared/components/LanguageToggle';
 
 export default function App() {
   useEffect(() => {
@@ -36,37 +38,42 @@ export default function App() {
   }, []);
 
   return (
-    <BrowserRouter>
-      <Shell>
-        <Routes>
-          <Route path="/" element={<HomeRoute />} />
-          <Route path="/setup" element={<SetupRoute />} />
+    <LanguageProvider>
+      <BrowserRouter>
+        <Shell>
+          <Routes>
+            <Route path="/" element={<HomeRoute />} />
+            <Route path="/setup" element={<SetupRoute />} />
+  
+            {/* New inspection by type - outbound/returns/retag */}
+            <Route path="/inspection/new/:type" element={<NewInspectionRoute />} />
+  
+            {/* Step 1 of an existing inspection — same screen, edit mode */}
+            <Route path="/inspection/:id/details" element={<NewInspectionRoute />} />
 
-          {/* New inspection by type - outbound/returns/retag */}
-          <Route path="/inspection/new/:type" element={<NewInspectionRoute />} />
-
-          {/* Outbound workflow */}
-          <Route path="/inspection/:id/capture-picklist" element={<CapturePicklistRoute />} />
-          <Route path="/inspection/:id/capture-bol" element={<CaptureBOLRoute />} />
-          <Route path="/inspection/:id/verify" element={<VerifyRoute />} />
-          
-          {/* Returns workflow */}
-          <Route path="/inspection/:id/capture-returns-bol" element={<CaptureReturnsBOLRoute />} />
-          <Route path="/inspection/:id/capture-returns-staging" element={<CaptureReturnsStagingRoute />} />
-          <Route path="/inspection/:id/verify-returns" element={<VerifyReturnsRoute />} />
-
-          {/* Shared Pallet & Workspace */}
-          <Route path="/inspection/:id" element={<InspectionWorkspaceRoute />} />
-          <Route path="/inspection/:id/pallet/:palletIndex" element={<ScanPalletRoute />} />
-          <Route path="/inspection/:id/review" element={<ReviewAndCompleteRoute />} />
-          <Route path="/investigation" element={<InvestigationRoute />} />
-
-          {/* Admin area - password gated, dashboard lives inside */}
-          <Route path="/admin" element={<AdminGate><AdminRoute /></AdminGate>} />
-          <Route path="/admin/dashboard" element={<AdminGate><DashboardRoute /></AdminGate>} />
-        </Routes>
-      </Shell>
-    </BrowserRouter>
+            {/* Outbound workflow */}
+            <Route path="/inspection/:id/capture-picklist" element={<CapturePicklistRoute />} />
+            <Route path="/inspection/:id/capture-bol" element={<CaptureBOLRoute />} />
+            <Route path="/inspection/:id/verify" element={<VerifyRoute />} />
+            
+            {/* Returns workflow */}
+            <Route path="/inspection/:id/capture-returns-bol" element={<CaptureReturnsBOLRoute />} />
+            <Route path="/inspection/:id/capture-returns-staging" element={<CaptureReturnsStagingRoute />} />
+            <Route path="/inspection/:id/verify-returns" element={<VerifyReturnsRoute />} />
+  
+            {/* Shared Pallet & Workspace */}
+            <Route path="/inspection/:id" element={<InspectionWorkspaceRoute />} />
+            <Route path="/inspection/:id/pallet/:palletIndex" element={<ScanPalletRoute />} />
+            <Route path="/inspection/:id/review" element={<ReviewAndCompleteRoute />} />
+            <Route path="/investigation" element={<InvestigationRoute />} />
+  
+            {/* Admin area - password gated, dashboard lives inside */}
+            <Route path="/admin" element={<AdminGate><AdminRoute /></AdminGate>} />
+            <Route path="/admin/dashboard" element={<AdminGate><DashboardRoute /></AdminGate>} />
+          </Routes>
+        </Shell>
+      </BrowserRouter>
+    </LanguageProvider>
   );
 }
 
@@ -80,6 +87,7 @@ function AdminGate({ children }: { children: React.ReactNode }) {
 function Shell({ children }: { children: React.ReactNode }) {
   const config = getDeviceConfig();
   const location = useLocation();
+  const t = useT();
 
   const [sync, setSync] = useState({ pending: 0, photos: 0 });
   const [online, setOnline] = useState(navigator.onLine);
@@ -124,10 +132,10 @@ function Shell({ children }: { children: React.ReactNode }) {
 
           <nav className="topbar__nav">
             <Link to="/" className={!isAdminArea ? 'active' : ''}>
-              Inspections
+              {t('nav.inspections', 'Inspections')}
             </Link>
             <Link to="/admin" className={isAdminArea ? 'active' : ''}>
-              Admin
+              {t('nav.admin', 'Admin')}
             </Link>
           </nav>
 
@@ -135,7 +143,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
             {config && (
               <div className="topbar__site">
-                <span className="topbar__site-label">Site</span>
+                <span className="topbar__site-label">{t('shell.site', 'Site')}</span>
                 <span className="topbar__site-name">{config.siteName}</span>
               </div>
             )}
@@ -150,11 +158,12 @@ function Shell({ children }: { children: React.ReactNode }) {
                 }`}
               />
               {!online
-                ? 'Offline'
+                ? t('shell.offline', 'Offline')
                 : sync.pending > 0 || sync.photos > 0
-                ? `${sync.pending + sync.photos} pending`
-                : 'Synced'}
+                ? t('shell.pending', '{count} pending', { count: sync.pending + sync.photos })
+                : t('shell.synced', 'Synced')}
             </div>
+            <LanguageToggle />
           </div>
         </div>
       </div>

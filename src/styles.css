@@ -258,11 +258,47 @@ h4, h5, h6 {
 .topbar__status-dot--offline { background: var(--danger); }
 .topbar__status-dot--syncing { background: var(--warn); }
 
+/* EN | ES segmented control */
+.lang-toggle {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.lang-toggle__btn {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  /* 40px min target: this gets tapped with gloves on */
+  min-width: 40px;
+  padding: 5px 10px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.lang-toggle__btn + .lang-toggle__btn {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+.lang-toggle__btn:hover { color: #fff; }
+.lang-toggle__btn--active {
+  background: var(--accent);
+  color: #fff;
+}
+.lang-toggle__btn:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: -2px;
+}
+
 @media (max-width: 640px) {
   .topbar__inner { padding: 0 16px; gap: 12px; }
   .topbar__nav { display: none; }
   .topbar__wordmark { display: none; }
   .topbar__site-label { display: none; }
+  .topbar__right { gap: 10px; }
 }
 
 main {
@@ -622,6 +658,29 @@ main {
 .photo-tile img {
   width: 100%; height: 100%; object-fit: cover;
 }
+/* Rotate control on a captured document page. Top-left so it clears the
+   quality-flag button, which sits top-right on other tiles. */
+.photo-tile__rotate {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  /* 44px tap target on a tablet, with gloves on */
+  min-width: 44px;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 20px;
+  line-height: 1;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.photo-tile__rotate:hover { background: rgba(0, 0, 0, 0.75); }
+.photo-tile__rotate:disabled { opacity: 0.5; cursor: default; }
 .photo-tile--placeholder {
   display: flex;
   align-items: center;
