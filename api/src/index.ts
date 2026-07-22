@@ -241,69 +241,94 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
         }
 
-        const modelId = process.env.DOC_INTEL_MODEL_ID || "PickList";
+        const modelId = process.env.DOC_INTEL_MODEL_ID || "Picklist";
         context.log(`Using Document Intelligence model: ${modelId}`);
         const poller = await client.beginAnalyzeDocument(modelId, buffer);
         const result = await poller.pollUntilDone();
 
         let lineItems: OcrLineItem[] = [];
 
-        // 1. Try to extract from the Custom Model's LineItems table field
+        // 1. Try to extract from the Custom Model's structured fields
         const doc = result.documents && result.documents[0];
         
-        // Find the table field, regardless of whether they named it LineItems, Items, or PicklistItems
-        let tableField = null;
+        // Discover table field by scanning ALL field names (case-insensitive)
+        let tableField: any = null;
+        let tableFieldName = "";
         if (doc && doc.fields) {
-            tableField = doc.fields.LineItems || doc.fields.Items || doc.fields.PicklistItems || doc.fields.table;
+            context.log(`Custom model docType: ${doc.docType}`);
+            context.log(`Custom model field names: ${Object.keys(doc.fields).join(", ")}`);
+            
+            for (const [key, value] of Object.entries(doc.fields)) {
+                const v = value as any;
+                context.log(`  Field "${key}": type=${v?.type}, valueType=${typeof v?.value}`);
+                if (v && v.type === "array") {
+                    tableField = v;
+                    tableFieldName = key;
+                    context.log(`  → Found array field: "${key}" with ${(v.values || v.value || []).length} rows`);
+                }
+            }
+        } else {
+            context.log("No documents array or no fields in response — model may not return structured fields.");
         }
 
-        if (tableField && tableField.type === "array") {
-            context.log("Extracting from Custom Model table field...");
-            const rowFields = tableField.values || [];
+        if (tableField) {
+            context.log(`Extracting from Custom Model field "${tableFieldName}"...`);
+            const rowFields = tableField.values || tableField.value || [];
             for (const row of rowFields) {
-                if (row.type === "object" && row.value) {
-                    const rowObj = row.value as any;
+                const rowObj = (row.type === "object" && row.value) ? row.value as any
+                             : (row.properties) ? row.properties as any
+                             : row as any;
+                
+                if (!rowObj || typeof rowObj !== "object") continue;
+                
+                // Log row keys to understand the structure
+                context.log(`  Row keys: ${Object.keys(rowObj).join(", ")}`);
 
-                    // Helper to check multiple possible column names
-                    const getField = (...names: string[]) => {
-                        for (const name of names) {
-                            if (rowObj[name]) return rowObj[name].content || rowObj[name].valueString || null;
-                        }
-                        return null;
-                    };
-                    const getNumField = (...names: string[]) => {
-                        for (const name of names) {
-                            if (rowObj[name]) {
-                                if (rowObj[name].valueNumber !== undefined) return rowObj[name].valueNumber;
-                                return parseQuantity(rowObj[name].content || rowObj[name].valueString || null);
-                            }
-                        }
-                        return null;
-                    };
-
-                    const batchCodeRaw = getField("BatchCode", "Batch", "Batch Code", "Batch_Code");
-                    const sku = getField("SKU", "SKU/Material", "Material", "Item", "ItemCode");
-                    const description = getField("Description", "MaterialDescription", "Desc", "Material Description");
-                    const expectedQuantity = getNumField("Quantity", "Qty", "QTY", "ExpectedQuantity");
-                    const uomRaw = getField("UOM", "Unit", "UnitOfMeasure");
-
-                    const item: OcrLineItem = {
-                        batchCode: batchCodeRaw ? batchCodeRaw.trim().toUpperCase() : null,
-                        sku: sku ? sku.trim() : null,
-                        description: description ? description.trim() : null,
-                        expectedQuantity,
-                        uom: normalizeUom(uomRaw),
-                    };
-
-                    if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
-                        lineItems.push(item);
+                // Helper to check multiple possible column names (case-insensitive)
+                const getField = (...names: string[]) => {
+                    for (const name of names) {
+                        // Try exact match first
+                        if (rowObj[name]) return rowObj[name].content || rowObj[name].valueString || rowObj[name].value || null;
+                        // Try case-insensitive match
+                        const found = Object.keys(rowObj).find(k => k.toLowerCase() === name.toLowerCase());
+                        if (found && rowObj[found]) return rowObj[found].content || rowObj[found].valueString || rowObj[found].value || null;
                     }
+                    return null;
+                };
+                const getNumField = (...names: string[]) => {
+                    for (const name of names) {
+                        const key = rowObj[name] ? name : Object.keys(rowObj).find(k => k.toLowerCase() === name.toLowerCase());
+                        if (key && rowObj[key]) {
+                            if (rowObj[key].valueNumber !== undefined) return rowObj[key].valueNumber;
+                            return parseQuantity(rowObj[key].content || rowObj[key].valueString || null);
+                        }
+                    }
+                    return null;
+                };
+
+                const batchCodeRaw = getField("BatchCode", "Batch", "Batch Code", "Batch_Code", "batchCode", "batch");
+                const sku = getField("SKU", "SKU/Material", "Material", "Item", "ItemCode", "sku", "material");
+                const description = getField("Description", "MaterialDescription", "Desc", "Material Description", "description");
+                const expectedQuantity = getNumField("Quantity", "Qty", "QTY", "ExpectedQuantity", "quantity", "qty");
+                const uomRaw = getField("UOM", "Unit", "UnitOfMeasure", "uom", "unit");
+
+                const item: OcrLineItem = {
+                    batchCode: batchCodeRaw ? String(batchCodeRaw).trim().toUpperCase() : null,
+                    sku: sku ? String(sku).trim() : null,
+                    description: description ? String(description).trim() : null,
+                    expectedQuantity,
+                    uom: normalizeUom(uomRaw),
+                };
+
+                if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
+                    lineItems.push(item);
                 }
             }
         } 
-        // 2. Fallback to generic table extraction (e.g. if using prebuilt-layout)
-        else {
-            context.log("Custom table field not found, falling back to prebuilt-layout table extraction...");
+        
+        // 2. Fallback to generic table extraction
+        if (lineItems.length === 0) {
+            context.log("No items from custom fields, falling back to table extraction...");
             lineItems = extractLineItemsFromTables(result.tables as any[]);
         }
 
