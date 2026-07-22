@@ -21,6 +21,7 @@ import { AdminGateRoute } from './routes/AdminGateRoute';
 import { SetupRoute } from './routes/SetupRoute';
 import { InvestigationRoute } from './routes/InvestigationRoute';
 import { CaptureReturnsStagingRoute } from './routes/CaptureReturnsStagingRoute';
+import { InventoryRoute } from './routes/InventoryRoute';
 
 import { startBackgroundSync } from './shared';
 import { startSitesSync } from './services/sites';
@@ -45,6 +46,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<HomeRoute />} />
             <Route path="/setup" element={<SetupRoute />} />
+            <Route path="/inventory" element={<InventoryRoute />} />
   
             {/* New inspection by type - outbound/returns/retag */}
             <Route path="/inspection/new/:type" element={<NewInspectionRoute />} />
@@ -135,8 +137,11 @@ function Shell({ children }: { children: React.ReactNode }) {
           </Link>
 
           <nav className="topbar__nav">
-            <Link to="/" className={!isAdminArea ? 'active' : ''}>
+            <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
               {t('nav.inspections', 'Inspections')}
+            </Link>
+            <Link to="/inventory" className={location.pathname === '/inventory' ? 'active' : ''}>
+              {t('nav.inventory', 'Inventory')}
             </Link>
             <Link to="/admin" className={isAdminArea ? 'active' : ''}>
               {t('nav.admin', 'Admin')}

@@ -12,6 +12,7 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Inspection } from '../types/inspection';
 import { emptySuggestable } from '../types/inspection';
+import type { InventoryItem } from '../types/inventory';
 
 interface InspectionDB extends DBSchema {
   inspections: {
@@ -35,6 +36,11 @@ interface InspectionDB extends DBSchema {
     value: SyncQueueEntry;
     indexes: { 'by-status': string };
   };
+  inventory: {
+    key: string;
+    value: InventoryItem;
+    indexes: { 'by-sku': string; 'by-batch': string };
+  };
 }
 
 export interface SyncQueueEntry {
@@ -51,7 +57,7 @@ export interface SyncQueueEntry {
 }
 
 const DB_NAME = 'loadout';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 // Cap on automatic retries so a permanently-bad record eventually stops
 // hammering the server instead of being retried forever.
@@ -77,6 +83,11 @@ export function getDB(): Promise<IDBPDatabase<InspectionDB>> {
         if (!db.objectStoreNames.contains('syncQueue')) {
           const store = db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
           store.createIndex('by-status', 'status');
+        }
+        if (!db.objectStoreNames.contains('inventory')) {
+          const store = db.createObjectStore('inventory', { keyPath: 'id' });
+          store.createIndex('by-sku', 'sku');
+          store.createIndex('by-batch', 'batch');
         }
       },
     });
@@ -374,3 +385,35 @@ export async function dbGetUnuploadedPhotoCount(): Promise<number> {
   const all = await db.getAll('photoBlobs');
   return all.filter((p) => !p.uploaded).length;
 }
+
+// ---- Inventory ----
+
+export async function dbSaveInventoryItems(items: InventoryItem[]): Promise<void> {
+  const db = await getDB();
+  const tx = db.transaction('inventory', 'readwrite');
+  for (const item of items) {
+    await tx.store.put(item);
+  }
+  await tx.done;
+}
+
+export async function dbUpdateInventoryItem(item: InventoryItem): Promise<void> {
+  const db = await getDB();
+  await db.put('inventory', item);
+}
+
+export async function dbDeleteInventoryItem(id: string): Promise<void> {
+  const db = await getDB();
+  await db.delete('inventory', id);
+}
+
+export async function dbListInventoryItems(): Promise<InventoryItem[]> {
+  const db = await getDB();
+  return db.getAll('inventory');
+}
+
+export async function dbClearInventory(): Promise<void> {
+  const db = await getDB();
+  await db.clear('inventory');
+}
+
