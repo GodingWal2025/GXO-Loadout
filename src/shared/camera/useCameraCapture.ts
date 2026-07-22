@@ -1,5 +1,6 @@
 import { useCallback, useRef } from 'react';
 import {
+  browserAutoOrientsBitmaps,
   readExifOrientation,
   setOrientationTransform,
   uprightSizeForOrientation,
@@ -41,8 +42,14 @@ export function useCameraCapture(onCapture: (blob: Blob, originalBlob: Blob) => 
 }
 
 async function downscaleAndNormalize(file: File, maxEdge: number): Promise<Blob> {
-  const orientation = await readExifOrientation(file);
-  const bitmap = await createImageBitmap(file, { imageOrientation: 'none' });
+  // When the browser auto-applies EXIF orientation despite `imageOrientation:
+  // 'none'` (older iPad Safari), the bitmap is already upright — applying our
+  // own transform on top of that is what turns a correctly-held shot sideways.
+  const autoOriented = await browserAutoOrientsBitmaps();
+  const orientation = autoOriented ? 1 : await readExifOrientation(file);
+  const bitmap = autoOriented
+    ? await createImageBitmap(file)
+    : await createImageBitmap(file, { imageOrientation: 'none' });
 
   const upright = uprightSizeForOrientation(orientation, bitmap.width, bitmap.height);
   const scale = Math.min(1, maxEdge / Math.max(upright.w, upright.h));

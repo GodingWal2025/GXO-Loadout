@@ -129,6 +129,82 @@ export function setOrientationTransform(
   }
 }
 
+// ============================================================
+// Browser probe — does createImageBitmap auto-apply EXIF?
+// ============================================================
+
+// We decode captured photos with `{ imageOrientation: 'none' }` and rotate them
+// ourselves. But that option is not honoured everywhere — notably older iPad
+// Safari, which silently auto-rotates regardless. There the pixels arrive
+// already upright, our transform rotates them a SECOND time, and the saved
+// photo lands sideways. So probe the behaviour once and skip our transform when
+// the browser has already done the work.
+let autoOrientProbe: Promise<boolean> | null = null;
+
+export function browserAutoOrientsBitmaps(): Promise<boolean> {
+  if (!autoOrientProbe) autoOrientProbe = probeAutoOrient();
+  return autoOrientProbe;
+}
+
+/** Test-only: forget the cached probe result. */
+export function resetAutoOrientProbe(): void {
+  autoOrientProbe = null;
+}
+
+async function probeAutoOrient(): Promise<boolean> {
+  try {
+    const jpeg = await makeProbeJpeg();
+    if (!jpeg) return false;
+    const bitmap = await createImageBitmap(jpeg, { imageOrientation: 'none' });
+    // The probe image is 2x1 pixels tagged EXIF orientation 6 (rotate 90°).
+    // Upright it would be 1x2, so swapped dimensions mean the browser rotated
+    // it for us and ignored our request not to.
+    const swapped = bitmap.height > bitmap.width;
+    bitmap.close?.();
+    return swapped;
+  } catch {
+    // Can't tell (no canvas, decode failure). Assume the option is honoured,
+    // which is the behaviour every modern browser has.
+    return false;
+  }
+}
+
+/** A 2x1 JPEG carrying an EXIF Orientation=6 tag. */
+async function makeProbeJpeg(): Promise<Blob | null> {
+  const canvas = document.createElement('canvas');
+  canvas.width = 2;
+  canvas.height = 1;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+  ctx.fillStyle = '#808080';
+  ctx.fillRect(0, 0, 2, 1);
+
+  const plain = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9)
+  );
+  if (!plain) return null;
+
+  const bytes = new Uint8Array(await plain.arrayBuffer());
+  if (bytes.length < 2 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return null;
+
+  // APP1 segment: marker, length (34), "Exif\0\0", then a little-endian TIFF
+  // header with a single IFD0 entry — tag 0x0112 (Orientation), SHORT, value 6.
+  const app1 = new Uint8Array([
+    0xff, 0xe1, 0x00, 0x22,
+    0x45, 0x78, 0x69, 0x66, 0x00, 0x00,
+    0x49, 0x49, 0x2a, 0x00, 0x08, 0x00, 0x00, 0x00,
+    0x01, 0x00,
+    0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
+    0x00, 0x00, 0x00, 0x00,
+  ]);
+
+  const out = new Uint8Array(bytes.length + app1.length);
+  out.set(bytes.subarray(0, 2), 0);          // SOI
+  out.set(app1, 2);                          // our APP1
+  out.set(bytes.subarray(2), 2 + app1.length);
+  return new Blob([out], { type: 'image/jpeg' });
+}
+
 export function mapPointThroughOrientation(
   orientation: number,
   srcW: number,
