@@ -250,25 +250,42 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
 
         // 1. Try to extract from the Custom Model's LineItems table field
         const doc = result.documents && result.documents[0];
-        if (doc && doc.fields && doc.fields.LineItems && doc.fields.LineItems.type === "array") {
-            context.log("Extracting from Custom Model LineItems field...");
-            const rowFields = doc.fields.LineItems.values || [];
+        
+        // Find the table field, regardless of whether they named it LineItems, Items, or PicklistItems
+        let tableField = null;
+        if (doc && doc.fields) {
+            tableField = doc.fields.LineItems || doc.fields.Items || doc.fields.PicklistItems || doc.fields.table;
+        }
+
+        if (tableField && tableField.type === "array") {
+            context.log("Extracting from Custom Model table field...");
+            const rowFields = tableField.values || [];
             for (const row of rowFields) {
                 if (row.type === "object" && row.value) {
                     const rowObj = row.value as any;
 
-                    // The field names must match what was labeled in Studio
-                    const batchCodeRaw = rowObj.BatchCode?.content || rowObj.BatchCode?.valueString || null;
-                    const sku = rowObj.SKU?.content || rowObj.SKU?.valueString || null;
-                    const description = rowObj.Description?.content || rowObj.Description?.valueString || null;
-                    
-                    // Quantity might be a number or a string depending on how the model parsed it
-                    let expectedQuantity = rowObj.Quantity?.valueNumber ?? null;
-                    if (expectedQuantity === null) {
-                        expectedQuantity = parseQuantity(rowObj.Quantity?.content || rowObj.Quantity?.valueString || null);
-                    }
-                    
-                    const uomRaw = rowObj.UOM?.content || rowObj.UOM?.valueString || null;
+                    // Helper to check multiple possible column names
+                    const getField = (...names: string[]) => {
+                        for (const name of names) {
+                            if (rowObj[name]) return rowObj[name].content || rowObj[name].valueString || null;
+                        }
+                        return null;
+                    };
+                    const getNumField = (...names: string[]) => {
+                        for (const name of names) {
+                            if (rowObj[name]) {
+                                if (rowObj[name].valueNumber !== undefined) return rowObj[name].valueNumber;
+                                return parseQuantity(rowObj[name].content || rowObj[name].valueString || null);
+                            }
+                        }
+                        return null;
+                    };
+
+                    const batchCodeRaw = getField("BatchCode", "Batch", "Batch Code", "Batch_Code");
+                    const sku = getField("SKU", "SKU/Material", "Material", "Item", "ItemCode");
+                    const description = getField("Description", "MaterialDescription", "Desc", "Material Description");
+                    const expectedQuantity = getNumField("Quantity", "Qty", "QTY", "ExpectedQuantity");
+                    const uomRaw = getField("UOM", "Unit", "UnitOfMeasure");
 
                     const item: OcrLineItem = {
                         batchCode: batchCodeRaw ? batchCodeRaw.trim().toUpperCase() : null,
@@ -286,7 +303,7 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
         } 
         // 2. Fallback to generic table extraction (e.g. if using prebuilt-layout)
         else {
-            context.log("LineItems custom field not found, falling back to prebuilt-layout table extraction...");
+            context.log("Custom table field not found, falling back to prebuilt-layout table extraction...");
             lineItems = extractLineItemsFromTables(result.tables as any[]);
         }
 
@@ -297,7 +314,10 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
                 success: true,
                 lineItems,
                 tableCount: result.tables?.length || 0,
-                ...(debug ? { tables: result.tables } : {}),
+                ...(debug ? { 
+                    tables: result.tables,
+                    documents: result.documents // Add documents to debug output
+                } : {}),
             },
         };
     } catch (error) {
