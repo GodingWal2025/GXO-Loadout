@@ -70,6 +70,10 @@ function getDocClient(): DocumentAnalysisClient | null {
     return docClient;
 }
 
+// SAP UOM codes as they appear on the picklist. BAG/PCE are legacy aliases kept
+// for older records; new extractions use BG/SP/MB/PL/C62.
+type Uom = "BG" | "SP" | "MB" | "PL" | "C62" | "BAG" | "PCE";
+
 type OcrLineItem = {
     batchCode: string | null;
     /** Material / SKU number — the two terms mean the same thing here. e.g. "91007244". */
@@ -77,7 +81,7 @@ type OcrLineItem = {
     /** Material description. e.g. "C.CL.201-40VT4PRIB.SF2.40USP.UB.US". */
     description: string | null;
     expectedQuantity: number | null;
-    uom: "BAG" | "SP" | "PCE";
+    uom: Uom;
 };
 
 // Header keyword → semantic column. First match wins, so ORDER MATTERS:
@@ -109,11 +113,17 @@ function looksLikeSku(value: string): boolean {
     return /^\d[\d\s-]{3,}$/.test(value.trim());
 }
 
-function normalizeUom(raw: string | null): "BAG" | "SP" | "PCE" {
+function normalizeUom(raw: string | null): Uom {
     const v = (raw || "").toUpperCase();
+    // Order matters: C62 before SP (neither collides, but be explicit), and PL
+    // ("pallet") is distinct from PCE. Default is BG (bags), the base unit.
+    if (v.includes("C62")) return "C62";
     if (v.includes("SP")) return "SP";
-    if (v.includes("PCE") || v.includes("PC") || v.includes("EA") || v.includes("PIECE")) return "PCE";
-    return "BAG";
+    if (v.includes("MB")) return "MB";
+    if (v.includes("PL") || v.includes("PALLET")) return "PL";
+    if (v.includes("PCE") || v.includes("PIECE") || v === "PC" || v === "EA") return "PCE";
+    if (v.includes("BG") || v.includes("BAG")) return "BG";
+    return "BG";
 }
 
 function parseQuantity(raw: string | null): number | null {
@@ -338,7 +348,7 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
         let lineItems: OcrLineItem[] = [];
 
         // 1. Try to extract from the Custom Model's structured fields.
-        const { rows } = extractCustomModelRows(result, context);
+        const { rows, header } = extractCustomModelRows(result, context);
         for (const row of rows) {
             const batchCodeRaw = row.get("BatchCode", "Batch", "Lot", "LotCode", "BatchLot");
             const sku = row.get("SKU", "Material", "MaterialNumber", "Item", "ItemCode", "ItemNumber", "Article", "Part", "PartNumber");
@@ -365,14 +375,26 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             lineItems = extractLineItemsFromTables(result.tables as any[]);
         }
 
+        // Document-level header fields drive the delivery auto-fill on the
+        // outbound flow: load # / ship date populate the load header (mirrored
+        // onto the BOL), and delivery # seeds the auto-created delivery.
+        const loadNumber = header?.get("LoadNumber", "Load", "LoadNo", "Load#", "BOLNumber", "BOL", "BillOfLading");
+        const shipDate = header?.get("ShipDate", "ShippingDate", "Date", "ShipmentDate", "DeliveryDate", "PickDate");
+        const deliveryNumber = header?.get("DeliveryNumber", "Delivery", "DeliveryNo", "Delivery#", "DeliveryId");
+
         const debug = request.query.get("debug") === "1";
         return {
             status: 200,
             jsonBody: {
                 success: true,
                 lineItems,
+                header: {
+                    loadNumber: loadNumber != null ? String(loadNumber).trim() : null,
+                    shipDate: shipDate != null ? String(shipDate).trim() : null,
+                    deliveryNumber: deliveryNumber != null ? String(deliveryNumber).trim() : null,
+                },
                 tableCount: result.tables?.length || 0,
-                ...(debug ? { 
+                ...(debug ? {
                     tables: result.tables,
                     documents: result.documents // Add documents to debug output
                 } : {}),
@@ -392,7 +414,7 @@ type BolOcrLineItem = {
     sku: string | null;
     description: string | null;
     quantity: number | null;
-    uom: "BAG" | "SP" | "PCE";
+    uom: Uom;
     shipmentNumber: string | null;
     deliveryNumber: string | null;
     stopNumber: number | null;

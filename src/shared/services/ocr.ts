@@ -3,6 +3,8 @@
 // The verifier confirms/corrects every extracted value, so results are
 // best-effort — callers must degrade gracefully to manual entry on failure.
 
+import type { Uom } from '../types/inspection';
+
 const apiBase = import.meta.env.VITE_API_URL || '';
 
 export interface OcrLineItem {
@@ -12,15 +14,28 @@ export interface OcrLineItem {
   /** Material description, e.g. "C.CL.201-40VT4PRIB.SF2.40USP.UB.US". */
   description: string | null;
   expectedQuantity: number | null;
-  uom: 'BAG' | 'SP' | 'PCE';
+  uom: Uom;
+}
+
+/** Document-level fields read off the picklist (for delivery auto-fill). */
+export interface PicklistOcrHeader {
+  loadNumber: string | null;
+  shipDate: string | null;
+  deliveryNumber: string | null;
+}
+
+export interface PicklistOcrResult {
+  lineItems: OcrLineItem[];
+  header: PicklistOcrHeader;
 }
 
 /**
  * Send a picklist photo to the analyze endpoint and get back extracted line
- * items. Throws on network error / non-2xx (including 501 "not configured") so
- * the caller can fall back to manual entry.
+ * items plus header fields (load #, ship date, delivery #). Throws on network
+ * error / non-2xx (including 501 "not configured") so the caller can fall back
+ * to manual entry.
  */
-export async function analyzePicklistPhoto(blob: Blob): Promise<OcrLineItem[]> {
+export async function analyzePicklistPhoto(blob: Blob): Promise<PicklistOcrResult> {
   const res = await fetch(`${apiBase}/api/analyze-picklist`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
@@ -29,8 +44,11 @@ export async function analyzePicklistPhoto(blob: Blob): Promise<OcrLineItem[]> {
   if (!res.ok) {
     throw new Error(`analyze-picklist failed: ${res.status}`);
   }
-  const json = (await res.json()) as { lineItems?: OcrLineItem[] };
-  return json.lineItems ?? [];
+  const json = (await res.json()) as Partial<PicklistOcrResult>;
+  return {
+    lineItems: json.lineItems ?? [],
+    header: json.header ?? { loadNumber: null, shipDate: null, deliveryNumber: null },
+  };
 }
 
 /** A BOL line item read by OCR. No batch code — SAP adds batches after picking. */
@@ -38,7 +56,7 @@ export interface BolOcrLineItem {
   sku: string | null;
   description: string | null;
   quantity: number | null;
-  uom: 'BAG' | 'SP' | 'PCE';
+  uom: Uom;
   shipmentNumber: string | null;
   deliveryNumber: string | null;
   stopNumber: number | null;

@@ -1,4 +1,10 @@
-import { generateId, mlSuggestable, analyzePicklistPhoto, compressPhoto } from '../shared';
+import {
+  generateId,
+  mlSuggestable,
+  analyzePicklistPhoto,
+  compressPhoto,
+  explodePicklistLines,
+} from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
@@ -69,12 +75,13 @@ export function CapturePicklistRoute() {
 
       const updatedPicklist = { ...inspection.picklist };
       updatedPicklist.photoIds = [...updatedPicklist.photoIds, photo.id];
+      let updatedBol = inspection.bol;
 
       // Best-effort OCR per page, so a multi-page picklist accumulates its
       // line items. Any failure (offline, OCR not configured, parse miss)
       // falls through to manual entry — never blocks the capture flow.
       try {
-        const ocrItems = await analyzePicklistPhoto(compressed);
+        const { lineItems: ocrItems, header } = await analyzePicklistPhoto(compressed);
         if (ocrItems.length > 0) {
           const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
             id: generateId(),
@@ -86,8 +93,43 @@ export function CapturePicklistRoute() {
             actualQuantity: 0,
             fulfilled: false,
           }));
-          updatedPicklist.lineItems = [...updatedPicklist.lineItems, ...mapped];
+          // SP lines split into one line per SeedPak (see uomRules).
+          const exploded = explodePicklistLines(mapped);
+          updatedPicklist.lineItems = [...updatedPicklist.lineItems, ...exploded];
         }
+
+        // Auto-fill the load header from the picklist. Load # / ship date are
+        // mirrored onto the BOL (they're the same value) unless the inspector
+        // already typed one in — never clobber a manual entry.
+        if (header.loadNumber && updatedPicklist.loadNumber.source !== 'manual') {
+          updatedPicklist.loadNumber = mlSuggestable(header.loadNumber);
+          updatedBol = { ...updatedBol, loadNumber: mlSuggestable(header.loadNumber) };
+        }
+        if (header.shipDate && updatedPicklist.shipDate.source !== 'manual') {
+          updatedPicklist.shipDate = mlSuggestable(header.shipDate);
+          updatedBol = { ...updatedBol, shipDate: mlSuggestable(header.shipDate) };
+        }
+
+        // Auto-create a delivery so the inspector just confirms it. We know
+        // which products go on this load (the picklist lines), so assign them
+        // all. A delivery already present (e.g. a prior page, or from the BOL)
+        // just absorbs the new line ids instead of spawning a duplicate.
+        const allLineIds = updatedPicklist.lineItems.map((li) => li.id);
+        const deliveries = [...updatedBol.deliveries];
+        if (deliveries.length === 0) {
+          deliveries.push({
+            id: generateId(),
+            deliveryNumber: header.deliveryNumber ?? '',
+            stopNumber: 1,
+            lineItemIds: allLineIds,
+          });
+        } else {
+          deliveries[0] = { ...deliveries[0], lineItemIds: allLineIds };
+          if (header.deliveryNumber && !deliveries[0].deliveryNumber) {
+            deliveries[0].deliveryNumber = header.deliveryNumber;
+          }
+        }
+        updatedBol = { ...updatedBol, deliveries };
       } catch (err) {
         console.warn('[picklist-ocr] extraction skipped:', err);
       }
@@ -95,6 +137,7 @@ export function CapturePicklistRoute() {
       const updated: Inspection = {
         ...inspection,
         picklist: updatedPicklist,
+        bol: updatedBol,
         lastEditedAt: new Date().toISOString(),
       };
       await dbSaveInspection(updated);

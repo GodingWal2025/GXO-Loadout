@@ -38,7 +38,7 @@ describe('picklist OCR extraction', () => {
       sku: '91007244',
       description: 'C.CL.201-40VT4PRIB.SF2.40USP.UB.US',
       expectedQuantity: 18,
-      uom: 'BAG',
+      uom: 'BG', // "BAG" normalizes to the SAP code BG
     });
     expect(items[1]).toMatchObject({ sku: '91007301', uom: 'SP', expectedQuantity: 4 });
   });

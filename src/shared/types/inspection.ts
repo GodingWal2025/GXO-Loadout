@@ -23,6 +23,31 @@ export type YesNoNA = 'Yes' | 'No' | 'N/A';
 export type PassFail = 'Pass' | 'Fail';
 
 // ============================================================
+// Unit of measure (picklist / BOL)
+// ============================================================
+//
+// The printed picklist uses SAP's UOM codes, each with its own packing rule:
+//   - BG   bags — the base unit, one physical bag
+//   - SP   SeedPak — a single reusable tote. Each SP holds 40, 45, or 50 bags,
+//          which one is encoded in the material description (a "40USP"/"45USP"/
+//          "50USP" token). A picklist line of "4 SP" means four separate
+//          SeedPaks, so it is exploded into four one-SP lines (see uomRules).
+//   - MB   Minibulk — like SP, a single tote exploded one-per-unit. Its size
+//          (40/45) is a "…UMB" token in the description ("40SCUMB"/"45SCUMB").
+//   - PL   pallet — a full pallet of BAGS_PER_PALLET bags
+//   - C62  pallet unit that carries no batch code, only a SKU + material
+//          description
+// BAG and PCE are legacy codes kept so records written before this union still
+// open; new picklist entry uses the codes in PICKLIST_UOM_OPTIONS.
+export type Uom = 'BG' | 'SP' | 'MB' | 'PL' | 'C62' | 'BAG' | 'PCE';
+
+/** UOM codes offered when entering/editing a picklist line. */
+export const PICKLIST_UOM_OPTIONS: Uom[] = ['BG', 'SP', 'MB', 'PL', 'C62'];
+
+/** A full pallet (UOM "PL") is 60 bags. */
+export const BAGS_PER_PALLET = 60;
+
+// ============================================================
 // Suggestable - ML-ready field wrapper
 // ============================================================
 
@@ -202,7 +227,7 @@ export interface PicklistLineItemEntry {
    */
   productName?: Suggestable<string>;
   expectedQuantity: Suggestable<number>;
-  uom: 'BAG' | 'SP' | 'PCE';
+  uom: Uom;
   deliveryId?: string; // which delivery does this line belong to (after picklist/BOL cross-ref)
   actualQuantity: number;
   fulfilled: boolean;
@@ -240,7 +265,7 @@ export interface BOLLineItem {
   description: Suggestable<string>;
   /** Quantity shipped for this SKU on this delivery/stop. */
   quantity: Suggestable<number>;
-  uom: 'BAG' | 'SP' | 'PCE';
+  uom: Uom;
   shipmentNumber: Suggestable<string>;
   deliveryNumber: Suggestable<string>;
   stopNumber: Suggestable<number>;

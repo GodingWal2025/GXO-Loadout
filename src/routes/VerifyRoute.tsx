@@ -1,4 +1,4 @@
-import { generateId, emptySuggestable } from '../shared';
+import { generateId, emptySuggestable, PICKLIST_UOM_OPTIONS, parsePackInfo } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection } from '../shared';
@@ -156,7 +156,7 @@ function VerifyInner({
               sku: emptySuggestable<string>(),
               description: emptySuggestable<string>(),
               expectedQuantity: emptySuggestable<number>(),
-              uom: 'BAG',
+              uom: 'BG',
               actualQuantity: 0,
               fulfilled: false,
             },
@@ -415,10 +415,29 @@ function PicklistLineItems({
                       })
                     }
                   >
-                    <option value="BAG">BAG</option>
-                    <option value="SP">SP</option>
-                    <option value="PCE">PCE</option>
+                    {/* Legacy codes (BAG/PCE) only appear if an old record still
+                        carries one, so it stays visible instead of resetting. */}
+                    {(PICKLIST_UOM_OPTIONS.includes(li.uom)
+                      ? PICKLIST_UOM_OPTIONS
+                      : [li.uom, ...PICKLIST_UOM_OPTIONS]
+                    ).map((code) => (
+                      <option key={code} value={code}>
+                        {code}
+                      </option>
+                    ))}
                   </select>
+                  {(() => {
+                    if (li.uom !== 'SP' && li.uom !== 'MB') return null;
+                    const pack = parsePackInfo(li.description.value);
+                    if (!pack) return null;
+                    return (
+                      <div className="small soft" style={{ marginTop: 4 }}>
+                        {pack.kind === 'MB'
+                          ? t('verify.mbSize', 'Minibulk · {n} bags', { n: pack.size })
+                          : t('verify.spSize', 'SeedPak · {n} bags', { n: pack.size })}
+                      </div>
+                    );
+                  })()}
                 </div>
                 <div className="field" style={{ alignSelf: 'flex-end' }}>
                   <button

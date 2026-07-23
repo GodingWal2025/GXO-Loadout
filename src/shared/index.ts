@@ -46,8 +46,25 @@ export {
 export type { ForceSyncResult } from './services/sync';
 
 export { analyzePicklistPhoto, analyzeBolPhoto } from './services/ocr';
-export type { OcrLineItem, BolOcrLineItem, BolOcrHeader, BolOcrResult } from './services/ocr';
+export type {
+  OcrLineItem,
+  PicklistOcrHeader,
+  PicklistOcrResult,
+  BolOcrLineItem,
+  BolOcrHeader,
+  BolOcrResult,
+} from './services/ocr';
 export { computeCrossReference } from './services/crossReference';
+
+export {
+  parseSpSize,
+  parsePackInfo,
+  bagsPerUnit,
+  shouldExplode,
+  explodePicklistLine,
+  explodePicklistLines,
+} from './rules/uomRules';
+export type { SpSize, PackKind, PackInfo } from './rules/uomRules';
 
 export {
   listInspectorsForSite,

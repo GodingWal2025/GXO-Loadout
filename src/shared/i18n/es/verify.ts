@@ -31,6 +31,8 @@ export const verify: Record<string, string> = {
   'verify.descriptionPlaceholder': 'Descripción del material',
   'verify.expectedQty': 'Cant. esperada',
   'verify.unit': 'Unidad',
+  'verify.spSize': 'SeedPak · {n} bolsas',
+  'verify.mbSize': 'Minibulk · {n} bolsas',
   'verify.removeLine': 'Quitar línea',
   'verify.totalExpectedLabel': 'Total esperado:',
   'verify.acrossLine': 'en {count} línea',

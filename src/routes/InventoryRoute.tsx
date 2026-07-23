@@ -7,6 +7,7 @@ import {
   dbUpdateInventoryItem
 } from '../shared/services/db';
 import type { InventoryItem } from '../shared/types/inventory';
+import { parsePackInfo } from '../shared';
 
 export function InventoryRoute() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -41,7 +42,14 @@ export function InventoryRoute() {
       const newItems: InventoryItem[] = json.map(row => {
         const sku = (row['Material'] || row['SKU'] || '').toString().trim();
         const batch = (row['LOTATR3'] || row['BATCH'] || row['Batch'] || '').toString().trim();
-        const description = (row['Material Description'] || row['Description'] || '').toString().trim();
+        const description = (
+          row['Material Description'] ||
+          row['Description'] ||
+          row['DESCRIPTION'] ||
+          ''
+        )
+          .toString()
+          .trim();
         
         return {
           id: `${sku}_${batch}`,
@@ -151,6 +159,7 @@ export function InventoryRoute() {
                   <th style={{ padding: '1rem' }}>SKU</th>
                   <th style={{ padding: '1rem' }}>Batch</th>
                   <th style={{ padding: '1rem' }}>Description</th>
+                  <th style={{ padding: '1rem' }}>Pack</th>
                   <th style={{ padding: '1rem' }}>Last Updated</th>
                   <th style={{ padding: '1rem', textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -161,6 +170,28 @@ export function InventoryRoute() {
                     <td style={{ padding: '1rem', fontWeight: 500 }}>{item.sku}</td>
                     <td style={{ padding: '1rem' }}>{item.batch}</td>
                     <td style={{ padding: '1rem' }}>{item.description}</td>
+                    <td style={{ padding: '1rem' }}>
+                      {(() => {
+                        const pack = parsePackInfo(item.description);
+                        if (!pack) return <span style={{ color: '#bbb' }}>—</span>;
+                        return (
+                          <span
+                            title={`${pack.kind === 'MB' ? 'Minibulk' : 'SeedPak'} bag count, read from the material description`}
+                            style={{
+                              display: 'inline-block',
+                              padding: '0.125rem 0.5rem',
+                              borderRadius: '999px',
+                              background: '#eef2ff',
+                              color: '#3730a3',
+                              fontWeight: 600,
+                              fontSize: '0.85rem',
+                            }}
+                          >
+                            {pack.size} bags/{pack.kind}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td style={{ padding: '1rem', color: '#666' }}>
                       {new Date(item.lastUpdated).toLocaleString()}
                     </td>
