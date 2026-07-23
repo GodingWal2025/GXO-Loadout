@@ -260,8 +260,12 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             
             for (const [key, value] of Object.entries(doc.fields)) {
                 const v = value as any;
-                context.log(`  Field "${key}": type=${v?.type}, valueType=${typeof v?.value}`);
-                if (v && v.type === "array") {
+                // @azure/ai-form-recognizer v5 discriminates fields on `kind`,
+                // not `type`. (`type` is always undefined here, which is why the
+                // custom-model rows were previously never read.)
+                const fieldKind = v?.kind ?? v?.type;
+                context.log(`  Field "${key}": kind=${fieldKind}, valueType=${typeof v?.value}`);
+                if (v && fieldKind === "array") {
                     tableField = v;
                     tableFieldName = key;
                     context.log(`  → Found array field: "${key}" with ${(v.values || v.value || []).length} rows`);
@@ -275,8 +279,9 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             context.log(`Extracting from Custom Model field "${tableFieldName}"...`);
             const rowFields = tableField.values || tableField.value || [];
             for (const row of rowFields) {
-                const rowObj = (row.type === "object" && row.value) ? row.value as any
-                             : (row.properties) ? row.properties as any
+                // v5 object fields expose their nested fields on `.properties`.
+                const rowObj = (row.properties) ? row.properties as any
+                             : ((row.kind === "object" || row.type === "object") && row.value) ? row.value as any
                              : row as any;
                 
                 if (!rowObj || typeof rowObj !== "object") continue;
@@ -284,40 +289,55 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
                 // Log row keys to understand the structure
                 context.log(`  Row keys: ${Object.keys(rowObj).join(", ")}`);
 
-                // Helper to check multiple possible column names (case-insensitive)
+                // Normalize every row key to a bare lowercase alphanumeric token
+                // ("Batch Code", "batch_code", "BatchCode" → "batchcode") so the
+                // label lookups below match regardless of how the custom model
+                // spells/spaces its column names.
+                const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+                const normMap = new Map<string, any>();
+                for (const k of Object.keys(rowObj)) normMap.set(normKey(k), rowObj[k]);
+
+                const cellValue = (cell: any): string | number | null => {
+                    if (!cell) return null;
+                    // v5 typed value first (string/number/etc.), then verbatim
+                    // content, then the REST SDK's valueString for good measure.
+                    return cell.value ?? cell.content ?? cell.valueString ?? null;
+                };
                 const getField = (...names: string[]) => {
                     for (const name of names) {
-                        // Try exact match first
-                        if (rowObj[name]) return rowObj[name].content || rowObj[name].valueString || rowObj[name].value || null;
-                        // Try case-insensitive match
-                        const found = Object.keys(rowObj).find(k => k.toLowerCase() === name.toLowerCase());
-                        if (found && rowObj[found]) return rowObj[found].content || rowObj[found].valueString || rowObj[found].value || null;
+                        const cell = normMap.get(normKey(name));
+                        if (cell) {
+                            const v = cellValue(cell);
+                            if (v !== null && v !== undefined && String(v).trim() !== "") return v;
+                        }
                     }
                     return null;
                 };
                 const getNumField = (...names: string[]) => {
                     for (const name of names) {
-                        const key = rowObj[name] ? name : Object.keys(rowObj).find(k => k.toLowerCase() === name.toLowerCase());
-                        if (key && rowObj[key]) {
-                            if (rowObj[key].valueNumber !== undefined) return rowObj[key].valueNumber;
-                            return parseQuantity(rowObj[key].content || rowObj[key].valueString || null);
+                        const cell = normMap.get(normKey(name));
+                        if (cell) {
+                            if (typeof cell.value === "number") return cell.value;
+                            if (cell.valueNumber !== undefined) return cell.valueNumber;
+                            const parsed = parseQuantity(cell.content ?? cell.valueString ?? (cell.value != null ? String(cell.value) : null));
+                            if (parsed !== null) return parsed;
                         }
                     }
                     return null;
                 };
 
-                const batchCodeRaw = getField("BatchCode", "Batch", "Batch Code", "Batch_Code", "batchCode", "batch");
-                const sku = getField("SKU", "SKU/Material", "Material", "Item", "ItemCode", "sku", "material");
-                const description = getField("Description", "MaterialDescription", "Desc", "Material Description", "description");
-                const expectedQuantity = getNumField("Quantity", "Qty", "QTY", "ExpectedQuantity", "quantity", "qty");
-                const uomRaw = getField("UOM", "Unit", "UnitOfMeasure", "uom", "unit");
+                const batchCodeRaw = getField("BatchCode", "Batch", "Lot", "LotCode", "BatchLot");
+                const sku = getField("SKU", "Material", "MaterialNumber", "Item", "ItemCode", "ItemNumber", "Article", "Part", "PartNumber");
+                const description = getField("Description", "MaterialDescription", "ItemDescription", "ProductDescription", "Desc", "ProductName", "Commodity");
+                const expectedQuantity = getNumField("Quantity", "Qty", "ExpectedQuantity", "Cases", "Bags", "Pieces", "Count", "Ordered", "PickQty");
+                const uomRaw = getField("UOM", "Unit", "UnitOfMeasure", "Units");
 
                 const item: OcrLineItem = {
                     batchCode: batchCodeRaw ? String(batchCodeRaw).trim().toUpperCase() : null,
                     sku: sku ? String(sku).trim() : null,
                     description: description ? String(description).trim() : null,
                     expectedQuantity,
-                    uom: normalizeUom(uomRaw),
+                    uom: normalizeUom(uomRaw != null ? String(uomRaw) : null),
                 };
 
                 if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
