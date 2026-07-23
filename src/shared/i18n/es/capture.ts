@@ -7,6 +7,10 @@ export const capture: Record<string, string> = {
   'bol.noPages': 'Sin páginas aún',
   'bol.pageCaptured': '{count} página capturada',
   'bol.pagesCaptured': '{count} páginas capturadas',
+  'bol.analyzingSuffix': ' · analizando…',
+  'bol.lineItem': '{count} línea',
+  'bol.lineItems': '{count} líneas',
+  'bol.lineItemsRead': 'leídas del BOL. Se cotejarán con la lista de surtido.',
   'bol.pageLabel': 'Página {n}',
   'bol.hint':
     'Fotografíe primero el BOL: determina cuántas paradas y entregas tiene esta carga. Agregue una página por cada hoja y continúe.',

@@ -1,4 +1,4 @@
-import { generateId, compressPhoto } from '../shared';
+import { generateId, compressPhoto, mlSuggestable, analyzeBolPhoto } from '../shared';
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
@@ -8,7 +8,7 @@ import { useEffect } from 'react';
 import { checkImageQuality, type QualityIssue } from '../shared';
 import { ImageQualityModal } from '../shared';
 import { StepBackLink } from '../shared';
-import type { Inspection, InspectionPhoto } from '../shared';
+import type { Inspection, InspectionPhoto, BOLData, BOLLineItem } from '../shared';
 import { CapturedPageThumb } from '../components/CapturedPageThumb';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -67,9 +67,43 @@ export function CaptureBOLRoute() {
 
       await dbSavePhotoBlob(photo.id, inspection.id, compressed);
 
+      const updatedBol: BOLData = {
+        ...inspection.bol,
+        photoIds: [...inspection.bol.photoIds, photo.id],
+      };
+
+      // Best-effort OCR per page. The BOL has no batch code (SAP stamps those
+      // after picking), so we read SKU / description / qty / shipment / delivery
+      // / stop. Any failure falls through to manual entry — never blocks capture.
+      try {
+        const { lineItems: ocrItems, header } = await analyzeBolPhoto(compressed);
+        if (ocrItems.length > 0) {
+          const mapped: BOLLineItem[] = ocrItems.map((li) => ({
+            id: generateId(),
+            sku: mlSuggestable(li.sku),
+            description: mlSuggestable(li.description),
+            quantity: mlSuggestable(li.quantity),
+            uom: li.uom,
+            shipmentNumber: mlSuggestable(li.shipmentNumber),
+            deliveryNumber: mlSuggestable(li.deliveryNumber),
+            stopNumber: mlSuggestable(li.stopNumber),
+          }));
+          updatedBol.lineItems = [...updatedBol.lineItems, ...mapped];
+        }
+        // Fill header fields from the BOL only if not already set by the user.
+        if (header.loadNumber && updatedBol.loadNumber.source === 'empty') {
+          updatedBol.loadNumber = mlSuggestable(header.loadNumber);
+        }
+        if (header.shipDate && updatedBol.shipDate.source === 'empty') {
+          updatedBol.shipDate = mlSuggestable(header.shipDate);
+        }
+      } catch (err) {
+        console.warn('[bol-ocr] extraction skipped:', err);
+      }
+
       const updated: Inspection = {
         ...inspection,
-        bol: { ...inspection.bol, photoIds: [...inspection.bol.photoIds, photo.id] },
+        bol: updatedBol,
         lastEditedAt: new Date().toISOString(),
       };
       await dbSaveInspection(updated);
@@ -96,6 +130,7 @@ export function CaptureBOLRoute() {
   if (!inspection) return null;
 
   const pageIds = inspection.bol.photoIds;
+  const lineCount = inspection.bol.lineItems.length;
   const goNext = () => navigate(`/inspection/${inspection.id}/capture-picklist`);
 
   return (
@@ -138,6 +173,7 @@ export function CaptureBOLRoute() {
             {pageIds.length === 1
               ? t('bol.pageCaptured', '{count} page captured', { count: pageIds.length })
               : t('bol.pagesCaptured', '{count} pages captured', { count: pageIds.length })}
+            {saving ? t('bol.analyzingSuffix', ' · analyzing…') : ''}
           </div>
           <div className="photo-grid">
             {pageIds.map((pid, i) => (
@@ -148,6 +184,23 @@ export function CaptureBOLRoute() {
                 label={t('bol.pageLabel', 'Page {n}', { n: i + 1 })}
               />
             ))}
+          </div>
+        </div>
+      )}
+
+      {lineCount > 0 && (
+        <div className="banner banner--info">
+          <span className="banner__icon">✨</span>
+          <div className="banner__body">
+            <strong>
+              {lineCount === 1
+                ? t('bol.lineItem', '{count} line item', { count: lineCount })
+                : t('bol.lineItems', '{count} line items', { count: lineCount })}
+            </strong>{' '}
+            {t(
+              'bol.lineItemsRead',
+              "read from the BOL. They'll be cross-referenced against the picklist."
+            )}
           </div>
         </div>
       )}

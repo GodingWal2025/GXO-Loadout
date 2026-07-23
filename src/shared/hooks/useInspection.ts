@@ -38,6 +38,7 @@ export function emptyInspection(siteId: string, type: InspectionType = 'outbound
       photoIds: [],
       loadNumber: emptySuggestable(),
       shipDate: emptySuggestable(),
+      lineItems: [],
       deliveries: type === 'returns' ? [{
         id: generateId(),
         deliveryNumber: '1',

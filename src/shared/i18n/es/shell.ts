@@ -1,6 +1,7 @@
 export const shell: Record<string, string> = {
   // ---- Topbar / nav ----
   'nav.inspections': 'Inspecciones',
+  'nav.inventory': 'Inventario',
   'nav.admin': 'Administración',
   'nav.back': '← Atrás',
   'shell.site': 'Sitio',

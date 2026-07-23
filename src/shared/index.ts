@@ -45,8 +45,9 @@ export {
 } from './services/sync';
 export type { ForceSyncResult } from './services/sync';
 
-export { analyzePicklistPhoto } from './services/ocr';
-export type { OcrLineItem } from './services/ocr';
+export { analyzePicklistPhoto, analyzeBolPhoto } from './services/ocr';
+export type { OcrLineItem, BolOcrLineItem, BolOcrHeader, BolOcrResult } from './services/ocr';
+export { computeCrossReference } from './services/crossReference';
 
 export {
   listInspectorsForSite,

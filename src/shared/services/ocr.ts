@@ -32,3 +32,46 @@ export async function analyzePicklistPhoto(blob: Blob): Promise<OcrLineItem[]> {
   const json = (await res.json()) as { lineItems?: OcrLineItem[] };
   return json.lineItems ?? [];
 }
+
+/** A BOL line item read by OCR. No batch code — SAP adds batches after picking. */
+export interface BolOcrLineItem {
+  sku: string | null;
+  description: string | null;
+  quantity: number | null;
+  uom: 'BAG' | 'SP' | 'PCE';
+  shipmentNumber: string | null;
+  deliveryNumber: string | null;
+  stopNumber: number | null;
+}
+
+export interface BolOcrHeader {
+  loadNumber: string | null;
+  shipDate: string | null;
+  shipmentNumber: string | null;
+}
+
+export interface BolOcrResult {
+  lineItems: BolOcrLineItem[];
+  header: BolOcrHeader;
+}
+
+/**
+ * Send a BOL photo to the analyze endpoint and get back extracted line items
+ * plus header fields. Throws on network error / non-2xx so the caller can fall
+ * back to manual entry.
+ */
+export async function analyzeBolPhoto(blob: Blob): Promise<BolOcrResult> {
+  const res = await fetch(`${apiBase}/api/analyze-bol`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: blob,
+  });
+  if (!res.ok) {
+    throw new Error(`analyze-bol failed: ${res.status}`);
+  }
+  const json = (await res.json()) as Partial<BolOcrResult>;
+  return {
+    lineItems: json.lineItems ?? [],
+    header: json.header ?? { loadNumber: null, shipDate: null, shipmentNumber: null },
+  };
+}

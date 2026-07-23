@@ -124,6 +124,23 @@ export const verify: Record<string, string> = {
   'review.statusMatch': '✓ coincide',
   'review.statusShort': 'faltante',
 
+  // ---- ReviewAndCompleteRoute: cross-reference (picklist vs BOL) ----
+  'review.xrefLead': 'Picklist vs',
+  'review.xrefEm': 'BOL',
+  'review.xrefMeta': 'Comparado por SKU',
+  'review.xrefMatchTitle': 'El picklist y el BOL coinciden.',
+  'review.xrefMatchBody': 'Cada total por SKU concuerda y los campos de encabezado coinciden.',
+  'review.xrefDiffTitleOne': '{count} SKU no coincide.',
+  'review.xrefDiffTitle': '{count} SKU no coinciden.',
+  'review.xrefDiffBody': 'Revise las diferencias abajo antes de completar.',
+  'review.xrefLoadMismatch': 'El # de carga difiere entre el picklist y el BOL.',
+  'review.xrefDateMismatch': 'La fecha de envío difiere entre el picklist y el BOL.',
+  'review.xrefColPicklist': 'Picklist',
+  'review.xrefColBol': 'BOL',
+  'review.xrefQty': 'cantidad difiere',
+  'review.xrefNotOnBol': 'no está en BOL',
+  'review.xrefNotOnPicklist': 'no está en picklist',
+
   // ---- ReviewAndCompleteRoute: flags ----
   'review.flags': 'Marcas',
   'review.qualityIssues': '{count} problema(s) de calidad',

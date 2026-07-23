@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { dbGetInspection } from '../shared';
+import { dbGetInspection, computeCrossReference } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import { InspectorPicker } from '../shared';
 import { MultiPhotoCapture } from '../shared';
@@ -46,6 +46,37 @@ function ReviewInner({ initial }: { initial: Inspection }) {
 
   const isReturns = inspection.type === 'returns';
   const returnsBol = inspection.returnsBol;
+
+  // Cross-reference the picklist against the BOL (SKU totals + header fields).
+  // Only meaningful for outbound loads that actually captured BOL line items.
+  const hasBolLines = !isReturns && (inspection.bol.lineItems?.length ?? 0) > 0;
+  const crossRef = useMemo(
+    () => (hasBolLines ? computeCrossReference(inspection) : null),
+    // Recompute only when the compared values change — not on every tally
+    // rebuild — so the persist-effect below can't loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      hasBolLines,
+      JSON.stringify(
+        inspection.picklist.lineItems.map((li) => [li.sku.value, li.expectedQuantity.value])
+      ),
+      JSON.stringify(
+        (inspection.bol.lineItems ?? []).map((li) => [li.sku.value, li.quantity.value])
+      ),
+      inspection.picklist.loadNumber.value,
+      inspection.bol.loadNumber.value,
+      inspection.picklist.shipDate.value,
+      inspection.bol.shipDate.value,
+    ]
+  );
+
+  // Persist the computed result onto the record (shown in admin). Keyed on the
+  // memoized crossRef, whose identity is stable across tally recomputes.
+  useEffect(() => {
+    if (readOnly || !crossRef) return;
+    dispatch({ type: 'SET_CROSS_REFERENCE', result: crossRef });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [crossRef, readOnly]);
   
   let returnsActuals = {
     pallets: 0,
@@ -203,6 +234,84 @@ function ReviewInner({ initial }: { initial: Inspection }) {
               </tbody>
             </table>
           </div>
+        </section>
+      )}
+
+      {crossRef && (
+        <section className="section">
+          <div className="section__head">
+            <h2 className="section__title">
+              {t('review.xrefLead', 'Picklist vs')} <em>{t('review.xrefEm', 'BOL')}</em>
+            </h2>
+            <span className="section__meta">{t('review.xrefMeta', 'Matched on SKU')}</span>
+          </div>
+
+          {crossRef.matches ? (
+            <div className="banner banner--success">
+              <span className="banner__icon">✓</span>
+              <div className="banner__body">
+                <strong>{t('review.xrefMatchTitle', 'Picklist and BOL match.')}</strong>{' '}
+                {t('review.xrefMatchBody', 'Every SKU total agrees and the header fields line up.')}
+              </div>
+            </div>
+          ) : (
+            <div className="banner banner--warn">
+              <span className="banner__icon">⚠</span>
+              <div className="banner__body">
+                <strong>
+                  {crossRef.lineItemDiscrepancies.length === 1
+                    ? t('review.xrefDiffTitleOne', '{count} SKU does not match.', {
+                        count: crossRef.lineItemDiscrepancies.length,
+                      })
+                    : t('review.xrefDiffTitle', '{count} SKUs do not match.', {
+                        count: crossRef.lineItemDiscrepancies.length,
+                      })}
+                </strong>{' '}
+                {t('review.xrefDiffBody', 'Review the differences below before completing.')}
+                {!crossRef.loadNumberMatches && (
+                  <> {t('review.xrefLoadMismatch', 'Load # differs between picklist and BOL.')}</>
+                )}
+                {!crossRef.shipDateMatches && (
+                  <> {t('review.xrefDateMismatch', 'Ship date differs between picklist and BOL.')}</>
+                )}
+              </div>
+            </div>
+          )}
+
+          {crossRef.lineItemDiscrepancies.length > 0 && (
+            <div className="table-card">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>{t('review.colSku', 'SKU')}</th>
+                    <th>{t('review.colDescription', 'Description')}</th>
+                    <th className="right">{t('review.xrefColPicklist', 'Picklist')}</th>
+                    <th className="right">{t('review.xrefColBol', 'BOL')}</th>
+                    <th className="right">{t('review.colStatus', 'Status')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {crossRef.lineItemDiscrepancies.map((d) => (
+                    <tr key={d.sku}>
+                      <td className="mono small">{d.sku}</td>
+                      <td className="small soft">{d.description || '—'}</td>
+                      <td className="right num">{d.picklistQty ?? '—'}</td>
+                      <td className="right num">{d.bolQty ?? '—'}</td>
+                      <td className="right">
+                        {d.kind === 'qty-mismatch' ? (
+                          <span className="pill pill--warn">{t('review.xrefQty', 'qty differs')}</span>
+                        ) : d.kind === 'missing-on-bol' ? (
+                          <span className="pill pill--warn">{t('review.xrefNotOnBol', 'not on BOL')}</span>
+                        ) : (
+                          <span className="pill pill--warn">{t('review.xrefNotOnPicklist', 'not on picklist')}</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
       )}
 

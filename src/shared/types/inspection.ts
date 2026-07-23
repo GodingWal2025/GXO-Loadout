@@ -222,9 +222,28 @@ export interface BOLData {
   numberOfStops?: number;
   isMultiStopLoad?: YesNoNA;
   placardMatchesBol?: YesNoNA;
+  /**
+   * Line items read from the BOL (via OCR or manual entry). The BOL has no
+   * batch code — SAP only stamps batches after picking — so these key on SKU.
+   * They're cross-referenced against the picklist to confirm the load matches.
+   */
+  lineItems: BOLLineItem[];
   deliveries: Delivery[];
   verifiedAt?: string;
   verifiedBy?: string;
+}
+
+export interface BOLLineItem {
+  id: string;
+  /** Material / SKU number — same value the picklist calls "Material". */
+  sku: Suggestable<string>;
+  description: Suggestable<string>;
+  /** Quantity shipped for this SKU on this delivery/stop. */
+  quantity: Suggestable<number>;
+  uom: 'BAG' | 'SP' | 'PCE';
+  shipmentNumber: Suggestable<string>;
+  deliveryNumber: Suggestable<string>;
+  stopNumber: Suggestable<number>;
 }
 
 export interface ReturnsBOLData {
@@ -258,11 +277,19 @@ export interface CrossReferenceResult {
   loadNumberMatches: boolean;
   shipDateMatches: boolean;
   lineItemDiscrepancies: LineItemDiscrepancy[];
+  /** True when header fields agree AND there are no line-item discrepancies. */
+  matches: boolean;
   computedAt: string;
 }
 
+/**
+ * A per-SKU mismatch between the picklist and the BOL. Keyed on SKU because the
+ * BOL carries no batch code (multiple picklist batches can share one SKU, so
+ * their quantities are summed before comparing).
+ */
 export interface LineItemDiscrepancy {
-  batchCode: string;
+  sku: string;
+  description?: string;
   picklistQty?: number;
   bolQty?: number;
   kind: 'missing-on-picklist' | 'missing-on-bol' | 'qty-mismatch';

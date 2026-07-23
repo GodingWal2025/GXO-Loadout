@@ -219,6 +219,95 @@ export function extractLineItemsFromTables(tables: any[] | undefined): OcrLineIt
     return items;
 }
 
+// A normalized accessor over one custom-model field bag (a table row, or the
+// document's top-level fields). Keys are matched case/space/punctuation-
+// insensitively so "Batch Code" / "batch_code" / "BatchCode" all resolve.
+interface FieldBag {
+    keys: string[];
+    /** First non-empty value among the given candidate names (string or number). */
+    get(...names: string[]): string | number | null;
+    /** First numeric value among the given candidate names. */
+    getNum(...names: string[]): number | null;
+}
+
+function makeFieldBag(obj: any): FieldBag {
+    const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const normMap = new Map<string, any>();
+    for (const k of Object.keys(obj || {})) normMap.set(normKey(k), obj[k]);
+    // v5 exposes the typed value first (string/number/etc.), then verbatim
+    // content, then the REST SDK's valueString for good measure.
+    const cellValue = (cell: any): string | number | null =>
+        cell ? (cell.value ?? cell.content ?? cell.valueString ?? null) : null;
+    return {
+        keys: Object.keys(obj || {}),
+        get(...names: string[]) {
+            for (const name of names) {
+                const v = cellValue(normMap.get(normKey(name)));
+                if (v !== null && v !== undefined && String(v).trim() !== "") return v;
+            }
+            return null;
+        },
+        getNum(...names: string[]) {
+            for (const name of names) {
+                const cell = normMap.get(normKey(name));
+                if (!cell) continue;
+                if (typeof cell.value === "number") return cell.value;
+                if (cell.valueNumber !== undefined) return cell.valueNumber;
+                const parsed = parseQuantity(cell.content ?? cell.valueString ?? (cell.value != null ? String(cell.value) : null));
+                if (parsed !== null) return parsed;
+            }
+            return null;
+        },
+    };
+}
+
+// Pull the row bags out of a custom model's first document. Finds the first
+// array (table) field, unwraps each object row (v5 nests them under
+// `.properties`), and returns them as normalized FieldBags. Empty if the model
+// returned no structured document/array field (caller falls back to layout).
+function extractCustomModelRows(result: any, context: InvocationContext): { rows: FieldBag[]; header: FieldBag | null } {
+    const doc = result.documents && result.documents[0];
+    if (!doc || !doc.fields) {
+        context.log("No documents array or no fields in response — model may not return structured fields.");
+        return { rows: [], header: null };
+    }
+    context.log(`Custom model docType: ${doc.docType}`);
+    context.log(`Custom model field names: ${Object.keys(doc.fields).join(", ")}`);
+
+    let tableField: any = null;
+    let tableFieldName = "";
+    for (const [key, value] of Object.entries(doc.fields)) {
+        const v = value as any;
+        // @azure/ai-form-recognizer v5 discriminates fields on `kind`, not
+        // `type` (`type` is always undefined here — the bug that made the
+        // custom-model rows read as empty).
+        const fieldKind = v?.kind ?? v?.type;
+        context.log(`  Field "${key}": kind=${fieldKind}, valueType=${typeof v?.value}`);
+        if (v && fieldKind === "array") {
+            tableField = v;
+            tableFieldName = key;
+            context.log(`  → Found array field: "${key}" with ${(v.values || v.value || []).length} rows`);
+        }
+    }
+
+    // Top-level scalar fields (load #, ship date, etc.) live directly on the doc.
+    const header = makeFieldBag(doc.fields);
+    if (!tableField) return { rows: [], header };
+
+    context.log(`Extracting rows from Custom Model field "${tableFieldName}"...`);
+    const rowFields = tableField.values || tableField.value || [];
+    const rows: FieldBag[] = [];
+    for (const row of rowFields) {
+        const rowObj = row.properties ? row.properties
+                     : ((row.kind === "object" || row.type === "object") && row.value) ? row.value
+                     : row;
+        if (!rowObj || typeof rowObj !== "object") continue;
+        context.log(`  Row keys: ${Object.keys(rowObj).join(", ")}`);
+        rows.push(makeFieldBag(rowObj));
+    }
+    return { rows, header };
+}
+
 // POST /api/analyze-picklist — body is the raw image bytes (image/jpeg). Runs
 // Document Intelligence prebuilt-layout and returns best-effort line items for
 // the verifier to confirm (source: 'ml' on the client). Never throws to the
@@ -248,104 +337,28 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
 
         let lineItems: OcrLineItem[] = [];
 
-        // 1. Try to extract from the Custom Model's structured fields
-        const doc = result.documents && result.documents[0];
-        
-        // Discover table field by scanning ALL field names (case-insensitive)
-        let tableField: any = null;
-        let tableFieldName = "";
-        if (doc && doc.fields) {
-            context.log(`Custom model docType: ${doc.docType}`);
-            context.log(`Custom model field names: ${Object.keys(doc.fields).join(", ")}`);
-            
-            for (const [key, value] of Object.entries(doc.fields)) {
-                const v = value as any;
-                // @azure/ai-form-recognizer v5 discriminates fields on `kind`,
-                // not `type`. (`type` is always undefined here, which is why the
-                // custom-model rows were previously never read.)
-                const fieldKind = v?.kind ?? v?.type;
-                context.log(`  Field "${key}": kind=${fieldKind}, valueType=${typeof v?.value}`);
-                if (v && fieldKind === "array") {
-                    tableField = v;
-                    tableFieldName = key;
-                    context.log(`  → Found array field: "${key}" with ${(v.values || v.value || []).length} rows`);
-                }
+        // 1. Try to extract from the Custom Model's structured fields.
+        const { rows } = extractCustomModelRows(result, context);
+        for (const row of rows) {
+            const batchCodeRaw = row.get("BatchCode", "Batch", "Lot", "LotCode", "BatchLot");
+            const sku = row.get("SKU", "Material", "MaterialNumber", "Item", "ItemCode", "ItemNumber", "Article", "Part", "PartNumber");
+            const description = row.get("Description", "MaterialDescription", "ItemDescription", "ProductDescription", "Desc", "ProductName", "Commodity");
+            const expectedQuantity = row.getNum("Quantity", "Qty", "ExpectedQuantity", "Cases", "Bags", "Pieces", "Count", "Ordered", "PickQty");
+            const uomRaw = row.get("UOM", "Unit", "UnitOfMeasure", "Units");
+
+            const item: OcrLineItem = {
+                batchCode: batchCodeRaw ? String(batchCodeRaw).trim().toUpperCase() : null,
+                sku: sku ? String(sku).trim() : null,
+                description: description ? String(description).trim() : null,
+                expectedQuantity,
+                uom: normalizeUom(uomRaw != null ? String(uomRaw) : null),
+            };
+
+            if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
+                lineItems.push(item);
             }
-        } else {
-            context.log("No documents array or no fields in response — model may not return structured fields.");
         }
 
-        if (tableField) {
-            context.log(`Extracting from Custom Model field "${tableFieldName}"...`);
-            const rowFields = tableField.values || tableField.value || [];
-            for (const row of rowFields) {
-                // v5 object fields expose their nested fields on `.properties`.
-                const rowObj = (row.properties) ? row.properties as any
-                             : ((row.kind === "object" || row.type === "object") && row.value) ? row.value as any
-                             : row as any;
-                
-                if (!rowObj || typeof rowObj !== "object") continue;
-                
-                // Log row keys to understand the structure
-                context.log(`  Row keys: ${Object.keys(rowObj).join(", ")}`);
-
-                // Normalize every row key to a bare lowercase alphanumeric token
-                // ("Batch Code", "batch_code", "BatchCode" → "batchcode") so the
-                // label lookups below match regardless of how the custom model
-                // spells/spaces its column names.
-                const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
-                const normMap = new Map<string, any>();
-                for (const k of Object.keys(rowObj)) normMap.set(normKey(k), rowObj[k]);
-
-                const cellValue = (cell: any): string | number | null => {
-                    if (!cell) return null;
-                    // v5 typed value first (string/number/etc.), then verbatim
-                    // content, then the REST SDK's valueString for good measure.
-                    return cell.value ?? cell.content ?? cell.valueString ?? null;
-                };
-                const getField = (...names: string[]) => {
-                    for (const name of names) {
-                        const cell = normMap.get(normKey(name));
-                        if (cell) {
-                            const v = cellValue(cell);
-                            if (v !== null && v !== undefined && String(v).trim() !== "") return v;
-                        }
-                    }
-                    return null;
-                };
-                const getNumField = (...names: string[]) => {
-                    for (const name of names) {
-                        const cell = normMap.get(normKey(name));
-                        if (cell) {
-                            if (typeof cell.value === "number") return cell.value;
-                            if (cell.valueNumber !== undefined) return cell.valueNumber;
-                            const parsed = parseQuantity(cell.content ?? cell.valueString ?? (cell.value != null ? String(cell.value) : null));
-                            if (parsed !== null) return parsed;
-                        }
-                    }
-                    return null;
-                };
-
-                const batchCodeRaw = getField("BatchCode", "Batch", "Lot", "LotCode", "BatchLot");
-                const sku = getField("SKU", "Material", "MaterialNumber", "Item", "ItemCode", "ItemNumber", "Article", "Part", "PartNumber");
-                const description = getField("Description", "MaterialDescription", "ItemDescription", "ProductDescription", "Desc", "ProductName", "Commodity");
-                const expectedQuantity = getNumField("Quantity", "Qty", "ExpectedQuantity", "Cases", "Bags", "Pieces", "Count", "Ordered", "PickQty");
-                const uomRaw = getField("UOM", "Unit", "UnitOfMeasure", "Units");
-
-                const item: OcrLineItem = {
-                    batchCode: batchCodeRaw ? String(batchCodeRaw).trim().toUpperCase() : null,
-                    sku: sku ? String(sku).trim() : null,
-                    description: description ? String(description).trim() : null,
-                    expectedQuantity,
-                    uom: normalizeUom(uomRaw != null ? String(uomRaw) : null),
-                };
-
-                if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
-                    lineItems.push(item);
-                }
-            }
-        } 
-        
         // 2. Fallback to generic table extraction
         if (lineItems.length === 0) {
             context.log("No items from custom fields, falling back to table extraction...");
@@ -368,6 +381,101 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
     } catch (error) {
         context.log("Error analyzing picklist:", error);
         return { status: 500, jsonBody: { error: "Error analyzing picklist" } };
+    }
+}
+
+// A BOL line item. Unlike the picklist, the BOL carries NO batch code — SAP
+// only stamps batches onto it after the load is picked. Instead each row
+// identifies its shipment / delivery / stop, which is what lets us match a
+// SKU's total quantity back to the picklist per delivery.
+type BolOcrLineItem = {
+    sku: string | null;
+    description: string | null;
+    quantity: number | null;
+    uom: "BAG" | "SP" | "PCE";
+    shipmentNumber: string | null;
+    deliveryNumber: string | null;
+    stopNumber: number | null;
+};
+
+// POST /api/analyze-bol — body is the raw image bytes (image/jpeg). Runs the
+// custom BOL model and returns best-effort line items (sku, description,
+// quantity, shipment #, delivery #, stop) plus any header fields. Never throws
+// to the client; the app degrades to manual BOL entry on failure.
+export async function analyzeBol(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const client = getDocClient();
+    if (!client) {
+        return {
+            status: 501,
+            jsonBody: {
+                error: "OCR not configured",
+                detail: "Set DOC_INTEL_ENDPOINT and DOC_INTEL_KEY in the Function App settings.",
+            },
+        };
+    }
+
+    try {
+        const buffer = Buffer.from(await request.arrayBuffer());
+        if (!buffer.length) {
+            return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+        }
+
+        const modelId = process.env.DOC_INTEL_BOL_MODEL_ID || "BOL";
+        context.log(`Using Document Intelligence BOL model: ${modelId}`);
+        const poller = await client.beginAnalyzeDocument(modelId, buffer);
+        const result = await poller.pollUntilDone();
+
+        const { rows, header } = extractCustomModelRows(result, context);
+
+        const lineItems: BolOcrLineItem[] = [];
+        for (const row of rows) {
+            const sku = row.get("SKU", "Material", "MaterialNumber", "Item", "ItemCode", "ItemNumber", "Article", "Part", "PartNumber", "Product");
+            const description = row.get("Description", "MaterialDescription", "ItemDescription", "ProductDescription", "Desc", "ProductName", "Commodity");
+            const quantity = row.getNum("Quantity", "Qty", "Cases", "Bags", "Pieces", "Count", "ShipQty", "ShippedQuantity");
+            const uomRaw = row.get("UOM", "Unit", "UnitOfMeasure", "Units");
+            const shipmentNumber = row.get("ShipmentNumber", "Shipment", "ShipmentNo", "Shipment#", "ShipmentId");
+            const deliveryNumber = row.get("DeliveryNumber", "Delivery", "DeliveryNo", "Delivery#", "DeliveryId");
+            const stopNumber = row.getNum("StopNumber", "Stop", "StopNo", "Stop#");
+
+            const item: BolOcrLineItem = {
+                sku: sku ? String(sku).trim() : null,
+                description: description ? String(description).trim() : null,
+                quantity,
+                uom: normalizeUom(uomRaw != null ? String(uomRaw) : null),
+                shipmentNumber: shipmentNumber ? String(shipmentNumber).trim() : null,
+                deliveryNumber: deliveryNumber ? String(deliveryNumber).trim() : null,
+                stopNumber,
+            };
+
+            if (item.sku || item.description || item.quantity !== null || item.deliveryNumber) {
+                lineItems.push(item);
+            }
+        }
+
+        // Header (document-level) fields, when the model labels them outside the
+        // line table. Falls back to the first row's shipment/delivery otherwise.
+        const loadNumber = header?.get("LoadNumber", "Load", "BOLNumber", "BOL", "BillOfLading", "ProNumber");
+        const shipDate = header?.get("ShipDate", "ShippingDate", "Date", "ShipmentDate");
+        const shipmentNumber = header?.get("ShipmentNumber", "Shipment", "ShipmentNo") ?? lineItems.find((li) => li.shipmentNumber)?.shipmentNumber ?? null;
+
+        const debug = request.query.get("debug") === "1";
+        return {
+            status: 200,
+            jsonBody: {
+                success: true,
+                lineItems,
+                header: {
+                    loadNumber: loadNumber != null ? String(loadNumber).trim() : null,
+                    shipDate: shipDate != null ? String(shipDate).trim() : null,
+                    shipmentNumber: shipmentNumber != null ? String(shipmentNumber).trim() : null,
+                },
+                tableCount: result.tables?.length || 0,
+                ...(debug ? { tables: result.tables, documents: result.documents } : {}),
+            },
+        };
+    } catch (error) {
+        context.log("Error analyzing BOL:", error);
+        return { status: 500, jsonBody: { error: "Error analyzing BOL" } };
     }
 }
 
@@ -642,6 +750,12 @@ app.http('analyze-picklist', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: analyzePicklist
+});
+
+app.http('analyze-bol', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: analyzeBol
 });
 
 app.http('sync-site', {

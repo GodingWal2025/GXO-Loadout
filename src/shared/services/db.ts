@@ -139,7 +139,15 @@ export async function upsertDownloadedInspection(inspection: Inspection): Promis
  * is wiped.
  */
 function migrateInspection(inspection: Inspection | undefined): Inspection | undefined {
-  if (!inspection?.picklist?.lineItems?.length) return inspection;
+  if (!inspection) return inspection;
+
+  // BOL line items were added later — old records have no `bol.lineItems`.
+  // Default it so the cross-reference/review code can read it unconditionally.
+  if (inspection.bol && !Array.isArray(inspection.bol.lineItems)) {
+    inspection = { ...inspection, bol: { ...inspection.bol, lineItems: [] } };
+  }
+
+  if (!inspection.picklist?.lineItems?.length) return inspection;
   let changed = false;
 
   const lineItems = inspection.picklist.lineItems.map((li) => {
