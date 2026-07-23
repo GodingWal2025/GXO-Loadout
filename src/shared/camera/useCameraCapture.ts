@@ -17,6 +17,15 @@ import {
 export function useCameraCapture(onCapture: (blob: Blob, originalBlob: Blob) => void) {
   const inputRef = useRef<HTMLInputElement | null>(null);
 
+  // The <input> is created once and its change listener is bound once, but
+  // `onCapture` is a fresh closure every render (it captures the caller's
+  // latest state — e.g. the pages already saved). Route it through a ref so the
+  // listener always calls the CURRENT callback. Without this the listener stays
+  // pinned to the first render's closure, so each new page appends to stale
+  // state and overwrites the pages captured before it.
+  const onCaptureRef = useRef(onCapture);
+  onCaptureRef.current = onCapture;
+
   const ensureInput = useCallback(() => {
     if (inputRef.current) return inputRef.current;
     const input = document.createElement('input');
@@ -28,13 +37,13 @@ export function useCameraCapture(onCapture: (blob: Blob, originalBlob: Blob) => 
       const file = (e.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const downscaled = await downscaleAndNormalize(file, 1200);
-      onCapture(downscaled, file);
+      onCaptureRef.current(downscaled, file);
       (e.target as HTMLInputElement).value = '';
     });
     document.body.appendChild(input);
     inputRef.current = input;
     return input;
-  }, [onCapture]);
+  }, []);
 
   return useCallback(() => {
     ensureInput().click();

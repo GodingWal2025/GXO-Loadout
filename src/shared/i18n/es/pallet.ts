@@ -120,6 +120,8 @@ export const pallet: Record<string, string> = {
   'workspace.stopCountMany': '{count} paradas',
   'workspace.staging': 'Preparación: {location}',
   'workspace.reviewProgress': 'Revisar progreso',
+  'workspace.backToBol': '← Fotos del BOL',
+  'workspace.backToBolTitle': 'Volver a las páginas de fotos del BOL / lista de surtido',
   'workspace.archive': 'Archivar',
   'workspace.home': '← Inicio',
   'workspace.confirmArchive':

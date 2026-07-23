@@ -209,6 +209,15 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           </div>
           <div className="page-head__actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {locked && <ViewEditToggle editing={editing} onChange={setEditing} />}
+            {inspection.type !== 'returns' && (
+              <Link
+                to={`/inspection/${inspection.id}/capture-bol`}
+                className="btn btn--ghost"
+                title={t('workspace.backToBolTitle', 'Go back to the BOL / picklist photo pages')}
+              >
+                {t('workspace.backToBol', '← BOL photos')}
+              </Link>
+            )}
             <button className="btn btn--ghost" onClick={() => setShowProgressModal(true)}>
               {t('workspace.reviewProgress', 'Review progress')}
             </button>
