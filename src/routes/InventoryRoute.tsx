@@ -164,7 +164,7 @@ export function InventoryRoute() {
                   <th style={{ padding: '1rem' }}>SKU</th>
                   <th style={{ padding: '1rem' }}>Batch</th>
                   <th style={{ padding: '1rem' }}>Description</th>
-                  <th style={{ padding: '1rem' }}>Pack</th>
+                  <th style={{ padding: '1rem' }}>UOM</th>
                   <th style={{ padding: '1rem' }}>Last Updated</th>
                   <th style={{ padding: '1rem', textAlign: 'right' }}>Actions</th>
                 </tr>
@@ -178,21 +178,24 @@ export function InventoryRoute() {
                     <td style={{ padding: '1rem' }}>
                       {(() => {
                         const pack = parsePackInfo(item.description);
-                        if (!pack) return <span style={{ color: '#bbb' }}>—</span>;
+                        const uom = pack ? pack.kind : 'Bags';
+                        const title = pack
+                          ? `${pack.kind === 'MB' ? 'Minibulk' : 'SeedPak'} (${pack.size} bags), read from the material description`
+                          : 'Loose bags — no SeedPak/Minibulk pack found in the material description';
                         return (
                           <span
-                            title={`${pack.kind === 'MB' ? 'Minibulk' : 'SeedPak'} pack type (${pack.size} bags), read from the material description`}
+                            title={title}
                             style={{
                               display: 'inline-block',
                               padding: '0.125rem 0.5rem',
                               borderRadius: '999px',
-                              background: '#eef2ff',
-                              color: '#3730a3',
+                              background: pack ? '#eef2ff' : '#f3f4f6',
+                              color: pack ? '#3730a3' : '#4b5563',
                               fontWeight: 600,
                               fontSize: '0.85rem',
                             }}
                           >
-                            {pack.ssu}
+                            {uom}
                           </span>
                         );
                       })()}
