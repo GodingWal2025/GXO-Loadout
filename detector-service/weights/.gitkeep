@@ -1,0 +1,3 @@
+# Put your fine-tuned RF-DETR checkpoint here, e.g. checkpoint_best.pth.
+# Set RFDETR_WEIGHTS=/app/weights/checkpoint_best.pth and RFDETR_CLASS_NAMES.
+# See ../README.md.

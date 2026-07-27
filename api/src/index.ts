@@ -775,6 +775,12 @@ const cosmosNimUrl = (process.env.COSMOS_NIM_URL || "").trim().replace(/\/+$/, "
 const cosmosNimKey = (process.env.COSMOS_NIM_KEY || "").trim();
 const cosmosNimModel = (process.env.COSMOS_NIM_MODEL || "nvidia/cosmos3-reasoner").trim();
 
+// RF-DETR detection backend (detector-service/). When DETECTOR_SERVICE_URL is set
+// it takes precedence over the Cosmos NIM: the service runs object detection on the
+// pallet face and returns the same JSON contract, so the Function forwards the bytes.
+const detectorServiceUrl = (process.env.DETECTOR_SERVICE_URL || "").trim().replace(/\/+$/, "");
+const detectorServiceKey = (process.env.DETECTOR_SERVICE_KEY || "").trim();
+
 const PALLET_COUNT_PROMPT = [
     "You are inspecting one face of a warehouse pallet stacked with bags of product.",
     "Bags sag and occlude each other, so DO NOT try to count individual bags.",
@@ -811,13 +817,50 @@ function extractJsonObject(text: string): any | null {
     return null;
 }
 
+// Forward the raw pallet-face bytes to the RF-DETR detection service, which
+// already returns the pallet-count JSON contract. Kept separate so the Cosmos
+// path below stays untouched as a fallback.
+async function analyzeWithDetector(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const buffer = Buffer.from(await request.arrayBuffer());
+    if (!buffer.length) {
+        return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+    }
+
+    const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+    if (detectorServiceKey) headers["Authorization"] = `Bearer ${detectorServiceKey}`;
+
+    const resp = await fetch(`${detectorServiceUrl}/analyze`, {
+        method: "POST",
+        headers,
+        body: buffer,
+    });
+
+    if (!resp.ok) {
+        const detail = await resp.text().catch(() => "");
+        context.log(`Detector service error ${resp.status}: ${detail.slice(0, 500)}`);
+        return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status } };
+    }
+
+    // The service emits the exact { success, layers, ... } shape the client wants.
+    return { status: 200, jsonBody: await resp.json() };
+}
+
 export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    if (detectorServiceUrl) {
+        try {
+            return await analyzeWithDetector(request, context);
+        } catch (error) {
+            context.log("Error calling detector service:", error);
+            return { status: 500, jsonBody: { error: "Error analyzing pallet count" } };
+        }
+    }
+
     if (!cosmosNimUrl) {
         return {
             status: 501,
             jsonBody: {
                 error: "Pallet vision not configured",
-                detail: "Set COSMOS_NIM_URL (and optionally COSMOS_NIM_KEY) in the Function App settings.",
+                detail: "Set DETECTOR_SERVICE_URL (or COSMOS_NIM_URL) in the Function App settings.",
             },
         };
     }

@@ -1,0 +1,14 @@
+# Model checkpoints — bake into the image at build time, don't commit.
+weights/*.pth
+weights/*.pt
+output/
+
+# Training data — large; keep out of git (label/export fresh from Roboflow).
+dataset/train/
+dataset/valid/
+dataset/test/
+
+# Keep the placeholders.
+!weights/.gitkeep
+!dataset/.gitkeep
+!dataset/README.md
