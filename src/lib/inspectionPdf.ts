@@ -5,6 +5,7 @@
 // jsPDF so it works offline and on iPad PWAs.
 
 import type { Inspection } from '../shared';
+import { dbListInventoryItems } from '../shared/services/db';
 
 export async function downloadInspectionPdf(inspection: Inspection): Promise<void> {
   // Lazy-load the PDF libraries (~350KB) so they don't weigh down the main
@@ -41,6 +42,24 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     if (code && label) productByBatch[code] = label;
     if (code && li.description.value) descByBatch[code] = li.description.value;
     if (code && li.sku.value) skuByBatch[code] = li.sku.value;
+  }
+
+  // Fill SKU / Material Description gaps from the inventory list (keyed by
+  // batch). The picklist often lacks descriptions, so inventory is the source
+  // of truth for the material description.
+  const inventory = await dbListInventoryItems().catch(() => []);
+  const descBySku: Record<string, string> = {};
+  for (const it of inventory) {
+    if (it.sku && it.description) descBySku[it.sku] = it.description;
+    if (!it.batch) continue;
+    if (it.sku && !skuByBatch[it.batch]) skuByBatch[it.batch] = it.sku;
+    if (it.description && !descByBatch[it.batch]) descByBatch[it.batch] = it.description;
+  }
+  // Last resort: resolve description via the batch's SKU.
+  for (const code of Object.keys(skuByBatch)) {
+    if (!descByBatch[code] && descBySku[skuByBatch[code]]) {
+      descByBatch[code] = descBySku[skuByBatch[code]];
+    }
   }
 
   // Flatten batch rows (same shape as the progress modal)

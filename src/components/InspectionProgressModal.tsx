@@ -1,6 +1,8 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import type { Inspection } from '../shared';
+import type { InventoryItem } from '../shared/types/inventory';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
+import { dbListInventoryItems } from '../shared/services/db';
 import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
@@ -14,6 +16,17 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   const [filterDelivery, setFilterDelivery] = useState('all');
   const [filterStop, setFilterStop] = useState('all');
   const [filterType, setFilterType] = useState('all');
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
+  // Load the inventory list — it's the source of truth for SKU + material
+  // description, since the picklist often omits descriptions.
+  useEffect(() => {
+    let active = true;
+    dbListInventoryItems()
+      .then((items) => { if (active) setInventory(items); })
+      .catch(() => { /* offline / empty inventory is fine */ });
+    return () => { active = false; };
+  }, []);
 
   // Build delivery ID to info map
   const deliveryMap = useMemo(() => {
@@ -29,7 +42,8 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
     return map;
   }, [inspection.bol?.deliveries]);
 
-  // Build SKU + material description lookups keyed by batch code (from picklist)
+  // Build SKU + material description lookups keyed by batch code. Inventory is
+  // the source of truth for descriptions; the picklist fills in any gaps.
   const batchInfoMap = useMemo(() => {
     const map: Record<string, { sku: string; description: string }> = {};
     for (const li of inspection.picklist?.lineItems ?? []) {
@@ -40,8 +54,25 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
         description: li.description.value || '',
       };
     }
+    // Inventory-derived lookups override/fill missing SKU + description.
+    const descBySku: Record<string, string> = {};
+    for (const it of inventory) {
+      if (it.sku && it.description) descBySku[it.sku] = it.description;
+      if (!it.batch) continue;
+      const cur = map[it.batch] || { sku: '', description: '' };
+      map[it.batch] = {
+        sku: cur.sku || it.sku || '',
+        description: cur.description || it.description || '',
+      };
+    }
+    // Last resort: resolve description via the batch's SKU.
+    for (const code of Object.keys(map)) {
+      if (!map[code].description && map[code].sku && descBySku[map[code].sku]) {
+        map[code].description = descBySku[map[code].sku];
+      }
+    }
     return map;
-  }, [inspection.picklist?.lineItems]);
+  }, [inspection.picklist?.lineItems, inventory]);
 
   // Build a flat list of all batch sections across all pallets
   const allBatches = useMemo(() => {
