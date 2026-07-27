@@ -34,11 +34,13 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
   // Product name lookup from picklist
   const productByBatch: Record<string, string> = {};
   const descByBatch: Record<string, string> = {};
+  const skuByBatch: Record<string, string> = {};
   for (const li of inspection.picklist.lineItems) {
     const code = li.batchCode.value;
     const label = [li.sku.value, li.description.value].filter(Boolean).join(' — ');
     if (code && label) productByBatch[code] = label;
     if (code && li.description.value) descByBatch[code] = li.description.value;
+    if (code && li.sku.value) skuByBatch[code] = li.sku.value;
   }
 
   // Flatten batch rows (same shape as the progress modal)
@@ -146,11 +148,11 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
   doc.text('Pallet detail', margin, afterSummaryY);
 
   const head = isReturns
-    ? [['Pallet', 'Batch', 'Material Description', 'Quantity']]
+    ? [['Pallet', 'Batch', 'SKU', 'Material Description', 'Quantity']]
     : [['Pallet', 'Delivery', 'Stop', 'Type', 'Batch Code', 'Bags', 'Scanned By']];
   const body = rows.map((r) =>
     isReturns
-      ? [`#${r.palletNumber}`, r.batchCode ? r.batchCode.toUpperCase() : '—', descByBatch[r.batchCode] || '—', String(r.bagCount)]
+      ? [`#${r.palletNumber}`, r.batchCode ? r.batchCode.toUpperCase() : '—', skuByBatch[r.batchCode] || '—', descByBatch[r.batchCode] || '—', String(r.bagCount)]
       : [`#${r.palletNumber}`, r.deliveryNumber, r.stopNumber !== undefined ? String(r.stopNumber) : '—', r.palletType, r.batchCode || '—', String(r.bagCount), r.scannedBy || '—']
   );
 
@@ -162,7 +164,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     theme: 'grid',
     headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: { [isReturns ? 3 : 5]: { halign: 'right' } },
+    columnStyles: { [isReturns ? 4 : 5]: { halign: 'right' } },
   });
 
   // Page footer

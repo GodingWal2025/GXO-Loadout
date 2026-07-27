@@ -29,12 +29,28 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
     return map;
   }, [inspection.bol?.deliveries]);
 
+  // Build SKU + material description lookups keyed by batch code (from picklist)
+  const batchInfoMap = useMemo(() => {
+    const map: Record<string, { sku: string; description: string }> = {};
+    for (const li of inspection.picklist?.lineItems ?? []) {
+      const code = li.batchCode.value;
+      if (!code) continue;
+      map[code] = {
+        sku: li.sku.value || '',
+        description: li.description.value || '',
+      };
+    }
+    return map;
+  }, [inspection.picklist?.lineItems]);
+
   // Build a flat list of all batch sections across all pallets
   const allBatches = useMemo(() => {
     const rows: {
       palletNumber: number;
       palletType: string;
       batchCode: string;
+      sku: string;
+      description: string;
       bagCount: number;
       deliveryNumber: string;
       stopNumber?: number;
@@ -45,10 +61,14 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
     for (const p of inspection.pallets) {
       const delInfo = p.deliveryId ? deliveryMap[p.deliveryId] : undefined;
       for (const bs of p.batchSections) {
+        const code = bs.batchCode.value || '';
+        const info = batchInfoMap[code];
         rows.push({
           palletNumber: p.palletNumber,
           palletType: p.palletType,
-          batchCode: bs.batchCode.value || '',
+          batchCode: code,
+          sku: info?.sku || '',
+          description: info?.description || '',
           bagCount: bs.actualBagCount.value || 0,
           deliveryNumber: delInfo?.deliveryNumber || '—',
           stopNumber: delInfo?.stopNumber,
@@ -58,7 +78,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
       }
     }
     return rows;
-  }, [inspection.pallets, deliveryMap]);
+  }, [inspection.pallets, deliveryMap, batchInfoMap]);
 
   // Extract unique values for filter dropdowns
   const deliveriesList = useMemo(() => {
@@ -228,6 +248,8 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                     {inspection.type !== 'returns' && <th>{t('progress.colStop', 'Stop')}</th>}
                     <th>{t('progress.colType', 'Type')}</th>
                     <th>{t('progress.colBatchCode', 'Batch Code')}</th>
+                    <th>{t('progress.colSku', 'SKU')}</th>
+                    <th>{t('progress.colDescription', 'Material Description')}</th>
                     <th className="right">{t('progress.colBags', 'Bags')}</th>
                     <th>{t('progress.colScannedBy', 'Scanned by')}</th>
                   </tr>
@@ -240,6 +262,8 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                       {inspection.type !== 'returns' && <td className="num small">{r.stopNumber ?? '—'}</td>}
                       <td className="small soft">{r.palletType}</td>
                       <td className="mono" style={{ textTransform: 'uppercase' }}>{r.batchCode || '—'}</td>
+                      <td className="mono small">{r.sku || '—'}</td>
+                      <td className="small soft">{r.description || '—'}</td>
                       <td className="right num fw-500">{r.bagCount}</td>
                       <td className="small soft">{r.scannedBy || '—'}</td>
                     </tr>
