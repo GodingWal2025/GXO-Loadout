@@ -150,7 +150,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     : [['Pallet', 'Delivery', 'Stop', 'Type', 'Batch Code', 'Bags', 'Scanned By']];
   const body = rows.map((r) =>
     isReturns
-      ? [`#${r.palletNumber}`, r.batchCode || '—', descByBatch[r.batchCode] || '—', String(r.bagCount)]
+      ? [`#${r.palletNumber}`, r.batchCode ? r.batchCode.toUpperCase() : '—', descByBatch[r.batchCode] || '—', String(r.bagCount)]
       : [`#${r.palletNumber}`, r.deliveryNumber, r.stopNumber !== undefined ? String(r.stopNumber) : '—', r.palletType, r.batchCode || '—', String(r.bagCount), r.scannedBy || '—']
   );
 
