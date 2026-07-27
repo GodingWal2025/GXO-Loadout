@@ -27,6 +27,7 @@ import { startBackgroundSync } from './shared';
 import { startSitesSync } from './services/sites';
 import { startInspectorsSync } from './shared/services/inspectors';
 import { startStagingLocationsSync } from './services/stagingLocations';
+import { startInventorySync } from './shared/services/inventorySync';
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
 import { SyncRefreshButton } from './components/SyncRefreshButton';
@@ -37,6 +38,7 @@ export default function App() {
     startSitesSync();
     startInspectorsSync();
     startStagingLocationsSync();
+    startInventorySync();
   }, []);
 
   return (

@@ -22,10 +22,18 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   // description, since the picklist often omits descriptions.
   useEffect(() => {
     let active = true;
-    dbListInventoryItems()
-      .then((items) => { if (active) setInventory(items); })
-      .catch(() => { /* offline / empty inventory is fine */ });
-    return () => { active = false; };
+    const load = () => {
+      dbListInventoryItems()
+        .then((items) => { if (active) setInventory(items); })
+        .catch(() => { /* offline / empty inventory is fine */ });
+    };
+    load();
+    // Re-load if a background inventory sync lands while the modal is open.
+    window.addEventListener('loadout-inventory-updated', load);
+    return () => {
+      active = false;
+      window.removeEventListener('loadout-inventory-updated', load);
+    };
   }, []);
 
   // Build delivery ID to info map

@@ -1136,6 +1136,32 @@ function makeRefListHandler(containerName: string, label: string) {
     };
 }
 
+// Bulk upsert for the inventory list. Inventory can be ~1-2k rows, so it's
+// pushed as a single { items: [...] } batch rather than one request per row
+// (unlike the small inspector/staging lists). Stored in its own ref container.
+export async function syncInventory(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        const body = await request.json() as any;
+        const items = Array.isArray(body) ? body : body?.items;
+        if (!Array.isArray(items)) {
+            return { status: 400, jsonBody: { error: "Invalid inventory: expected an items array" } };
+        }
+        const container = await getRefContainer("inventory");
+        const valid = items.filter((it: any) => it && typeof it.id === "string");
+        let count = 0;
+        const chunkSize = 50;
+        for (let i = 0; i < valid.length; i += chunkSize) {
+            const chunk = valid.slice(i, i + chunkSize);
+            await Promise.all(chunk.map((it: any) => container.items.upsert(it)));
+            count += chunk.length;
+        }
+        return { status: 200, jsonBody: { success: true, count } };
+    } catch (error) {
+        context.log("Error syncing inventory:", error);
+        return { status: 500, jsonBody: { error: "Error syncing inventory" } };
+    }
+}
+
 // Register the Azure Functions endpoints (v4 Model)
 app.http('sync-inspection', {
     methods: ['POST'],
@@ -1220,4 +1246,16 @@ app.http('staging-locations', {
     methods: ['GET'],
     authLevel: 'anonymous',
     handler: makeRefListHandler("stagingLocations", "staging locations")
+});
+
+app.http('sync-inventory', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: syncInventory
+});
+
+app.http('inventory', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    handler: makeRefListHandler("inventory", "inventory")
 });

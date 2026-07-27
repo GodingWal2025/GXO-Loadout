@@ -8,6 +8,7 @@ import {
 } from '../shared/services/db';
 import type { InventoryItem } from '../shared/types/inventory';
 import { parsePackInfo } from '../shared';
+import { pushInventory } from '../shared/services/inventorySync';
 
 export function InventoryRoute() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -62,7 +63,9 @@ export function InventoryRoute() {
 
       // Save to IndexedDB
       await dbSaveInventoryItems(newItems);
-      
+      // Sync to the cloud so other devices (review screen, PDF) get it too.
+      void pushInventory(newItems);
+
       alert(`Imported ${newItems.length} items successfully.`);
       loadItems();
     };
@@ -78,11 +81,13 @@ export function InventoryRoute() {
 
   const handleSaveEdit = async () => {
     if (editItem) {
-      await dbUpdateInventoryItem({
+      const saved: InventoryItem = {
         ...editItem,
         id: `${editItem.sku}_${editItem.batch}`,
         lastUpdated: new Date().toISOString()
-      });
+      };
+      await dbUpdateInventoryItem(saved);
+      void pushInventory([saved]);
       setEditItem(null);
       loadItems();
     }
