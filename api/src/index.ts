@@ -761,6 +761,146 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
     }
 }
 
+// ---------------------------------------------------------------------------
+// Pallet bag-count assist (NVIDIA Cosmos3 Reasoner NIM)
+//
+// The NIM is a self-hosted, OpenAI-compatible vision-language endpoint running
+// on a GPU host. Its URL and (optional) key live in Function App settings — the
+// key never reaches the browser. The model does NOT count individual bags
+// (they sag and occlude); it reasons about the visible stack — layer count and
+// anomalies — and the client multiplies layers by the known bags-per-layer.
+// Everything it returns is a suggestion the verifier confirms.
+// ---------------------------------------------------------------------------
+const cosmosNimUrl = (process.env.COSMOS_NIM_URL || "").trim().replace(/\/+$/, "");
+const cosmosNimKey = (process.env.COSMOS_NIM_KEY || "").trim();
+const cosmosNimModel = (process.env.COSMOS_NIM_MODEL || "nvidia/cosmos3-reasoner").trim();
+
+const PALLET_COUNT_PROMPT = [
+    "You are inspecting one face of a warehouse pallet stacked with bags of product.",
+    "Bags sag and occlude each other, so DO NOT try to count individual bags.",
+    "Instead reason about the visible stack and report:",
+    "- layers: how many horizontal layers (courses) are stacked, as an integer.",
+    "- topLayerFull: is the top layer complete, or short/partial? boolean.",
+    "- gaps: are there obvious missing bags or holes in the stack? boolean.",
+    "- damage: any torn, crushed, or leaking bags visible? boolean.",
+    "- estimatedBags: your best whole-number estimate of total bags on this face, or null if unsure.",
+    "- confidence: your confidence from 0 to 1.",
+    "- rationale: one short sentence explaining what you saw.",
+    "Respond with ONLY a JSON object with exactly these keys and no extra text.",
+].join("\n");
+
+// Pull the first balanced {...} object out of a model response and parse it.
+function extractJsonObject(text: string): any | null {
+    if (!text) return null;
+    const start = text.indexOf("{");
+    if (start < 0) return null;
+    let depth = 0;
+    for (let i = start; i < text.length; i++) {
+        if (text[i] === "{") depth++;
+        else if (text[i] === "}") {
+            depth--;
+            if (depth === 0) {
+                try {
+                    return JSON.parse(text.slice(start, i + 1));
+                } catch {
+                    return null;
+                }
+            }
+        }
+    }
+    return null;
+}
+
+export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    if (!cosmosNimUrl) {
+        return {
+            status: 501,
+            jsonBody: {
+                error: "Pallet vision not configured",
+                detail: "Set COSMOS_NIM_URL (and optionally COSMOS_NIM_KEY) in the Function App settings.",
+            },
+        };
+    }
+
+    try {
+        const buffer = Buffer.from(await request.arrayBuffer());
+        if (!buffer.length) {
+            return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+        }
+
+        const dataUrl = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+        const body = {
+            model: cosmosNimModel,
+            messages: [
+                {
+                    role: "user",
+                    content: [
+                        { type: "text", text: PALLET_COUNT_PROMPT },
+                        { type: "image_url", image_url: { url: dataUrl } },
+                    ],
+                },
+            ],
+            max_tokens: 512,
+            temperature: 0,
+        };
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (cosmosNimKey) headers["Authorization"] = `Bearer ${cosmosNimKey}`;
+
+        const resp = await fetch(`${cosmosNimUrl}/chat/completions`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+        });
+
+        if (!resp.ok) {
+            const detail = await resp.text().catch(() => "");
+            context.log(`NIM error ${resp.status}: ${detail.slice(0, 500)}`);
+            return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status } };
+        }
+
+        const completion = await resp.json() as any;
+        const content: string = completion?.choices?.[0]?.message?.content ?? "";
+        const parsed = extractJsonObject(content);
+
+        if (!parsed) {
+            const debug = request.query.get("debug") === "1";
+            return {
+                status: 200,
+                jsonBody: {
+                    success: false,
+                    error: "Could not parse model output",
+                    ...(debug ? { raw: content } : {}),
+                },
+            };
+        }
+
+        const toBool = (v: any) => v === true || v === "true";
+        const toNum = (v: any) => {
+            const n = typeof v === "number" ? v : Number(v);
+            return Number.isFinite(n) ? n : null;
+        };
+
+        return {
+            status: 200,
+            jsonBody: {
+                success: true,
+                layers: toNum(parsed.layers),
+                topLayerFull: toBool(parsed.topLayerFull),
+                gaps: toBool(parsed.gaps),
+                damage: toBool(parsed.damage),
+                estimatedBags: toNum(parsed.estimatedBags),
+                confidence: toNum(parsed.confidence),
+                rationale: typeof parsed.rationale === "string" ? parsed.rationale : null,
+                modelVersion: cosmosNimModel,
+            },
+        };
+    } catch (error) {
+        context.log("Error analyzing pallet count:", error);
+        return { status: 500, jsonBody: { error: "Error analyzing pallet count" } };
+    }
+}
+
 export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Syncing inspection. URL: "${request.url}"`);
     try {
@@ -1038,6 +1178,12 @@ app.http('analyze-bol', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: analyzeBol
+});
+
+app.http('analyze-pallet-count', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: analyzePalletCount
 });
 
 app.http('sync-site', {

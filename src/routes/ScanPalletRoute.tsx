@@ -5,9 +5,11 @@ import { useInspection, useInspectionMode } from '../shared';
 import { SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
+import { useCameraCapture } from '../shared';
 import type { Inspection, BatchSection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
+import { analyzePalletCount, type PalletCountResult } from '../shared/services/palletVision';
 import { useT } from '../shared/i18n/LanguageContext';
 
 const FINDINGS_OPTIONS = [
@@ -792,62 +794,141 @@ function LayerCountHelper({
       : null;
   const alreadyApplied = computed !== null && section.actualBagCount.value === computed;
 
+  const [aiBusy, setAiBusy] = useState(false);
+  const [ai, setAi] = useState<PalletCountResult | null>(null);
+  const [aiMsg, setAiMsg] = useState<string | null>(null);
+
   const parse = (raw: string): number | undefined => {
     if (raw === '') return undefined;
     const n = Number(raw);
     return Number.isFinite(n) && n >= 0 ? n : undefined;
   };
 
+  // Photograph the pallet face and let the vision model estimate the LAYER
+  // count (not individual bags). It pre-fills Layers; the verifier still sets
+  // bags/layer and confirms. Degrades to manual entry if the model is
+  // unconfigured or unreachable.
+  const captureForAi = useCameraCapture(async (blob) => {
+    setAiBusy(true);
+    setAiMsg(null);
+    try {
+      const r = await analyzePalletCount(blob);
+      setAi(r);
+      if (r.success && typeof r.layers === 'number' && r.layers > 0) {
+        onUpdate({ layerCount: r.layers });
+      } else {
+        setAiMsg(t('pallet.aiUnreadable', "Couldn't read the stack — enter layers manually."));
+      }
+    } catch {
+      setAi(null);
+      setAiMsg(t('pallet.aiUnavailable', 'AI estimate unavailable — enter layers manually.'));
+    } finally {
+      setAiBusy(false);
+    }
+  });
+
+  const confidencePct =
+    ai && typeof ai.confidence === 'number' ? Math.round(ai.confidence * 100) : null;
+  const aiFlag = ai?.success && (ai.gaps || ai.damage || ai.topLayerFull === false);
+
   return (
     <div
       className="mt-8"
-      style={{
-        borderTop: '1px dashed var(--rule-soft)',
-        paddingTop: 8,
-        display: 'flex',
-        flexWrap: 'wrap',
-        alignItems: 'flex-end',
-        gap: 8,
-      }}
+      style={{ borderTop: '1px dashed var(--rule-soft)', paddingTop: 8 }}
     >
-      <div className="field" style={{ margin: 0, minWidth: 110, flex: '1 1 110px' }}>
-        <div className="field__label">{t('pallet.bagsPerLayer', 'Bags / layer')}</div>
-        <input
-          type="number"
-          inputMode="numeric"
-          value={perLayer ?? ''}
-          placeholder={t('pallet.bagsPerLayerHint', 'e.g. 8')}
-          onChange={(e) => onUpdate({ bagsPerLayer: parse(e.target.value) })}
-        />
-      </div>
-      <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--ink-faint)' }}>×</div>
-      <div className="field" style={{ margin: 0, minWidth: 90, flex: '1 1 90px' }}>
-        <div className="field__label">{t('pallet.layers', 'Layers')}</div>
-        <input
-          type="number"
-          inputMode="numeric"
-          value={layers ?? ''}
-          placeholder={t('pallet.layersHint', 'e.g. 6')}
-          onChange={(e) => onUpdate({ layerCount: parse(e.target.value) })}
-        />
-      </div>
-      <div style={{ alignSelf: 'center', paddingBottom: 8, whiteSpace: 'nowrap' }}>
-        = <strong>{computed ?? '—'}</strong> {t('pallet.bagsUnit', 'bags')}
-      </div>
-      <button
-        type="button"
-        className="btn btn--sm"
-        disabled={computed === null || alreadyApplied}
-        onClick={() =>
-          computed !== null &&
-          onUpdate({ actualBagCount: { ...section.actualBagCount, value: computed, source: 'manual' } })
-        }
-        style={{ marginBottom: 2 }}
+      <div
+        style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 8 }}
       >
-        {alreadyApplied
-          ? t('pallet.layerApplied', '✓ Applied')
-          : t('pallet.layerApply', 'Use as actual count')}
-      </button>
+        <div className="field" style={{ margin: 0, minWidth: 110, flex: '1 1 110px' }}>
+          <div className="field__label">{t('pallet.bagsPerLayer', 'Bags / layer')}</div>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={perLayer ?? ''}
+            placeholder={t('pallet.bagsPerLayerHint', 'e.g. 8')}
+            onChange={(e) => onUpdate({ bagsPerLayer: parse(e.target.value) })}
+          />
+        </div>
+        <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--ink-faint)' }}>×</div>
+        <div className="field" style={{ margin: 0, minWidth: 90, flex: '1 1 90px' }}>
+          <div className="field__label">{t('pallet.layers', 'Layers')}</div>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={layers ?? ''}
+            placeholder={t('pallet.layersHint', 'e.g. 6')}
+            onChange={(e) => onUpdate({ layerCount: parse(e.target.value) })}
+          />
+        </div>
+        <div style={{ alignSelf: 'center', paddingBottom: 8, whiteSpace: 'nowrap' }}>
+          = <strong>{computed ?? '—'}</strong> {t('pallet.bagsUnit', 'bags')}
+        </div>
+        <button
+          type="button"
+          className="btn btn--sm"
+          disabled={computed === null || alreadyApplied}
+          onClick={() =>
+            computed !== null &&
+            onUpdate({ actualBagCount: { ...section.actualBagCount, value: computed, source: 'manual' } })
+          }
+          style={{ marginBottom: 2 }}
+        >
+          {alreadyApplied
+            ? t('pallet.layerApplied', '✓ Applied')
+            : t('pallet.layerApply', 'Use as actual count')}
+        </button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          className="btn btn--sm btn--ghost"
+          onClick={captureForAi}
+          disabled={aiBusy}
+        >
+          {aiBusy
+            ? t('pallet.aiEstimating', '✨ Estimating…')
+            : t('pallet.aiEstimate', '✨ Estimate layers from photo')}
+        </button>
+        {ai?.success && typeof ai.layers === 'number' && (
+          <span className="xs soft">
+            {t('pallet.aiLayers', 'AI saw {n} layers', { n: ai.layers })}
+            {confidencePct !== null ? ` · ${confidencePct}%` : ''}
+          </span>
+        )}
+      </div>
+
+      {ai?.success && ai.rationale && (
+        <div className="xs soft" style={{ marginTop: 4 }}>
+          “{ai.rationale}”
+        </div>
+      )}
+
+      {aiFlag && (
+        <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
+          <span className="banner__icon">⚠</span>
+          <div className="banner__body">
+            {t(
+              'pallet.aiAnomaly',
+              'AI flagged a possible issue — check the stack:'
+            )}{' '}
+            {[
+              ai?.topLayerFull === false ? t('pallet.aiShortTop', 'top layer looks short') : null,
+              ai?.gaps ? t('pallet.aiGaps', 'gaps/missing bags') : null,
+              ai?.damage ? t('pallet.aiDamage', 'possible damage') : null,
+            ]
+              .filter(Boolean)
+              .join(', ')}
+            .
+          </div>
+        </div>
+      )}
+
+      {aiMsg && (
+        <div className="xs soft" style={{ marginTop: 4 }}>
+          {aiMsg}
+        </div>
+      )}
     </div>
   );
 }
