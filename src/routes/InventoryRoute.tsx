@@ -122,27 +122,64 @@ export function InventoryRoute() {
         {editItem && (
           <div style={{ padding: '1rem', background: '#f5f5f5', borderRadius: '8px', marginBottom: '1.5rem' }}>
             <h3>{editItem.id ? 'Edit Item' : 'New Item'}</h3>
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <input
-                className="input"
-                placeholder="SKU (Material)"
-                value={editItem.sku}
-                onChange={(e) => setEditItem({ ...editItem, sku: e.target.value })}
-              />
-              <input
-                className="input"
-                placeholder="Batch (LOTATR3)"
-                value={editItem.batch}
-                onChange={(e) => setEditItem({ ...editItem, batch: e.target.value })}
-              />
-              <input
-                className="input"
-                placeholder="Description"
-                value={editItem.description}
-                style={{ flex: 1 }}
-                onChange={(e) => setEditItem({ ...editItem, description: e.target.value })}
-              />
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', alignItems: 'flex-end' }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>SKU</span>
+                <input
+                  className="input"
+                  placeholder="SKU (Material)"
+                  value={editItem.sku}
+                  onChange={(e) => setEditItem({ ...editItem, sku: e.target.value })}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>Batch</span>
+                <input
+                  className="input"
+                  placeholder="Batch (LOTATR3)"
+                  value={editItem.batch}
+                  onChange={(e) => setEditItem({ ...editItem, batch: e.target.value })}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>Material Description</span>
+                <input
+                  className="input"
+                  placeholder="Material Description"
+                  value={editItem.description}
+                  onChange={(e) => setEditItem({ ...editItem, description: e.target.value })}
+                />
+              </label>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>UOM</span>
+                {(() => {
+                  const pack = parsePackInfo(editItem.description);
+                  const uom = pack ? pack.kind : 'Bags';
+                  return (
+                    <span
+                      title={pack
+                        ? `${pack.kind === 'MB' ? 'Minibulk' : 'SeedPak'} (${pack.size} bags), derived from the description`
+                        : 'Loose bags — no SeedPak/Minibulk pack found in the description'}
+                      style={{
+                        display: 'inline-block',
+                        padding: '0.4rem 0.75rem',
+                        borderRadius: '999px',
+                        background: pack ? '#eef2ff' : '#f3f4f6',
+                        color: pack ? '#3730a3' : '#4b5563',
+                        fontWeight: 600,
+                        fontSize: '0.85rem',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {uom}
+                    </span>
+                  );
+                })()}
+              </div>
             </div>
+            <p style={{ fontSize: '0.8rem', color: '#777', marginTop: '0.5rem' }}>
+              UOM is derived automatically from the material description and isn't stored separately.
+            </p>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', justifyContent: 'flex-end' }}>
               <button className="btn btn-secondary" onClick={() => setEditItem(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSaveEdit}>Save</button>
