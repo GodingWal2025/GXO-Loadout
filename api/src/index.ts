@@ -82,6 +82,13 @@ type OcrLineItem = {
     description: string | null;
     expectedQuantity: number | null;
     uom: Uom;
+    /**
+     * Delivery this line is picked for. A picklist groups its lines under a
+     * delivery heading (or carries a delivery column), and that grouping is what
+     * puts each product under the right delivery in the app. Null when the sheet
+     * only ever names one delivery.
+     */
+    deliveryNumber: string | null;
 };
 
 // Header keyword → semantic column. First match wins, so ORDER MATTERS:
@@ -93,6 +100,7 @@ const COLUMN_KEYWORDS: Array<{ key: keyof OcrLineItem; words: string[] }> = [
     { key: "batchCode", words: ["batch", "lot"] },
     { key: "expectedQuantity", words: ["qty", "quantity", "cases", "bags", "count", "pieces", "ordered", "pick"] },
     { key: "uom", words: ["uom", "unit"] },
+    { key: "deliveryNumber", words: ["delivery"] },
     { key: "description", words: ["description", "desc", "product name", "commodity", "product"] },
     { key: "sku", words: ["sku", "material", "item", "part", "article"] },
 ];
@@ -132,10 +140,216 @@ function parseQuantity(raw: string | null): number | null {
     return m ? Number(m[0]) : null;
 }
 
+// ============================================================
+// Reading the sheet's own text (labels, headings, positions)
+// ============================================================
+//
+// The custom models are trained on the LINE-ITEM TABLE. The load header
+// (load #, ship date) and the delivery headings that group the lines are not
+// labelled in the model, so `documents[0].fields` returns nothing for them and
+// the app auto-filled nothing. Everything below reads those values off the
+// OCR'd text layer instead, which works no matter how the model is trained.
+
+/** One OCR'd text line, with its page and its vertical position as 0..1. */
+type DocLine = { page: number; y: number; text: string };
+type DocPosition = { page: number; y: number };
+
+/** Top-most y of a polygon, accepting both the `{x,y}[]` and flat-array forms. */
+function polygonTop(polygon: any): number | null {
+    if (!Array.isArray(polygon) || !polygon.length) return null;
+    let min = Infinity;
+    if (typeof polygon[0] === "number") {
+        for (let i = 1; i < polygon.length; i += 2) min = Math.min(min, polygon[i]);
+    } else {
+        for (const p of polygon) if (typeof p?.y === "number") min = Math.min(min, p.y);
+    }
+    return Number.isFinite(min) ? min : null;
+}
+
+/** page number → page height, so positions normalize to 0..1 across pages. */
+function pageHeights(result: any): Map<number, number> {
+    const heights = new Map<number, number>();
+    for (const page of result?.pages || []) {
+        if (typeof page.height === "number" && page.height > 0) {
+            heights.set(page.pageNumber ?? 1, page.height);
+        }
+    }
+    return heights;
+}
+
+/** Flatten the OCR'd lines into reading order (top-to-bottom, left-to-right). */
+export function docLines(result: any): DocLine[] {
+    const heights = pageHeights(result);
+    const lines: DocLine[] = [];
+    for (const page of result?.pages || []) {
+        const pageNumber = page.pageNumber ?? 1;
+        const height = heights.get(pageNumber) || 0;
+        for (const line of page.lines || []) {
+            const text = String(line.content || "").trim();
+            if (!text) continue;
+            const top = polygonTop(line.polygon ?? line.boundingBox);
+            lines.push({ page: pageNumber, y: top != null && height ? top / height : top ?? 0, text });
+        }
+    }
+    return lines;
+}
+
+/** First bounding region of a field/cell — its own, or its first child's. */
+function firstRegion(node: any): any | null {
+    if (!node || typeof node !== "object") return null;
+    if (Array.isArray(node.boundingRegions) && node.boundingRegions.length) return node.boundingRegions[0];
+    const props = node.properties || (node.kind === "object" || node.type === "object" ? node.value : null);
+    for (const child of Object.values(props || {}) as any[]) {
+        if (Array.isArray(child?.boundingRegions) && child.boundingRegions.length) return child.boundingRegions[0];
+    }
+    return null;
+}
+
+/** Where a custom-model row / table cell sits, normalized like {@link docLines}. */
+function positionOf(node: any, heights: Map<number, number>): DocPosition | null {
+    const region = firstRegion(node);
+    if (!region) return null;
+    const top = polygonTop(region.polygon ?? region.boundingBox);
+    if (top == null) return null;
+    const page = region.pageNumber ?? 1;
+    const height = heights.get(page) || 0;
+    return { page, y: height ? top / height : top };
+}
+
+/** True when `text` is nothing but the value (plus stray punctuation). */
+function isWholeLineValue(valueRe: RegExp, text: string): boolean {
+    return new RegExp(`^[\\s:#.\\-]*(?:${valueRe.source})[\\s.,;]*$`, "i").test(text.trim());
+}
+
+/**
+ * Find the value belonging to a label. SAP sheets print these two ways —
+ * "Load: 835" on one line, or "Load" with 835 stacked underneath / to the
+ * right — so the label's own line is tried first, then the next two lines
+ * (which is where a right-hand neighbour lands in reading order).
+ */
+export function findLabeledValue(lines: DocLine[], labelRe: RegExp, valueRe: RegExp): string | null {
+    for (let i = 0; i < lines.length; i++) {
+        const label = labelRe.exec(lines[i].text);
+        if (!label) continue;
+        const rest = lines[i].text.slice(label.index + label[0].length).replace(/^[\s:#.\-]+/, "");
+        const inline = valueRe.exec(rest);
+        if (inline) return inline[0];
+        for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {
+            if (!isWholeLineValue(valueRe, lines[j].text)) continue;
+            const m = valueRe.exec(lines[j].text);
+            if (m) return m[0];
+        }
+    }
+    return null;
+}
+
+// A load number is short and contains at least one digit ("835", "L-2041").
+export const LOAD_LABEL = /\bload\b\s*(?:#|no\.?|nbr|num(?:ber)?)?/i;
+export const LOAD_VALUE = /(?=[A-Z0-9\-\/]*\d)[A-Z0-9][A-Z0-9\-\/]{1,19}/i;
+export const SHIP_DATE_LABEL = /\b(?:ship(?:ping|ment)?\s*(?:date|dt)|date\s*shipped|pick\s*date|deliver(?:y)?\s*date)\b/i;
+export const DATE_VALUE =
+    /\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[./-]\d{1,2}[./-]\d{2,4}|\d{1,2}[ -][A-Za-z]{3,9}[ -]\d{2,4}|[A-Za-z]{3,9}\s+\d{1,2},?\s+\d{4}/;
+// "Delivery" that is not "Delivery Date". SAP delivery numbers are 6–12 digits.
+const DELIVERY_LABEL = /\bdeliver(?:y|ies)\b(?!\s*(?:date|dt)\b)\s*(?:#|no\.?|nbr|num(?:ber)?)?/i;
+const DELIVERY_VALUE = /\d{6,12}/;
+
+const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+/**
+ * Normalize any printed date to YYYY-MM-DD. The verify screen uses an
+ * `<input type="date">`, which silently shows nothing for "07/26/2026" — so an
+ * un-normalized ship date reads to the inspector as "OCR didn't fill it in".
+ */
+export function parseDateToIso(raw: string | null): string | null {
+    if (!raw) return null;
+    const s = String(raw).trim();
+    const iso = (y: number, m: number, d: number): string | null => {
+        if (y < 100) y += 2000;
+        if (m < 1 || m > 12 || d < 1 || d > 31 || y < 2000 || y > 2100) return null;
+        return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+    };
+
+    let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s);
+    if (m) return iso(+m[1], +m[2], +m[3]);
+
+    // Numeric: US sheets print MM/DD/YYYY, SAP's dotted form is DD.MM.YYYY.
+    // A first part above 12 can only be the day either way.
+    m = /^(\d{1,2})([./-])(\d{1,2})\2(\d{2,4})$/.exec(s);
+    if (m) {
+        const a = +m[1], b = +m[3], year = +m[4];
+        const dayFirst = m[2] === "." || a > 12;
+        return dayFirst ? iso(year, b, a) : iso(year, a, b);
+    }
+
+    // "26-JUL-2026" / "26 July 2026"
+    m = /^(\d{1,2})[ -]([A-Za-z]{3,9})[ -](\d{2,4})$/.exec(s);
+    if (m) {
+        const month = MONTHS.indexOf(m[2].slice(0, 3).toLowerCase()) + 1;
+        return month ? iso(+m[3], month, +m[1]) : null;
+    }
+
+    // "July 26, 2026" — and the Date.toString() form a typed model field
+    // ("Sun Jul 26 2026 …") collapses to once it is stringified.
+    m = /^(?:[A-Za-z]{3}\s+)?([A-Za-z]{3,9})\s+(\d{1,2}),?\s+(\d{4})/.exec(s);
+    if (m) {
+        const month = MONTHS.indexOf(m[1].slice(0, 3).toLowerCase()) + 1;
+        return month ? iso(+m[3], month, +m[2]) : null;
+    }
+    return null;
+}
+
+/** A delivery heading on the sheet, with where it sits on the page. */
+type DeliveryAnchor = DocPosition & { deliveryNumber: string };
+
+/**
+ * Every "Delivery 8012345" heading, in reading order. On a multi-delivery
+ * picklist these are the section headings the line items are printed under.
+ */
+export function findDeliveryAnchors(lines: DocLine[]): DeliveryAnchor[] {
+    const anchors: DeliveryAnchor[] = [];
+    for (let i = 0; i < lines.length; i++) {
+        const label = DELIVERY_LABEL.exec(lines[i].text);
+        if (!label) continue;
+        const rest = lines[i].text.slice(label.index + label[0].length);
+        let value = (DELIVERY_VALUE.exec(rest) || [])[0] || null;
+        if (!value) {
+            for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {
+                if (!isWholeLineValue(DELIVERY_VALUE, lines[j].text)) continue;
+                value = (DELIVERY_VALUE.exec(lines[j].text) || [])[0] || null;
+                if (value) break;
+            }
+        }
+        if (!value) continue;
+        const last = anchors[anchors.length - 1];
+        // The same heading repeated (page footer, continuation banner) is not a
+        // new section — only a change of number starts one.
+        if (last && last.deliveryNumber === value) continue;
+        anchors.push({ page: lines[i].page, y: lines[i].y, deliveryNumber: value });
+    }
+    return anchors;
+}
+
+/** The delivery heading a row sits under: the nearest anchor above it. */
+export function deliveryForPosition(anchors: DeliveryAnchor[], pos: DocPosition | null): string | null {
+    if (!pos || !anchors.length) return null;
+    let best: DeliveryAnchor | null = null;
+    for (const a of anchors) {
+        if (a.page > pos.page) continue;
+        // Small tolerance: a heading printed level with its first row.
+        if (a.page === pos.page && a.y > pos.y + 0.01) continue;
+        if (!best || a.page > best.page || (a.page === best.page && a.y > best.y)) best = a;
+    }
+    return best ? best.deliveryNumber : null;
+}
+
 // Map a prebuilt-layout table into line items by matching header cells to the
 // keyword table above. Layout preserves cell row/column indices, so we detect
 // the header row (row 0), build a column→field map, then read each data row.
-export function extractLineItemsFromTables(tables: any[] | undefined): OcrLineItem[] {
+export function extractLineItemsFromTables(
+    tables: any[] | undefined,
+    /** Resolves a row's delivery from where its cells sit, when no column names one. */
+    resolveDelivery?: (cell: any) => string | null
+): OcrLineItem[] {
     if (!tables || !tables.length) return [];
     const items: OcrLineItem[] = [];
 
@@ -218,6 +432,8 @@ export function extractLineItemsFromTables(tables: any[] | undefined): OcrLineIt
                 description,
                 expectedQuantity: parseQuantity(raw.expectedQuantity ?? null),
                 uom: normalizeUom(raw.uom ?? null),
+                deliveryNumber:
+                    raw.deliveryNumber ?? (resolveDelivery ? resolveDelivery(rowCells[0]) : null),
             };
             // Skip empty/subtotal rows.
             if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
@@ -234,13 +450,15 @@ export function extractLineItemsFromTables(tables: any[] | undefined): OcrLineIt
 // insensitively so "Batch Code" / "batch_code" / "BatchCode" all resolve.
 interface FieldBag {
     keys: string[];
+    /** Where the row sits on the page, for matching it to a delivery heading. */
+    position: DocPosition | null;
     /** First non-empty value among the given candidate names (string or number). */
     get(...names: string[]): string | number | null;
     /** First numeric value among the given candidate names. */
     getNum(...names: string[]): number | null;
 }
 
-function makeFieldBag(obj: any): FieldBag {
+function makeFieldBag(obj: any, position: DocPosition | null = null): FieldBag {
     const normKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
     const normMap = new Map<string, any>();
     for (const k of Object.keys(obj || {})) normMap.set(normKey(k), obj[k]);
@@ -250,6 +468,7 @@ function makeFieldBag(obj: any): FieldBag {
         cell ? (cell.value ?? cell.content ?? cell.valueString ?? null) : null;
     return {
         keys: Object.keys(obj || {}),
+        position,
         get(...names: string[]) {
             for (const name of names) {
                 const v = cellValue(normMap.get(normKey(name)));
@@ -306,6 +525,7 @@ function extractCustomModelRows(result: any, context: InvocationContext): { rows
 
     context.log(`Extracting rows from Custom Model field "${tableFieldName}"...`);
     const rowFields = tableField.values || tableField.value || [];
+    const heights = pageHeights(result);
     const rows: FieldBag[] = [];
     for (const row of rowFields) {
         const rowObj = row.properties ? row.properties
@@ -313,7 +533,7 @@ function extractCustomModelRows(result: any, context: InvocationContext): { rows
                      : row;
         if (!rowObj || typeof rowObj !== "object") continue;
         context.log(`  Row keys: ${Object.keys(rowObj).join(", ")}`);
-        rows.push(makeFieldBag(rowObj));
+        rows.push(makeFieldBag(rowObj, positionOf(row, heights)));
     }
     return { rows, header };
 }
@@ -347,6 +567,13 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
 
         let lineItems: OcrLineItem[] = [];
 
+        // The sheet's own text layer: it carries the load header and the
+        // delivery headings, neither of which the custom model labels.
+        const lines = docLines(result);
+        const heights = pageHeights(result);
+        const anchors = findDeliveryAnchors(lines);
+        context.log(`Delivery headings found: ${anchors.map((a) => a.deliveryNumber).join(", ") || "(none)"}`);
+
         // 1. Try to extract from the Custom Model's structured fields.
         const { rows, header } = extractCustomModelRows(result, context);
         for (const row of rows) {
@@ -355,6 +582,7 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             const description = row.get("Description", "MaterialDescription", "ItemDescription", "ProductDescription", "Desc", "ProductName", "Commodity");
             const expectedQuantity = row.getNum("Quantity", "Qty", "ExpectedQuantity", "Cases", "Bags", "Pieces", "Count", "Ordered", "PickQty");
             const uomRaw = row.get("UOM", "Unit", "UnitOfMeasure", "Units");
+            const rowDelivery = row.get("DeliveryNumber", "Delivery", "DeliveryNo", "Delivery#", "DeliveryId");
 
             const item: OcrLineItem = {
                 batchCode: batchCodeRaw ? String(batchCodeRaw).trim().toUpperCase() : null,
@@ -362,6 +590,11 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
                 description: description ? String(description).trim() : null,
                 expectedQuantity,
                 uom: normalizeUom(uomRaw != null ? String(uomRaw) : null),
+                // A delivery column wins; otherwise the row belongs to whichever
+                // delivery heading it is printed under.
+                deliveryNumber: rowDelivery
+                    ? String(rowDelivery).trim()
+                    : deliveryForPosition(anchors, row.position),
             };
 
             if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
@@ -372,15 +605,32 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
         // 2. Fallback to generic table extraction
         if (lineItems.length === 0) {
             context.log("No items from custom fields, falling back to table extraction...");
-            lineItems = extractLineItemsFromTables(result.tables as any[]);
+            lineItems = extractLineItemsFromTables(result.tables as any[], (cell) =>
+                deliveryForPosition(anchors, positionOf(cell, heights))
+            );
         }
 
-        // Document-level header fields drive the delivery auto-fill on the
-        // outbound flow: load # / ship date populate the load header (mirrored
-        // onto the BOL), and delivery # seeds the auto-created delivery.
-        const loadNumber = header?.get("LoadNumber", "Load", "LoadNo", "Load#", "BOLNumber", "BOL", "BillOfLading");
-        const shipDate = header?.get("ShipDate", "ShippingDate", "Date", "ShipmentDate", "DeliveryDate", "PickDate");
-        const deliveryNumber = header?.get("DeliveryNumber", "Delivery", "DeliveryNo", "Delivery#", "DeliveryId");
+        // Header fields drive the auto-fill on the outbound flow: load # / ship
+        // date populate the load header (mirrored onto the BOL), and delivery #
+        // seeds the auto-created delivery. The custom model only labels these on
+        // sheets it was trained with, so fall back to the sheet's own text.
+        const loadNumber =
+            header?.get("LoadNumber", "Load", "LoadNo", "Load#", "BOLNumber", "BOL", "BillOfLading") ??
+            findLabeledValue(lines, LOAD_LABEL, LOAD_VALUE);
+        const shipDateRaw =
+            header?.get("ShipDate", "ShippingDate", "Date", "ShipmentDate", "DeliveryDate", "PickDate") ??
+            findLabeledValue(lines, SHIP_DATE_LABEL, DATE_VALUE);
+        const deliveryNumber =
+            header?.get("DeliveryNumber", "Delivery", "DeliveryNo", "Delivery#", "DeliveryId") ??
+            (anchors.length ? anchors[0].deliveryNumber : null);
+
+        // A single-delivery sheet often names the delivery only in its header —
+        // the lines then carry nothing, so give them the one delivery there is.
+        const soleDelivery =
+            anchors.length <= 1 && deliveryNumber != null ? String(deliveryNumber).trim() : null;
+        if (soleDelivery) {
+            for (const item of lineItems) item.deliveryNumber = item.deliveryNumber || soleDelivery;
+        }
 
         const debug = request.query.get("debug") === "1";
         return {
@@ -390,13 +640,18 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
                 lineItems,
                 header: {
                     loadNumber: loadNumber != null ? String(loadNumber).trim() : null,
-                    shipDate: shipDate != null ? String(shipDate).trim() : null,
+                    shipDate: parseDateToIso(shipDateRaw != null ? String(shipDateRaw) : null),
                     deliveryNumber: deliveryNumber != null ? String(deliveryNumber).trim() : null,
                 },
                 tableCount: result.tables?.length || 0,
                 ...(debug ? {
                     tables: result.tables,
-                    documents: result.documents // Add documents to debug output
+                    documents: result.documents, // Add documents to debug output
+                    // What the text-layer fallback actually saw. When a header
+                    // field comes back null on a real sheet, these show whether
+                    // the label was even read and how it was worded.
+                    textLines: lines,
+                    deliveryAnchors: anchors,
                 } : {}),
             },
         };
@@ -476,8 +731,13 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
 
         // Header (document-level) fields, when the model labels them outside the
         // line table. Falls back to the first row's shipment/delivery otherwise.
-        const loadNumber = header?.get("LoadNumber", "Load", "BOLNumber", "BOL", "BillOfLading", "ProNumber");
-        const shipDate = header?.get("ShipDate", "ShippingDate", "Date", "ShipmentDate");
+        const bolLines = docLines(result);
+        const loadNumber =
+            header?.get("LoadNumber", "Load", "BOLNumber", "BOL", "BillOfLading", "ProNumber") ??
+            findLabeledValue(bolLines, LOAD_LABEL, LOAD_VALUE);
+        const shipDateRaw =
+            header?.get("ShipDate", "ShippingDate", "Date", "ShipmentDate") ??
+            findLabeledValue(bolLines, SHIP_DATE_LABEL, DATE_VALUE);
         const shipmentNumber = header?.get("ShipmentNumber", "Shipment", "ShipmentNo") ?? lineItems.find((li) => li.shipmentNumber)?.shipmentNumber ?? null;
 
         const debug = request.query.get("debug") === "1";
@@ -488,7 +748,7 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
                 lineItems,
                 header: {
                     loadNumber: loadNumber != null ? String(loadNumber).trim() : null,
-                    shipDate: shipDate != null ? String(shipDate).trim() : null,
+                    shipDate: parseDateToIso(shipDateRaw != null ? String(shipDateRaw) : null),
                     shipmentNumber: shipmentNumber != null ? String(shipmentNumber).trim() : null,
                 },
                 tableCount: result.tables?.length || 0,

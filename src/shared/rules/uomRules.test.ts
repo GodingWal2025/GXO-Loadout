@@ -3,6 +3,7 @@ import {
   parseSpSize,
   parsePackInfo,
   bagsPerUnit,
+  expectedBags,
   shouldExplode,
   explodePicklistLine,
   explodePicklistLines,
@@ -48,14 +49,44 @@ describe('parseSpSize', () => {
 
 describe('parsePackInfo', () => {
   it('distinguishes SeedPak (USP) from Minibulk (UMB)', () => {
-    expect(parsePackInfo('C.CL.201-40VT4PRIB.SF2.40USP.UB.US')).toEqual({ size: 40, kind: 'SP' });
-    expect(parsePackInfo('B.AS.AG18XF1.SD3.40SCUMB.X.US')).toEqual({ size: 40, kind: 'MB' });
-    expect(parsePackInfo('B.AS.AG18XF1.SD3.45SCUMB.X.US')).toEqual({ size: 45, kind: 'MB' });
+    expect(parsePackInfo('C.CL.201-40VT4PRIB.SF2.40USP.UB.US')).toEqual({ size: 40, kind: 'SP', ssu: '40USP' });
+    expect(parsePackInfo('B.AS.AG18XF1.SD3.40SCUMB.X.US')).toEqual({ size: 40, kind: 'MB', ssu: '40SCUMB' });
+    expect(parsePackInfo('B.AS.AG18XF1.SD3.45SCUMB.X.US')).toEqual({ size: 45, kind: 'MB', ssu: '45SCUMB' });
+  });
+
+  it('carries the SSU token exactly as printed (SCUSP variant, placard form)', () => {
+    // The floor confirms against the pack designation itself, not a derived
+    // bag count — so 40SCUSP must not collapse to "40USP".
+    expect(parsePackInfo('B.AS.AG18XF1.SD3.40SCUSP.X.US')?.ssu).toBe('40SCUSP');
+    expect(parsePackInfo('LABLE CORN SP50 PLACARD DK/AS LOGO US')?.ssu).toBe('SP50');
   });
 
   it('is null when no tote token is present', () => {
     expect(parsePackInfo('C.CL.195-85DGVT2PRIB.SC8.80M.G7.US')).toBeNull();
     expect(parsePackInfo(null)).toBeNull();
+  });
+});
+
+describe('expectedBags', () => {
+  it('converts a pallet line to 60 bags', () => {
+    expect(expectedBags('PL', 1, null)).toBe(60);
+    expect(expectedBags('PL', 2, null)).toBe(120);
+  });
+
+  it('converts a tote line to its bag size (one exploded 40USP SeedPak → 40)', () => {
+    expect(expectedBags('SP', 1, 'x.40USP.y')).toBe(40);
+    expect(expectedBags('MB', 3, 'x.45SCUMB.y')).toBe(135);
+  });
+
+  it('leaves bag lines unchanged', () => {
+    expect(expectedBags('BG', 18, null)).toBe(18);
+    expect(expectedBags('BAG', 5, null)).toBe(5);
+  });
+
+  it('passes the raw quantity through when no per-unit count is derivable', () => {
+    expect(expectedBags('C62', 3, 'anything')).toBe(3);
+    expect(expectedBags('SP', 2, 'no-size-here')).toBe(2); // undecipherable tote
+    expect(expectedBags('PL', null, null)).toBe(0);
   });
 });
 

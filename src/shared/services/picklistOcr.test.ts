@@ -8,7 +8,18 @@
 // being filled with the material DESCRIPTION and the batch code was dropped.
 
 import { describe, expect, it } from 'vitest';
-import { extractLineItemsFromTables } from '../../../api/src/index';
+import {
+  DATE_VALUE,
+  LOAD_LABEL,
+  LOAD_VALUE,
+  SHIP_DATE_LABEL,
+  deliveryForPosition,
+  docLines,
+  extractLineItemsFromTables,
+  findDeliveryAnchors,
+  findLabeledValue,
+  parseDateToIso,
+} from '../../../api/src/index';
 
 /** Builds a prebuilt-layout style table from a header row + data rows. */
 function table(header: string[], rows: string[][]) {
@@ -103,5 +114,124 @@ describe('picklist OCR extraction', () => {
     ]);
 
     expect(items).toHaveLength(1);
+  });
+
+  it('reads a delivery column when the picklist has one', () => {
+    const items = extractLineItemsFromTables([
+      table(
+        ['Delivery', 'Batch', 'Material', 'Qty'],
+        [
+          ['8012345', 'H18MYD9JX', '91007244', '18'],
+          ['8012346', 'J20QRT4LM', '91007301', '4'],
+        ]
+      ),
+    ]);
+
+    expect(items.map((i) => i.deliveryNumber)).toEqual(['8012345', '8012346']);
+  });
+});
+
+// The load header and the delivery headings are not part of the trained model —
+// they're read off the OCR'd text layer. These are the shapes real Albert Lea
+// picklists print them in.
+
+/** Builds an analyze result from lines laid out top-to-bottom on one page. */
+function page(texts: string[], pageNumber = 1) {
+  return {
+    pageNumber,
+    height: 100,
+    lines: texts.map((content, i) => ({
+      content,
+      // 10 units apart down a 100-unit page → normalized y of 0.1, 0.2, …
+      polygon: [
+        { x: 0, y: (i + 1) * 10 },
+        { x: 10, y: (i + 1) * 10 },
+      ],
+    })),
+  };
+}
+
+describe('picklist header extraction', () => {
+  it('reads a load number printed beside its label', () => {
+    const lines = docLines({ pages: [page(['Warehouse: Albert Lea', 'Load #: 835'])] });
+    expect(findLabeledValue(lines, LOAD_LABEL, LOAD_VALUE)).toBe('835');
+  });
+
+  it('reads a load number stacked under its label', () => {
+    const lines = docLines({ pages: [page(['Load', '835', 'Carrier', 'ACME'])] });
+    expect(findLabeledValue(lines, LOAD_LABEL, LOAD_VALUE)).toBe('835');
+  });
+
+  it('does not mistake "Loading Point" for the load number', () => {
+    const lines = docLines({ pages: [page(['Loading Point', 'AL01', 'Load 835'])] });
+    expect(findLabeledValue(lines, LOAD_LABEL, LOAD_VALUE)).toBe('835');
+  });
+
+  it('reads the ship date', () => {
+    const lines = docLines({ pages: [page(['Ship Date', '07/26/2026'])] });
+    expect(findLabeledValue(lines, SHIP_DATE_LABEL, DATE_VALUE)).toBe('07/26/2026');
+  });
+
+  it('normalizes every printed date form to YYYY-MM-DD', () => {
+    // The verify screen uses <input type="date">, which shows nothing at all
+    // unless the value is ISO — an un-normalized date reads as "OCR failed".
+    expect(parseDateToIso('07/26/2026')).toBe('2026-07-26');
+    expect(parseDateToIso('26.07.2026')).toBe('2026-07-26'); // SAP's dotted form
+    expect(parseDateToIso('7/26/26')).toBe('2026-07-26');
+    expect(parseDateToIso('26-JUL-2026')).toBe('2026-07-26');
+    expect(parseDateToIso('July 26, 2026')).toBe('2026-07-26');
+    expect(parseDateToIso('2026-07-26')).toBe('2026-07-26');
+    // A typed model field stringifies to this before it reaches us.
+    expect(parseDateToIso('Sun Jul 26 2026 00:00:00 GMT+0000')).toBe('2026-07-26');
+    expect(parseDateToIso('not a date')).toBeNull();
+    expect(parseDateToIso(null)).toBeNull();
+  });
+});
+
+describe('delivery grouping', () => {
+  const result = {
+    pages: [
+      page([
+        'Delivery 8012345',
+        'H18MYD9JX 91007244 18 BAG',
+        'K44ZZP1QW 91007288 6 BAG',
+        'Delivery 8012346',
+        'J20QRT4LM 91007301 4 SP',
+      ]),
+    ],
+  };
+
+  it('finds each delivery heading in order', () => {
+    expect(findDeliveryAnchors(docLines(result)).map((a) => a.deliveryNumber)).toEqual([
+      '8012345',
+      '8012346',
+    ]);
+  });
+
+  it('assigns a row to the heading printed above it', () => {
+    const anchors = findDeliveryAnchors(docLines(result));
+    // y values match the page() layout: heading 1 at .1, its rows at .2/.3,
+    // heading 2 at .4, its row at .5.
+    expect(deliveryForPosition(anchors, { page: 1, y: 0.2 })).toBe('8012345');
+    expect(deliveryForPosition(anchors, { page: 1, y: 0.3 })).toBe('8012345');
+    expect(deliveryForPosition(anchors, { page: 1, y: 0.5 })).toBe('8012346');
+  });
+
+  it('ignores "Delivery Date" — that is not a delivery number', () => {
+    const lines = docLines({ pages: [page(['Delivery Date', '07/26/2026'])] });
+    expect(findDeliveryAnchors(lines)).toEqual([]);
+  });
+
+  it('treats a repeated heading as the same section, not a new one', () => {
+    // Page 2 of a delivery reprints its heading as a continuation banner.
+    const lines = docLines({
+      pages: [page(['Delivery 8012345', 'row a']), page(['Delivery 8012345', 'row b'], 2)],
+    });
+    expect(findDeliveryAnchors(lines)).toHaveLength(1);
+  });
+
+  it('leaves a row unassigned when nothing is above it', () => {
+    expect(deliveryForPosition([], { page: 1, y: 0.5 })).toBeNull();
+    expect(deliveryForPosition(findDeliveryAnchors(docLines(result)), null)).toBeNull();
   });
 });

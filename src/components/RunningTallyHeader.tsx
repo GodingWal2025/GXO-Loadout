@@ -1,4 +1,5 @@
 import type { Picklist } from '../shared';
+import { expectedBags } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
@@ -10,10 +11,12 @@ export function RunningTallyHeader({ picklist }: Props) {
 
   if (!picklist.lineItems || picklist.lineItems.length === 0) return null;
 
-  const totalExpected = picklist.lineItems.reduce(
-    (sum, li) => sum + (li.expectedQuantity.value || 0),
-    0
-  );
+  // The header counts bags, so each line's quantity is converted from its UOM
+  // (1 PL → 60 bags, one 40USP SeedPak → 40) to match the scanned bag tally.
+  const bagsExpected = (li: Picklist['lineItems'][number]) =>
+    expectedBags(li.uom, li.expectedQuantity.value, li.description.value);
+
+  const totalExpected = picklist.lineItems.reduce((sum, li) => sum + bagsExpected(li), 0);
   const totalActual = picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
   const allFulfilled =
     picklist.lineItems.length > 0 && picklist.lineItems.every((li) => li.fulfilled);
@@ -33,7 +36,7 @@ export function RunningTallyHeader({ picklist }: Props) {
 
         <div className="tally__bars">
           {picklist.lineItems.map((li) => {
-            const expected = li.expectedQuantity.value || 0;
+            const expected = bagsExpected(li);
             const actual = li.actualQuantity;
             const pct = expected ? Math.min(100, (actual / expected) * 100) : 0;
             const status =

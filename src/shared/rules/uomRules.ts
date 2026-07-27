@@ -24,6 +24,12 @@ export type PackKind = 'SP' | 'MB';
 export interface PackInfo {
   size: SpSize;
   kind: PackKind;
+  /**
+   * The pack designation exactly as it appears in the description — the "SSU
+   * type" the floor reads off the material ("40USP", "40SCUSP", "45SCUMB").
+   * This is what the picklist shows for a tote, not the derived bag count.
+   */
+  ssu: string;
 }
 
 /**
@@ -36,9 +42,9 @@ export function parsePackInfo(description: string | null | undefined): PackInfo 
   if (!description) return null;
   const d = description.toUpperCase();
   let m = d.match(/(40|45|50)(?:SC)?USP/) || d.match(/SP\s*(40|45|50)\b/);
-  if (m) return { size: Number(m[1]) as SpSize, kind: 'SP' };
+  if (m) return { size: Number(m[1]) as SpSize, kind: 'SP', ssu: m[0].replace(/\s+/g, '') };
   m = d.match(/(40|45|50)(?:SC)?UMB/) || d.match(/MB\s*(40|45|50)\b/);
-  if (m) return { size: Number(m[1]) as SpSize, kind: 'MB' };
+  if (m) return { size: Number(m[1]) as SpSize, kind: 'MB', ssu: m[0].replace(/\s+/g, '') };
   return null;
 }
 
@@ -70,6 +76,22 @@ export function bagsPerUnit(uom: string, description: string | null | undefined)
     default:
       return null;
   }
+}
+
+/**
+ * The picklist quantity expressed in BAGS, which is the unit the floor actually
+ * counts. A line's `expectedQuantity` is in its own UOM (pallets, SeedPaks…),
+ * but scanning tallies loose bags — so reconciliation has to compare like for
+ * like: a "1 PL" line expects 60 bags, a single 40USP SeedPak expects 40.
+ *
+ * When the per-unit bag count can't be derived (C62 / PCE, or a tote whose size
+ * the description doesn't spell out) the quantity passes through unconverted —
+ * better to reconcile against the raw count than to zero the line out.
+ */
+export function expectedBags(uom: string, quantity: number | null | undefined, description: string | null | undefined): number {
+  const qty = quantity || 0;
+  const per = bagsPerUnit(uom, description);
+  return per == null ? qty : qty * per;
 }
 
 /** True when a picklist line should be split into one line per unit: SP or MB. */

@@ -60,6 +60,7 @@ export {
   parseSpSize,
   parsePackInfo,
   bagsPerUnit,
+  expectedBags,
   shouldExplode,
   explodePicklistLine,
   explodePicklistLines,

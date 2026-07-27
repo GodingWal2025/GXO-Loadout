@@ -17,6 +17,7 @@ import type {
   ReturnsBOLData,
 } from '../types/inspection';
 import { emptySuggestable } from '../types/inspection';
+import { expectedBags } from '../rules/uomRules';
 import { dbSaveInspection } from '../services/db';
 
 export function emptyInspection(siteId: string, type: InspectionType = 'outbound'): Inspection {
@@ -138,7 +139,9 @@ function recomputeTallies(state: Inspection): Inspection {
   const lineItems = state.picklist.lineItems.map((li) => {
     const batch = li.batchCode.value;
     const actual = batch ? tally[batch] || 0 : 0;
-    const expected = li.expectedQuantity.value || 0;
+    // Scanning tallies loose bags, so the picklist quantity is converted to its
+    // bag-equivalent before comparing (1 PL → 60 bags, one 40USP SeedPak → 40).
+    const expected = expectedBags(li.uom, li.expectedQuantity.value, li.description.value);
     return {
       ...li,
       actualQuantity: actual,
@@ -152,7 +155,12 @@ function recomputeTallies(state: Inspection): Inspection {
       const code = bs.batchCode.value;
       if (!code) return bs;
       const lineItem = lineItems.find((li) => li.batchCode.value === code);
-      return { ...bs, expectedBagCount: lineItem?.expectedQuantity.value || 0 };
+      return {
+        ...bs,
+        expectedBagCount: lineItem
+          ? expectedBags(lineItem.uom, lineItem.expectedQuantity.value, lineItem.description.value)
+          : 0,
+      };
     }),
   }));
 
@@ -240,17 +248,29 @@ function reducer(state: Inspection, action: Action): Inspection {
       };
       break;
 
-    case 'UPDATE_PICKLIST_LINE':
+    case 'UPDATE_PICKLIST_LINE': {
+      const lineItems = state.picklist.lineItems.map((li, i) =>
+        i === action.index ? { ...li, ...action.patch } : li
+      );
       next = {
         ...state,
-        picklist: {
-          ...state.picklist,
-          lineItems: state.picklist.lineItems.map((li, i) =>
-            i === action.index ? { ...li, ...action.patch } : li
-          ),
-        },
+        picklist: { ...state.picklist, lineItems },
+        // `deliveryId` on the line is the source of truth for which delivery a
+        // product belongs to; the delivery's own list is rebuilt from it so
+        // reassigning a line can't leave the two disagreeing.
+        bol:
+          action.patch.deliveryId === undefined
+            ? state.bol
+            : {
+                ...state.bol,
+                deliveries: state.bol.deliveries.map((d) => ({
+                  ...d,
+                  lineItemIds: lineItems.filter((li) => li.deliveryId === d.id).map((li) => li.id),
+                })),
+              },
       };
       break;
+    }
 
     case 'ADD_PICKLIST_LINE':
       next = {

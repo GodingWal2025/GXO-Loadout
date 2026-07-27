@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection } from '../shared';
 import { useInspection } from '../shared';
-import type { Inspection, Suggestable, PicklistLineItemEntry } from '../shared';
+import type { Inspection, Suggestable, PicklistLineItemEntry, Delivery } from '../shared';
 import { SuggestableField } from '../shared';
 import { StepBackLink } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
@@ -147,6 +147,7 @@ function VerifyInner({
       {/* ===== Picklist line items ===== */}
       <PicklistLineItems
         lineItems={inspection.picklist.lineItems}
+        deliveries={inspection.bol.deliveries}
         onAdd={() =>
           dispatch({
             type: 'ADD_PICKLIST_LINE',
@@ -321,11 +322,13 @@ function VerifyInner({
 
 function PicklistLineItems({
   lineItems,
+  deliveries,
   onAdd,
   onUpdate,
   onRemove,
 }: {
   lineItems: PicklistLineItemEntry[];
+  deliveries: Delivery[];
   onAdd: () => void;
   onUpdate: (index: number, patch: Partial<PicklistLineItemEntry>) => void;
   onRemove: (index: number) => void;
@@ -433,12 +436,34 @@ function PicklistLineItems({
                     return (
                       <div className="small soft" style={{ marginTop: 4 }}>
                         {pack.kind === 'MB'
-                          ? t('verify.mbSize', 'Minibulk · {n} bags', { n: pack.size })
-                          : t('verify.spSize', 'SeedPak · {n} bags', { n: pack.size })}
+                          ? t('verify.mbSize', 'Minibulk · {ssu}', { ssu: pack.ssu })
+                          : t('verify.spSize', 'SeedPak · {ssu}', { ssu: pack.ssu })}
                       </div>
                     );
                   })()}
                 </div>
+                {/* Which delivery this product is picked for. Read off the
+                    picklist's delivery heading — shown here so the inspector
+                    confirms (or corrects) the placement before scanning. */}
+                {deliveries.length > 1 && (
+                  <div className="field">
+                    <div className="field__label">{t('verify.lineDelivery', 'Delivery')}</div>
+                    <select
+                      value={li.deliveryId ?? ''}
+                      onChange={(e) =>
+                        onUpdate(index, { deliveryId: e.target.value || undefined })
+                      }
+                    >
+                      <option value="">{t('verify.lineDeliveryNone', 'Unassigned')}</option>
+                      {deliveries.map((d, i) => (
+                        <option key={d.id} value={d.id}>
+                          {d.deliveryNumber ||
+                            t('verify.lineDeliveryFallback', 'Delivery {n}', { n: i + 1 })}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div className="field" style={{ alignSelf: 'flex-end' }}>
                   <button
                     className="btn btn--sm btn--ghost"

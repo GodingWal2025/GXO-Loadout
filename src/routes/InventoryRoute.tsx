@@ -176,7 +176,7 @@ export function InventoryRoute() {
                         if (!pack) return <span style={{ color: '#bbb' }}>—</span>;
                         return (
                           <span
-                            title={`${pack.kind === 'MB' ? 'Minibulk' : 'SeedPak'} bag count, read from the material description`}
+                            title={`${pack.kind === 'MB' ? 'Minibulk' : 'SeedPak'} pack type (${pack.size} bags), read from the material description`}
                             style={{
                               display: 'inline-block',
                               padding: '0.125rem 0.5rem',
@@ -187,7 +187,7 @@ export function InventoryRoute() {
                               fontSize: '0.85rem',
                             }}
                           >
-                            {pack.size} bags/{pack.kind}
+                            {pack.ssu}
                           </span>
                         );
                       })()}

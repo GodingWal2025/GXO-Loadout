@@ -15,11 +15,18 @@ export interface OcrLineItem {
   description: string | null;
   expectedQuantity: number | null;
   uom: Uom;
+  /**
+   * Delivery this line is picked for — from a delivery column, or from the
+   * delivery heading the line is printed under. Null when the sheet never
+   * names one, in which case the caller falls back to the header's delivery.
+   */
+  deliveryNumber: string | null;
 }
 
 /** Document-level fields read off the picklist (for delivery auto-fill). */
 export interface PicklistOcrHeader {
   loadNumber: string | null;
+  /** Normalized to YYYY-MM-DD server-side — the verify screen's date input needs it. */
   shipDate: string | null;
   deliveryNumber: string | null;
 }

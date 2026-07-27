@@ -82,21 +82,6 @@ export function CapturePicklistRoute() {
       // falls through to manual entry — never blocks the capture flow.
       try {
         const { lineItems: ocrItems, header } = await analyzePicklistPhoto(compressed);
-        if (ocrItems.length > 0) {
-          const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
-            id: generateId(),
-            batchCode: mlSuggestable(li.batchCode),
-            sku: mlSuggestable(li.sku),
-            description: mlSuggestable(li.description),
-            expectedQuantity: mlSuggestable(li.expectedQuantity),
-            uom: li.uom,
-            actualQuantity: 0,
-            fulfilled: false,
-          }));
-          // SP lines split into one line per SeedPak (see uomRules).
-          const exploded = explodePicklistLines(mapped);
-          updatedPicklist.lineItems = [...updatedPicklist.lineItems, ...exploded];
-        }
 
         // Auto-fill the load header from the picklist. Load # / ship date are
         // mirrored onto the BOL (they're the same value) unless the inspector
@@ -110,26 +95,77 @@ export function CapturePicklistRoute() {
           updatedBol = { ...updatedBol, shipDate: mlSuggestable(header.shipDate) };
         }
 
-        // Auto-create a delivery so the inspector just confirms it. We know
-        // which products go on this load (the picklist lines), so assign them
-        // all. A delivery already present (e.g. a prior page, or from the BOL)
-        // just absorbs the new line ids instead of spawning a duplicate.
-        const allLineIds = updatedPicklist.lineItems.map((li) => li.id);
-        const deliveries = [...updatedBol.deliveries];
-        if (deliveries.length === 0) {
-          deliveries.push({
+        if (ocrItems.length > 0) {
+          // Each line goes under the delivery it was picked for. Deliveries are
+          // matched by number across pages, so page 2's lines land under the
+          // delivery page 1 already created instead of spawning a duplicate.
+          const deliveries = [...updatedBol.deliveries];
+          const deliveryIdFor = (rawNumber: string | null): string => {
+            const number = (rawNumber ?? header.deliveryNumber ?? '').trim();
+            let index = number
+              ? deliveries.findIndex((d) => d.deliveryNumber.trim() === number)
+              : deliveries.findIndex((d) => !d.deliveryNumber.trim());
+            // A blank delivery (added by hand, or created before any number was
+            // read) adopts the number rather than sitting empty beside it.
+            if (index === -1 && number) {
+              index = deliveries.findIndex((d) => !d.deliveryNumber.trim());
+              if (index !== -1) deliveries[index] = { ...deliveries[index], deliveryNumber: number };
+            }
+            if (index === -1) {
+              deliveries.push({
+                id: generateId(),
+                deliveryNumber: number,
+                stopNumber: deliveries.length + 1,
+                lineItemIds: [],
+              });
+              index = deliveries.length - 1;
+            }
+            return deliveries[index].id;
+          };
+
+          const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
             id: generateId(),
-            deliveryNumber: header.deliveryNumber ?? '',
-            stopNumber: 1,
-            lineItemIds: allLineIds,
-          });
-        } else {
-          deliveries[0] = { ...deliveries[0], lineItemIds: allLineIds };
-          if (header.deliveryNumber && !deliveries[0].deliveryNumber) {
-            deliveries[0].deliveryNumber = header.deliveryNumber;
-          }
+            batchCode: mlSuggestable(li.batchCode),
+            sku: mlSuggestable(li.sku),
+            description: mlSuggestable(li.description),
+            expectedQuantity: mlSuggestable(li.expectedQuantity),
+            uom: li.uom,
+            deliveryId: deliveryIdFor(li.deliveryNumber),
+            actualQuantity: 0,
+            fulfilled: false,
+          }));
+          // SP lines split into one line per SeedPak (see uomRules). Each copy
+          // keeps its parent's deliveryId, so the split stays on one delivery.
+          const exploded = explodePicklistLines(mapped);
+          updatedPicklist.lineItems = [...updatedPicklist.lineItems, ...exploded];
+
+          // Append the new ids to their delivery — existing assignments from an
+          // earlier page stay put.
+          updatedBol = {
+            ...updatedBol,
+            deliveries: deliveries.map((d) => ({
+              ...d,
+              lineItemIds: [
+                ...d.lineItemIds,
+                ...exploded.filter((li) => li.deliveryId === d.id).map((li) => li.id),
+              ],
+            })),
+          };
+        } else if (header.deliveryNumber && updatedBol.deliveries.length === 0) {
+          // Nothing read off this page, but we know the delivery — seed it so
+          // the inspector only has to confirm the number.
+          updatedBol = {
+            ...updatedBol,
+            deliveries: [
+              {
+                id: generateId(),
+                deliveryNumber: header.deliveryNumber,
+                stopNumber: 1,
+                lineItemIds: [],
+              },
+            ],
+          };
         }
-        updatedBol = { ...updatedBol, deliveries };
       } catch (err) {
         console.warn('[picklist-ocr] extraction skipped:', err);
       }
