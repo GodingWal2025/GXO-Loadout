@@ -172,7 +172,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
       <div
         className="modal"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 760, maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
+        style={{ maxWidth: 1100, width: '95vw', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}
       >
         <div className="modal__head">
           <h2 className="modal__title">
