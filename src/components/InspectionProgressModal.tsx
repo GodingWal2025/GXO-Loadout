@@ -44,10 +44,12 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
 
   // Build SKU + material description lookups keyed by batch code. Inventory is
   // the source of truth for descriptions; the picklist fills in any gaps.
+  // Codes are matched case-insensitively (scanned codes are often mixed-case).
   const batchInfoMap = useMemo(() => {
+    const norm = (s: string) => s.trim().toUpperCase();
     const map: Record<string, { sku: string; description: string }> = {};
     for (const li of inspection.picklist?.lineItems ?? []) {
-      const code = li.batchCode.value;
+      const code = norm(li.batchCode.value || '');
       if (!code) continue;
       map[code] = {
         sku: li.sku.value || '',
@@ -57,18 +59,19 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
     // Inventory-derived lookups override/fill missing SKU + description.
     const descBySku: Record<string, string> = {};
     for (const it of inventory) {
-      if (it.sku && it.description) descBySku[it.sku] = it.description;
-      if (!it.batch) continue;
-      const cur = map[it.batch] || { sku: '', description: '' };
-      map[it.batch] = {
+      if (it.sku && it.description) descBySku[norm(it.sku)] = it.description;
+      const batch = norm(it.batch || '');
+      if (!batch) continue;
+      const cur = map[batch] || { sku: '', description: '' };
+      map[batch] = {
         sku: cur.sku || it.sku || '',
         description: cur.description || it.description || '',
       };
     }
     // Last resort: resolve description via the batch's SKU.
     for (const code of Object.keys(map)) {
-      if (!map[code].description && map[code].sku && descBySku[map[code].sku]) {
-        map[code].description = descBySku[map[code].sku];
+      if (!map[code].description && map[code].sku && descBySku[norm(map[code].sku)]) {
+        map[code].description = descBySku[norm(map[code].sku)];
       }
     }
     return map;
@@ -93,7 +96,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
       const delInfo = p.deliveryId ? deliveryMap[p.deliveryId] : undefined;
       for (const bs of p.batchSections) {
         const code = bs.batchCode.value || '';
-        const info = batchInfoMap[code];
+        const info = batchInfoMap[code.trim().toUpperCase()];
         rows.push({
           palletNumber: p.palletNumber,
           palletType: p.palletType,

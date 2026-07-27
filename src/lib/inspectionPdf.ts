@@ -32,12 +32,16 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     deliveryMap[d.id] = { deliveryNumber: d.deliveryNumber, stopNumber: d.stopNumber };
   }
 
+  // Batch codes are matched case-insensitively — scanned/OCR'd codes are often
+  // mixed-case while inventory/picklist store them uppercase.
+  const norm = (s: string) => s.trim().toUpperCase();
+
   // Product name lookup from picklist
   const productByBatch: Record<string, string> = {};
   const descByBatch: Record<string, string> = {};
   const skuByBatch: Record<string, string> = {};
   for (const li of inspection.picklist.lineItems) {
-    const code = li.batchCode.value;
+    const code = norm(li.batchCode.value || '');
     const label = [li.sku.value, li.description.value].filter(Boolean).join(' — ');
     if (code && label) productByBatch[code] = label;
     if (code && li.description.value) descByBatch[code] = li.description.value;
@@ -50,15 +54,16 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
   const inventory = await dbListInventoryItems().catch(() => []);
   const descBySku: Record<string, string> = {};
   for (const it of inventory) {
-    if (it.sku && it.description) descBySku[it.sku] = it.description;
-    if (!it.batch) continue;
-    if (it.sku && !skuByBatch[it.batch]) skuByBatch[it.batch] = it.sku;
-    if (it.description && !descByBatch[it.batch]) descByBatch[it.batch] = it.description;
+    if (it.sku && it.description) descBySku[norm(it.sku)] = it.description;
+    const batch = norm(it.batch || '');
+    if (!batch) continue;
+    if (it.sku && !skuByBatch[batch]) skuByBatch[batch] = it.sku;
+    if (it.description && !descByBatch[batch]) descByBatch[batch] = it.description;
   }
   // Last resort: resolve description via the batch's SKU.
   for (const code of Object.keys(skuByBatch)) {
-    if (!descByBatch[code] && descBySku[skuByBatch[code]]) {
-      descByBatch[code] = descBySku[skuByBatch[code]];
+    if (!descByBatch[code] && descBySku[norm(skuByBatch[code])]) {
+      descByBatch[code] = descBySku[norm(skuByBatch[code])];
     }
   }
 
@@ -147,7 +152,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
       head: [['Batch Code', 'Product', 'Total Bags']],
       body: Array.from(batchTotals.entries()).map(([code, bags]) => [
         code,
-        productByBatch[code] || '—',
+        productByBatch[norm(code)] || '—',
         String(bags),
       ]),
       foot: [['Total', '', String(totalBags)]],
@@ -171,7 +176,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     : [['Pallet', 'Delivery', 'Stop', 'Type', 'Batch Code', 'Bags', 'Scanned By']];
   const body = rows.map((r) =>
     isReturns
-      ? [`#${r.palletNumber}`, r.batchCode ? r.batchCode.toUpperCase() : '—', skuByBatch[r.batchCode] || '—', descByBatch[r.batchCode] || '—', String(r.bagCount)]
+      ? [`#${r.palletNumber}`, r.batchCode ? r.batchCode.toUpperCase() : '—', skuByBatch[norm(r.batchCode)] || '—', descByBatch[norm(r.batchCode)] || '—', String(r.bagCount)]
       : [`#${r.palletNumber}`, r.deliveryNumber, r.stopNumber !== undefined ? String(r.stopNumber) : '—', r.palletType, r.batchCode || '—', String(r.bagCount), r.scannedBy || '—']
   );
 
