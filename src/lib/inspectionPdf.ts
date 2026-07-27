@@ -33,10 +33,12 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
 
   // Product name lookup from picklist
   const productByBatch: Record<string, string> = {};
+  const descByBatch: Record<string, string> = {};
   for (const li of inspection.picklist.lineItems) {
     const code = li.batchCode.value;
     const label = [li.sku.value, li.description.value].filter(Boolean).join(' — ');
     if (code && label) productByBatch[code] = label;
+    if (code && li.description.value) descByBatch[code] = li.description.value;
   }
 
   // Flatten batch rows (same shape as the progress modal)
@@ -72,6 +74,16 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
   }
   const totalBags = rows.reduce((s, r) => s + r.bagCount, 0);
 
+  const isReturns = inspection.type === 'returns';
+
+  // Distinct delivery numbers across all pallets, in first-seen order
+  const deliveryNums: string[] = [];
+  for (const r of rows) {
+    if (r.deliveryNumber && r.deliveryNumber !== '—' && !deliveryNums.includes(r.deliveryNumber)) {
+      deliveryNums.push(r.deliveryNumber);
+    }
+  }
+
   // ---- Header ----
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(18);
@@ -91,45 +103,54 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
 
   doc.setFontSize(10);
   doc.setTextColor(40);
-  doc.text(
-    `${inspection.pallets.length} pallets scanned   ·   ${totalBags} total bags   ·   ${batchTotals.size} unique batches`,
-    margin,
-    86
-  );
+  if (isReturns) {
+    doc.text(
+      `Deliveries: ${deliveryNums.length ? deliveryNums.join(', ') : '—'}`,
+      margin,
+      86
+    );
+  } else {
+    doc.text(
+      `${inspection.pallets.length} pallets scanned   ·   ${totalBags} total bags   ·   ${batchTotals.size} unique batches`,
+      margin,
+      86
+    );
+  }
 
-  // ---- Batch summary table ----
-  autoTable(doc, {
-    startY: 100,
-    margin: { left: margin, right: margin },
-    head: [['Batch Code', 'Product', 'Total Bags']],
-    body: Array.from(batchTotals.entries()).map(([code, bags]) => [
-      code,
-      productByBatch[code] || '—',
-      String(bags),
-    ]),
-    foot: [['Total', '', String(totalBags)]],
-    theme: 'grid',
-    headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 9 },
-    footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: 'bold', fontSize: 9 },
-    styles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: { 2: { halign: 'right' } },
-  });
+  // ---- Batch summary table (non-returns only) ----
+  let afterSummaryY = 110;
+  if (!isReturns) {
+    autoTable(doc, {
+      startY: 100,
+      margin: { left: margin, right: margin },
+      head: [['Batch Code', 'Product', 'Total Bags']],
+      body: Array.from(batchTotals.entries()).map(([code, bags]) => [
+        code,
+        productByBatch[code] || '—',
+        String(bags),
+      ]),
+      foot: [['Total', '', String(totalBags)]],
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 9 },
+      footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: 'bold', fontSize: 9 },
+      styles: { fontSize: 9, cellPadding: 5 },
+      columnStyles: { 2: { halign: 'right' } },
+    });
+    afterSummaryY = (doc as any).lastAutoTable.finalY + 24;
+  }
 
   // ---- Per-pallet detail table ----
-  const isReturns = inspection.type === 'returns';
-  const afterSummaryY = (doc as any).lastAutoTable.finalY + 24;
-
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   doc.setTextColor(20);
   doc.text('Pallet detail', margin, afterSummaryY);
 
   const head = isReturns
-    ? [['Pallet', 'Delivery', 'Type', 'Batch Code', 'Bags', 'Scanned By']]
+    ? [['Pallet', 'Batch', 'Material Description', 'Quantity']]
     : [['Pallet', 'Delivery', 'Stop', 'Type', 'Batch Code', 'Bags', 'Scanned By']];
   const body = rows.map((r) =>
     isReturns
-      ? [`#${r.palletNumber}`, r.deliveryNumber, r.palletType, r.batchCode || '—', String(r.bagCount), r.scannedBy || '—']
+      ? [`#${r.palletNumber}`, r.batchCode || '—', descByBatch[r.batchCode] || '—', String(r.bagCount)]
       : [`#${r.palletNumber}`, r.deliveryNumber, r.stopNumber !== undefined ? String(r.stopNumber) : '—', r.palletType, r.batchCode || '—', String(r.bagCount), r.scannedBy || '—']
   );
 
@@ -141,7 +162,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     theme: 'grid',
     headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: { [isReturns ? 4 : 5]: { halign: 'right' } },
+    columnStyles: { [isReturns ? 3 : 5]: { halign: 'right' } },
   });
 
   // Page footer
