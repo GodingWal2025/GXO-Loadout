@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
-import { PALLET_TYPES } from '../shared';
+import { PALLET_TYPES, expectedBags } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
@@ -109,12 +109,17 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
       : inspection.picklist.lineItems.length === 0 ||
         inspection.picklist.lineItems.every((li) => li.fulfilled);
 
+  // Both sides of this comparison must be in BAGS. actualQuantity is a bag tally,
+  // so the expected side needs the same UOM conversion the header uses — summing
+  // raw expectedQuantity would compare bags against pallets/SeedPaks and report a
+  // total that disagrees with the tally header on the very same screen.
   const totalExpected = inspection.picklist.lineItems.reduce(
-    (sum, li) => sum + (li.expectedQuantity.value || 0),
+    (sum, li) => sum + expectedBags(li.uom, li.expectedQuantity.value, li.description.value),
     0
   );
   const totalActual = inspection.picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
-  const remaining = totalExpected - totalActual;
+  // Floor at zero: an over-scan should never render as "-39 more bags to scan".
+  const remaining = Math.max(0, totalExpected - totalActual);
 
   const loadNum =
     inspection.type === 'returns'

@@ -124,7 +124,8 @@ export type Action =
   | { type: 'SET_PHOTO_CLOUD_URL'; photoId: string; sharePointUrl: string }
   | { type: 'MARK_COMPLETE' };
 
-function recomputeTallies(state: Inspection): Inspection {
+// Exported for tests: the batch-code allocation below is subtle enough to pin down.
+export function recomputeTallies(state: Inspection): Inspection {
   const tally: Record<string, number> = {};
   for (const pallet of state.pallets) {
     for (const section of pallet.batchSections) {
@@ -136,12 +137,37 @@ function recomputeTallies(state: Inspection): Inspection {
     }
   }
 
-  const lineItems = state.picklist.lineItems.map((li) => {
+  // A batch code routinely spans MORE THAN ONE picklist line: the picklist can
+  // split one SKU across order lines, and explodePicklistLines() turns every
+  // SP/MB line into one line per unit, all carrying the same code. Those lines
+  // draw from a SINGLE pool of scanned bags, so the pool is allocated across
+  // them in order. Crediting each line the full pool instead would mark unfilled
+  // lines "Complete" and count the same bags once per line in the header total.
+  const remaining: Record<string, number> = { ...tally };
+
+  // Scanning tallies loose bags, so the picklist quantity is converted to its
+  // bag-equivalent before comparing (1 PL → 60 bags, one 40USP SeedPak → 40).
+  const expectedByLine = state.picklist.lineItems.map((li) =>
+    expectedBags(li.uom, li.expectedQuantity.value, li.description.value)
+  );
+
+  // The last line for a code absorbs whatever the earlier lines didn't take, so
+  // an over-scan still surfaces as "Over by N" rather than silently vanishing.
+  const lastLineForCode: Record<string, number> = {};
+  state.picklist.lineItems.forEach((li, i) => {
+    const code = li.batchCode.value;
+    if (code) lastLineForCode[code] = i;
+  });
+
+  const lineItems = state.picklist.lineItems.map((li, i) => {
     const batch = li.batchCode.value;
-    const actual = batch ? tally[batch] || 0 : 0;
-    // Scanning tallies loose bags, so the picklist quantity is converted to its
-    // bag-equivalent before comparing (1 PL → 60 bags, one 40USP SeedPak → 40).
-    const expected = expectedBags(li.uom, li.expectedQuantity.value, li.description.value);
+    const expected = expectedByLine[i];
+    let actual = 0;
+    if (batch) {
+      const pool = remaining[batch] || 0;
+      actual = lastLineForCode[batch] === i ? pool : Math.min(pool, expected);
+      remaining[batch] = pool - actual;
+    }
     return {
       ...li,
       actualQuantity: actual,
