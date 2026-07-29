@@ -247,9 +247,13 @@ def main() -> None:
             # Through the deployed app: the Function already returns the parsed
             # contract, so there is no chat wrapper to unpack.
             try:
-                parsed = post_bytes(
-                    f"{args.endpoint.rstrip('/')}/api/analyze-pallet-count", jpeg
+                # Accept either a bare host or a full path (so ?debug=1 can be passed).
+                url = (
+                    args.endpoint
+                    if "/api/" in args.endpoint
+                    else f"{args.endpoint.rstrip('/')}/api/analyze-pallet-count"
                 )
+                parsed = post_bytes(url, jpeg)
             except urllib.error.HTTPError as e:
                 detail = e.read().decode(errors="replace")[:400]
                 hint = ""
