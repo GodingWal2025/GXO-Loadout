@@ -229,6 +229,8 @@ export const verify: Record<string, string> = {
   'progress.colStop': 'Parada',
   'progress.colType': 'Tipo',
   'progress.colBatchCode': 'Código de lote',
+  'progress.colSku': 'SKU',
+  'progress.colDescription': 'Descripción del material',
   'progress.colBags': 'Bolsas',
   'progress.colScannedBy': 'Escaneado por',
   'progress.handoffTimeline': 'Historial de relevos',

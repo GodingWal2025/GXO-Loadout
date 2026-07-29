@@ -49,6 +49,17 @@ export const pallet: Record<string, string> = {
   'pallet.layerApplied': '✓ Aplicado',
   'pallet.layerApply': 'Usar como cantidad real',
 
+  // ---- Vision assist (bag-count estimate from the pallet photo) ----
+  'pallet.aiEstimate': '✨ Estimar capas desde la foto',
+  'pallet.aiEstimating': '✨ Estimando…',
+  'pallet.aiLayers': 'La IA vio {n} capas',
+  'pallet.aiUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
+  'pallet.aiUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
+  'pallet.aiAnomaly': 'La IA detectó un posible problema, revise la estiba:',
+  'pallet.aiShortTop': 'la capa superior parece incompleta',
+  'pallet.aiGaps': 'huecos o bolsas faltantes',
+  'pallet.aiDamage': 'posible daño',
+
   // ---- Inspection result ----
   'pallet.damageTitle': 'Daño',
   'pallet.orderVerificationTitle': 'Verificación del pedido',
