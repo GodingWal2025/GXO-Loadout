@@ -9,7 +9,11 @@ import { useCameraCapture } from '../shared';
 import type { Inspection, BatchSection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
-import { analyzePalletCount, type PalletCountResult } from '../shared/services/palletVision';
+import {
+  analyzePalletCount,
+  consensusLayers,
+  type PalletCountResult,
+} from '../shared/services/palletVision';
 import { useT } from '../shared/i18n/LanguageContext';
 
 const FINDINGS_OPTIONS = [
@@ -815,7 +819,23 @@ function LayerCountHelper({
       const r = await analyzePalletCount(blob);
       setAi(r);
       if (r.success && typeof r.layers === 'number' && r.layers > 0) {
-        onUpdate({ layerCount: r.layers });
+        // Accumulate one vote per press so photographing several faces of the
+        // pallet converges: a single face is right ~65% of the time, the
+        // consensus across faces was right on 4 of 5 pallets.
+        const samples = [...(section.aiLayerSamples ?? []), r.layers];
+        const consensus = consensusLayers(samples);
+        onUpdate({
+          layerCount: consensus.value ?? r.layers,
+          aiLayerSamples: samples,
+          // Kept even after a verifier edits layerCount — the (suggested,
+          // confirmed) pair is the only label this workflow produces.
+          aiSuggestedLayers: consensus.value ?? r.layers,
+          aiModelVersion: r.modelVersion,
+          aiSuggestedAt: new Date().toISOString(),
+          aiTopLayerFull: r.topLayerFull,
+          aiGaps: r.gaps,
+          aiDamage: r.damage,
+        });
       } else {
         setAiMsg(t('pallet.aiUnreadable', "Couldn't read the stack — enter layers manually."));
       }
@@ -827,8 +847,8 @@ function LayerCountHelper({
     }
   });
 
-  const confidencePct =
-    ai && typeof ai.confidence === 'number' ? Math.round(ai.confidence * 100) : null;
+  const consensus = consensusLayers(section.aiLayerSamples ?? []);
+
   const aiFlag = ai?.success && (ai.gaps || ai.damage || ai.topLayerFull === false);
 
   return (
@@ -888,15 +908,45 @@ function LayerCountHelper({
         >
           {aiBusy
             ? t('pallet.aiEstimating', '✨ Estimating…')
+            : consensus.total > 0
+            ? t('pallet.aiEstimateAgain', '✨ Estimate another face')
             : t('pallet.aiEstimate', '✨ Estimate layers from photo')}
         </button>
-        {ai?.success && typeof ai.layers === 'number' && (
+        {consensus.total > 0 && consensus.value !== null && (
+          // Deliberately NOT showing the model's confidence: it was measured at
+          // 0.95-1.0 even on wrong answers, so a percentage badge would imply a
+          // precision this does not have. Sample agreement is the honest signal.
           <span className="xs soft">
-            {t('pallet.aiLayers', 'AI saw {n} layers', { n: ai.layers })}
-            {confidencePct !== null ? ` · ${confidencePct}%` : ''}
+            {t('pallet.aiLayers', 'AI saw {n} layers', { n: consensus.value })}
+            {consensus.total > 1
+              ? ` · ${t('pallet.aiAgreement', '{votes} of {total} faces agree', {
+                  votes: consensus.votes,
+                  total: consensus.total,
+                })}`
+              : ''}
           </span>
         )}
       </div>
+
+      {consensus.total === 1 && (
+        <div className="xs soft" style={{ marginTop: 4 }}>
+          {t(
+            'pallet.aiOneFaceHint',
+            'One photo is right about two thirds of the time — shoot another face to confirm.'
+          )}
+        </div>
+      )}
+
+      {consensus.tied && (
+        <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
+          <span className="banner__icon">⚠</span>
+          <div className="banner__body">
+            {t('pallet.aiTied', 'The faces disagree ({samples}) — count the layers yourself.', {
+              samples: (section.aiLayerSamples ?? []).join(', '),
+            })}
+          </div>
+        </div>
+      )}
 
       {ai?.success && ai.rationale && (
         <div className="xs soft" style={{ marginTop: 4 }}>

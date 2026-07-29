@@ -51,8 +51,13 @@ export const pallet: Record<string, string> = {
 
   // ---- Vision assist (bag-count estimate from the pallet photo) ----
   'pallet.aiEstimate': '✨ Estimar capas desde la foto',
+  'pallet.aiEstimateAgain': '✨ Estimar otra cara',
   'pallet.aiEstimating': '✨ Estimando…',
   'pallet.aiLayers': 'La IA vio {n} capas',
+  'pallet.aiAgreement': '{votes} de {total} caras coinciden',
+  'pallet.aiOneFaceHint':
+    'Una sola foto acierta unas dos de cada tres veces: fotografíe otra cara para confirmar.',
+  'pallet.aiTied': 'Las caras no coinciden ({samples}): cuente las capas usted mismo.',
   'pallet.aiUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
   'pallet.aiUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
   'pallet.aiAnomaly': 'La IA detectó un posible problema, revise la estiba:',

@@ -41,6 +41,51 @@ export interface PalletCountResult {
   modelVersion?: string;
 }
 
+export interface LayerConsensus {
+  /** Agreed layer count, or null with no samples. */
+  value: number | null;
+  /** How many samples backed `value`. */
+  votes: number;
+  total: number;
+  /** True when no single value had a clear plurality — the human should decide. */
+  tied: boolean;
+}
+
+/**
+ * Reduce repeated layer estimates to one number.
+ *
+ * Measured on real pallets (cosmos-nim/EVALUATION.md): a single photo is right
+ * about 65% of the time and never off by more than 2, while the consensus across
+ * a pallet's four faces was right on 4 of 5. The model is also not deterministic
+ * even at temperature 0, so re-estimating the same face is informative too.
+ *
+ * Uses the most frequent value rather than the mean or median, so the result is
+ * always a count something actually observed — a median of [8,8,10,10] would be
+ * 9, which no face reported. A tie is reported rather than silently broken,
+ * because that is precisely the case where the estimate should not be trusted.
+ */
+export function consensusLayers(samples: readonly number[]): LayerConsensus {
+  const valid = samples.filter((n) => Number.isInteger(n) && n > 0);
+  if (valid.length === 0) return { value: null, votes: 0, total: 0, tied: false };
+
+  const counts = new Map<number, number>();
+  for (const n of valid) counts.set(n, (counts.get(n) ?? 0) + 1);
+
+  let best = valid[0];
+  let bestCount = 0;
+  for (const [n, c] of counts) {
+    // Prefer the higher count; on equal counts prefer the larger layer value so
+    // the choice is deterministic rather than dependent on Map iteration order.
+    if (c > bestCount || (c === bestCount && n > best)) {
+      best = n;
+      bestCount = c;
+    }
+  }
+
+  const tied = [...counts.values()].filter((c) => c === bestCount).length > 1;
+  return { value: best, votes: bestCount, total: valid.length, tied };
+}
+
 /** Scale a frame to fit inside `maxEdge` on its longest side, preserving aspect. */
 export function fitWithin(
   width: number,
