@@ -1,0 +1,3 @@
+# Production backend: RF-DETR (Apache-2.0). Needs fine-tuned weights to be useful.
+# Install alongside requirements.txt:  pip install -r requirements.txt -r requirements-rfdetr.txt
+rfdetr>=1.1.0

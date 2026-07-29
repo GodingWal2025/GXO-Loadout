@@ -773,7 +773,14 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
 // ---------------------------------------------------------------------------
 const cosmosNimUrl = (process.env.COSMOS_NIM_URL || "").trim().replace(/\/+$/, "");
 const cosmosNimKey = (process.env.COSMOS_NIM_KEY || "").trim();
-const cosmosNimModel = (process.env.COSMOS_NIM_MODEL || "nvidia/cosmos3-reasoner").trim();
+const cosmosNimModel = (process.env.COSMOS_NIM_MODEL || "nvidia/cosmos3-nano-reasoner").trim();
+
+// Reasoning VLMs spend tokens thinking before they answer, and a budget that runs
+// out mid-thought yields no JSON at all — a parse failure that looks like a bad
+// model. 1536 leaves room for a chain of thought plus the object. Lower it for a
+// direct-answering model (512 is plenty) if latency becomes the binding constraint,
+// since Static Web Apps cuts the response off at 45s.
+const cosmosNimMaxTokens = Number(process.env.COSMOS_NIM_MAX_TOKENS) || 1536;
 
 // RF-DETR detection backend (detector-service/). When DETECTOR_SERVICE_URL is set
 // it takes precedence over the Cosmos NIM: the service runs object detection on the
@@ -792,29 +799,54 @@ const PALLET_COUNT_PROMPT = [
     "- estimatedBags: your best whole-number estimate of total bags on this face, or null if unsure.",
     "- confidence: your confidence from 0 to 1.",
     "- rationale: one short sentence explaining what you saw.",
-    "Respond with ONLY a JSON object with exactly these keys and no extra text.",
+    // Cosmos-family reasoners narrate before answering whether or not you ask them
+    // to. Naming the format pins that narration inside a <think> block that the
+    // parser strips, instead of letting it bleed into the reply where its braces
+    // and coordinates would be mistaken for the answer.
+    "Answer using the following format:<think>Your reasoning.</think>",
+    "Immediately after the </think> tag, write ONLY a JSON object with exactly these keys and no extra text.",
 ].join("\n");
 
-// Pull the first balanced {...} object out of a model response and parse it.
-function extractJsonObject(text: string): any | null {
+// Pull the answer object out of a model response.
+//
+// Reasoning VLMs (Cosmos, and anything prompted into <think>...</think>) narrate
+// before answering, and that narration routinely contains braces — JSON sketches,
+// set notation, coordinates. So: drop any think block, then take the LAST balanced
+// top-level object that parses, not the first. For a well-behaved model returning
+// a single object the two are identical, so this costs nothing and stops a
+// chain-of-thought model from being misread as a parse failure.
+export function extractJsonObject(text: string): any | null {
     if (!text) return null;
-    const start = text.indexOf("{");
-    if (start < 0) return null;
+
+    const body = text.replace(/<think>[\s\S]*?<\/think>/gi, " ");
+
+    let last: any = null;
+    let start = -1;
     let depth = 0;
-    for (let i = start; i < text.length; i++) {
-        if (text[i] === "{") depth++;
-        else if (text[i] === "}") {
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (ch === "{") {
+            if (depth === 0) start = i;
+            depth++;
+        } else if (ch === "}" && depth > 0) {
             depth--;
-            if (depth === 0) {
+            if (depth === 0 && start >= 0) {
                 try {
-                    return JSON.parse(text.slice(start, i + 1));
+                    const candidate = JSON.parse(body.slice(start, i + 1));
+                    // Ignore stray objects that aren't the answer shape.
+                    if (candidate && typeof candidate === "object" && "layers" in candidate) {
+                        last = candidate;
+                    } else if (last === null) {
+                        last = candidate;
+                    }
                 } catch {
-                    return null;
+                    // keep scanning — a malformed block shouldn't abort the search
                 }
+                start = -1;
             }
         }
     }
-    return null;
+    return last;
 }
 
 // Forward the raw pallet-face bytes to the RF-DETR detection service, which
@@ -883,7 +915,7 @@ export async function analyzePalletCount(request: HttpRequest, context: Invocati
                     ],
                 },
             ],
-            max_tokens: 512,
+            max_tokens: cosmosNimMaxTokens,
             temperature: 0,
         };
 
@@ -899,7 +931,20 @@ export async function analyzePalletCount(request: HttpRequest, context: Invocati
         if (!resp.ok) {
             const detail = await resp.text().catch(() => "");
             context.log(`NIM error ${resp.status}: ${detail.slice(0, 500)}`);
-            return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status } };
+            // The upstream body is the only thing that distinguishes "model id
+            // doesn't exist" from "URL is missing /v1" — both surface as a bare
+            // 404. Echo it behind ?debug=1 so misconfiguration is diagnosable
+            // without digging through Application Insights.
+            return {
+                status: 502,
+                jsonBody: {
+                    error: "Pallet vision backend error",
+                    status: resp.status,
+                    ...(request.query.get("debug") === "1"
+                        ? { detail: detail.slice(0, 500), endpoint: `${cosmosNimUrl}/chat/completions`, model: cosmosNimModel }
+                        : {}),
+                },
+            };
         }
 
         const completion = await resp.json() as any;

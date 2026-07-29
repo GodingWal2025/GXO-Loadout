@@ -1,0 +1,27 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "COSMOS_DB_CONNECTION_STRING": "",
+    "STORAGE_ACCOUNT_NAME": "",
+    "STORAGE_ACCOUNT_KEY": "",
+
+    "DOC_INTEL_ENDPOINT": "",
+    "DOC_INTEL_KEY": "",
+    "DOC_INTEL_MODEL_ID": "",
+    "DOC_INTEL_BOL_MODEL_ID": "",
+
+    "COSMOS_NIM_URL": "https://integrate.api.nvidia.com/v1",
+    "COSMOS_NIM_KEY": "nvapi-REPLACE_ME",
+    "COSMOS_NIM_MODEL": "nvidia/cosmos3-nano-reasoner",
+    "COSMOS_NIM_MAX_TOKENS": "1536",
+
+    "DETECTOR_SERVICE_URL": "",
+    "DETECTOR_SERVICE_KEY": ""
+  },
+  "Host": {
+    "CORS": "*"
+  }
+}

@@ -5,4 +5,9 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# Azure Functions local config — holds real keys (Cosmos, Document Intelligence,
+# NVIDIA). Note `*.local` above does NOT match this filename.
+local.settings.json
+!local.settings.json.example
 .DS_Store

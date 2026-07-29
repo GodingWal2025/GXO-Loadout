@@ -8,6 +8,13 @@ dataset/train/
 dataset/valid/
 dataset/test/
 
+# Local dev + demo artifacts.
+.venv/
+__pycache__/
+demo-output/
+prod-check.json
+nvidia-results.json
+
 # Keep the placeholders.
 !weights/.gitkeep
 !dataset/.gitkeep
