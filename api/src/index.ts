@@ -979,8 +979,19 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
             return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status, detail: detail.slice(0, 500), endpoint } };
         }
 
-        // The service emits the exact { success, layers, ... } shape the client wants.
-        return { status: 200, jsonBody: await resp.json() };
+        const text = await resp.text();
+        if (text.trim().startsWith("<")) {
+            return {
+                status: 502,
+                jsonBody: {
+                    error: "Detector endpoint returned HTML (Brev login redirect) instead of API JSON",
+                    detail: "The Brev domain requires web login. Change DETECTOR_SERVICE_URL in Azure to direct IP: http://216.81.200.12:19408",
+                    endpoint,
+                },
+            };
+        }
+
+        return { status: 200, jsonBody: JSON.parse(text) };
     } catch (err: any) {
         context.log(`Failed to fetch detector at ${endpoint}:`, err);
         return {
