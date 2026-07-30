@@ -58,6 +58,15 @@ export const pallet: Record<string, string> = {
   'pallet.aiOneFaceHint':
     'Una sola foto acierta unas dos de cada tres veces: fotografíe otra cara para confirmar.',
   'pallet.aiTied': 'Las caras no coinciden ({samples}): cuente las capas usted mismo.',
+  'pallet.facesEstimating': '✨ Leyendo la estiba con las 4 fotos…',
+  'pallet.facesEstimate': '✨ Estimar capas con las 4 fotos',
+  'pallet.facesAgain': '✨ Leer de nuevo',
+  'pallet.facesRead': 'La IA leyó {list} en las 4 fotos',
+  'pallet.facesNoBlobs': 'Las fotos no están disponibles sin conexión: ingrese las capas manualmente.',
+  'pallet.facesUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
+  'pallet.facesUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
+  'pallet.facesMixed':
+    'La IA leyó {n} capas en las 4 fotos: aplíquelo usted mismo al lote correspondiente.',
   'pallet.aiUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
   'pallet.aiUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
   'pallet.aiAnomaly': 'La IA detectó un posible problema, revise la estiba:',

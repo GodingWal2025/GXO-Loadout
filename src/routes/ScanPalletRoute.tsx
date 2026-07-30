@@ -11,9 +11,12 @@ import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import {
   consensusLayers,
+  estimateFromFaces,
   estimatePalletFace,
+  PALLET_FACE_SLOTS,
   type PalletCountResult,
 } from '../shared/services/palletVision';
+import { dbGetPhotoBlob } from '../shared/services/db';
 import { useT } from '../shared/i18n/LanguageContext';
 
 const FINDINGS_OPTIONS = [
@@ -112,6 +115,97 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   }, [pallet?.findings]);
 
   const [validationError, setValidationError] = useState('');
+
+  // --- layer prediction from the four required face photos -------------------
+  // Estimating from all four faces is the strongest measured configuration (6 of
+  // 7 pallets, versus ~55% from any single face), and because these four slots
+  // are whole-pallet views by definition it also closes the one failure mode
+  // voting cannot: a bag-label close-up reads 1-5 layers at high confidence.
+  const [facesBusy, setFacesBusy] = useState(false);
+  const [facesMsg, setFacesMsg] = useState<string | null>(null);
+  const [faceReadings, setFaceReadings] = useState<{ slotKey: string; layers: number | null }[]>([]);
+  // Which set of photos we have already predicted from. Retaking a face changes
+  // its photo id, so the estimate re-runs; nothing else re-triggers it.
+  const [predictedFor, setPredictedFor] = useState<string | null>(null);
+
+  const facePhotos = useMemo(
+    () =>
+      PALLET_FACE_SLOTS.map((slot) => pallet?.photos?.find((p: any) => p.slotKey === slot)).filter(
+        (p): p is NonNullable<typeof p> => Boolean(p?.id)
+      ),
+    [pallet?.photos]
+  );
+  const allFacesCaptured = facePhotos.length === PALLET_FACE_SLOTS.length;
+  const faceSignature = allFacesCaptured ? facePhotos.map((p: any) => p.id).join('|') : null;
+  // Only auto-apply when the pallet has a single batch; on a mixed pallet one
+  // stack height does not map onto several batch sections.
+  const singleBatch = pallet?.batchSections?.length === 1;
+
+  const predictFromFaces = async () => {
+    if (!faceSignature || facesBusy) return;
+    setFacesBusy(true);
+    setFacesMsg(null);
+    setPredictedFor(faceSignature);
+    try {
+      const withBlobs: { slotKey: string; blob: Blob }[] = [];
+      for (const p of facePhotos as any[]) {
+        const blob = await dbGetPhotoBlob(p.id);
+        if (blob) withBlobs.push({ slotKey: p.slotKey, blob });
+      }
+      if (withBlobs.length === 0) {
+        setFacesMsg(t('pallet.facesNoBlobs', 'Photos not available offline — enter layers manually.'));
+        return;
+      }
+
+      const est = await estimateFromFaces(withBlobs);
+      setFaceReadings(est.readings.map((r) => ({ slotKey: r.slotKey, layers: r.layers })));
+
+      if (est.consensus.value === null) {
+        setFacesMsg(t('pallet.facesUnreadable', "Couldn't read the stack — enter layers manually."));
+        return;
+      }
+      if (!singleBatch) {
+        // Surfaced but not applied: the inspector decides which section it fits.
+        setFacesMsg(
+          t('pallet.facesMixed', 'AI read {n} layers from the 4 photos — apply it to the right batch yourself.', {
+            n: est.consensus.value,
+          })
+        );
+        return;
+      }
+
+      const samples = est.readings
+        .map((r) => r.layers)
+        .filter((n): n is number => typeof n === 'number');
+      dispatch({
+        type: 'UPDATE_BATCH_SECTION',
+        palletIndex,
+        sectionId: pallet.batchSections[0].id,
+        patch: {
+          layerCount: est.consensus.value,
+          aiLayerSamples: samples,
+          aiSuggestedLayers: est.consensus.value,
+          aiModelVersion: est.modelVersion,
+          aiSuggestedAt: new Date().toISOString(),
+          aiTopLayerFull: est.topLayerFull,
+          aiGaps: est.gaps,
+          aiDamage: est.damage,
+        },
+      });
+    } catch {
+      setFacesMsg(t('pallet.facesUnavailable', 'AI estimate unavailable — enter layers manually.'));
+    } finally {
+      setFacesBusy(false);
+    }
+  };
+
+  useEffect(() => {
+    // Fires once per distinct set of four photos, and never in read-only view.
+    if (readOnly || !faceSignature || faceSignature === predictedFor) return;
+    void predictFromFaces();
+    // predictFromFaces is recreated each render; faceSignature is the real trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [faceSignature, predictedFor, readOnly]);
 
   const handleAdd = () => {
     if (!pallet.lpnNumber && inspection.type !== 'returns' && pallet.passInspection === 'Fail') {
@@ -366,6 +460,44 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           }
           readOnly={readOnly}
         />
+
+        {/* Layer prediction from the four faces, once they are all captured. */}
+        {!readOnly && allFacesCaptured && (
+          <div className="mt-8" style={{ borderTop: '1px dashed var(--rule-soft)', paddingTop: 8 }}>
+            {facesBusy ? (
+              <div className="xs soft">
+                {t('pallet.facesEstimating', '✨ Reading the stack from all 4 photos…')}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                {faceReadings.length > 0 && (
+                  <span className="xs soft">
+                    {t('pallet.facesRead', 'AI read {list} from the 4 photos', {
+                      list: faceReadings.map((r) => r.layers ?? '—').join(' · '),
+                    })}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className="btn btn--sm btn--ghost"
+                  onClick={() => {
+                    setPredictedFor(null); // allow a re-run on the same photos
+                    void predictFromFaces();
+                  }}
+                >
+                  {faceReadings.length > 0
+                    ? t('pallet.facesAgain', '✨ Read again')
+                    : t('pallet.facesEstimate', '✨ Estimate layers from the 4 photos')}
+                </button>
+              </div>
+            )}
+            {facesMsg && (
+              <div className="xs soft" style={{ marginTop: 4 }}>
+                {facesMsg}
+              </div>
+            )}
+          </div>
+        )}
       </section>
 
       {/* Batch sections - one per batch on this pallet */}

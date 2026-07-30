@@ -219,6 +219,79 @@ export async function estimatePalletFace(blob: Blob): Promise<PalletCountResult>
   return { ...ok[0], layers: layers.value ?? ok[0].layers };
 }
 
+/** The four required pallet-face slots, in capture order. */
+export const PALLET_FACE_SLOTS = ['FRONT_VIEW', 'SIDE_VIEW_1', 'BACK_VIEW', 'SIDE_VIEW_2'] as const;
+
+export interface FaceReading {
+  slotKey: string;
+  layers: number | null;
+  /** Undefined unless that face's request failed. */
+  error?: string;
+}
+
+export interface PalletFacesEstimate {
+  consensus: LayerConsensus;
+  readings: FaceReading[];
+  /** Anomalies seen on ANY face — a torn bag on one side still matters. */
+  topLayerFull: boolean;
+  gaps: boolean;
+  damage: boolean;
+  modelVersion?: string;
+}
+
+/**
+ * Estimate layers from the pallet's four required face photos.
+ *
+ * This is the strongest configuration measured (cosmos-nim/EVALUATION.md): a
+ * single face is right ~55% of the time, but the consensus across four faces was
+ * right on 6 of 7 pallets. It also sidesteps the one failure mode voting cannot
+ * fix — a close-up of a bag label reads 1-5 layers at high confidence, and these
+ * four slots are by definition whole-pallet views, so an off-target photo can no
+ * longer reach the estimator.
+ *
+ * One sample per face, not three: the NIM processes concurrent vision requests
+ * semi-serially (3 concurrent measured at ~12s), so 12 requests would leave an
+ * inspector waiting close to a minute. Four faces is the bigger accuracy lever.
+ * Callers wanting more can run it again — samples accumulate.
+ *
+ * A face whose request fails is reported and skipped rather than failing the whole
+ * estimate; three good faces still vote.
+ */
+export async function estimateFromFaces(
+  faces: readonly { slotKey: string; blob: Blob }[]
+): Promise<PalletFacesEstimate> {
+  const prepared = await Promise.all(
+    faces.map(async (f) => ({ slotKey: f.slotKey, upload: await prepareForVision(f.blob) }))
+  );
+
+  const settled = await Promise.allSettled(prepared.map((p) => postForAnalysis(p.upload)));
+
+  const readings: FaceReading[] = [];
+  const good: PalletCountResult[] = [];
+  settled.forEach((s, i) => {
+    const slotKey = prepared[i].slotKey;
+    if (s.status === 'fulfilled') {
+      readings.push({ slotKey, layers: s.value.layers });
+      good.push(s.value);
+    } else {
+      readings.push({ slotKey, layers: null, error: String(s.reason?.message ?? s.reason) });
+    }
+  });
+
+  return {
+    consensus: consensusLayers(
+      readings.map((r) => r.layers).filter((n): n is number => typeof n === 'number')
+    ),
+    readings,
+    // Default to "fine" only when a face actually said so; an all-failed estimate
+    // must not read as a clean pallet.
+    topLayerFull: good.length > 0 ? good.every((r) => r.topLayerFull !== false) : true,
+    gaps: good.some((r) => r.gaps),
+    damage: good.some((r) => r.damage),
+    modelVersion: good[0]?.modelVersion,
+  };
+}
+
 /**
  * Send a pallet-face photo to the vision endpoint. Throws on network error /
  * non-2xx (including 501 "not configured" when no backend is set) so the caller
