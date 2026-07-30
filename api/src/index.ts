@@ -1121,9 +1121,16 @@ export async function analyzePalletCount(request: HttpRequest, context: Invocati
     if (customDetector) {
         try {
             return await analyzeWithDetector(request, context, customDetector);
-        } catch (error) {
+        } catch (error: any) {
             context.log("Error calling detector service:", error);
-            return { status: 500, jsonBody: { error: "Error analyzing pallet count" } };
+            return {
+                status: 500,
+                jsonBody: {
+                    error: "Error analyzing pallet count",
+                    detail: String(error?.message || error),
+                    targetDetectorUrl: customDetector,
+                },
+            };
         }
     }
 
