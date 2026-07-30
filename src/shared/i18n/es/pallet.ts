@@ -67,6 +67,11 @@ export const pallet: Record<string, string> = {
   'pallet.facesUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
   'pallet.facesMixed':
     'La IA leyó {n} capas en las 4 fotos: aplíquelo usted mismo al lote correspondiente.',
+  'pallet.flapTotal': 'Solapas de bolsas: {perFace} = {total} visibles',
+  'pallet.flapTally': 'contadas por el modelo, no localizadas',
+  'pallet.flapInterior': '+{n} ocultas en el interior → {est} en total',
+  'pallet.flapMismatch': 'su propio conteo no coincide con lo que localizó',
+  'pallet.physicalIssues': 'La IA marcó la carga, revísela: {issues}.',
   'pallet.aiUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
   'pallet.aiUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
   'pallet.aiAnomaly': 'La IA detectó un posible problema, revise la estiba:',

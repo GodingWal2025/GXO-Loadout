@@ -10,10 +10,14 @@ import type { Inspection, BatchSection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import {
+  assessPalletFaces,
+  bestBagTotal,
   consensusLayers,
   estimateFromFaces,
   estimatePalletFace,
   PALLET_FACE_SLOTS,
+  physicalIssues,
+  type PalletAssessment,
   type PalletCountResult,
 } from '../shared/services/palletVision';
 import { dbGetPhotoBlob } from '../shared/services/db';
@@ -124,6 +128,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const [facesBusy, setFacesBusy] = useState(false);
   const [facesMsg, setFacesMsg] = useState<string | null>(null);
   const [faceReadings, setFaceReadings] = useState<{ slotKey: string; layers: number | null }[]>([]);
+  const [assessment, setAssessment] = useState<PalletAssessment | null>(null);
   // Which set of photos we have already predicted from. Retaking a face changes
   // its photo id, so the estimate re-runs; nothing else re-triggers it.
   const [predictedFor, setPredictedFor] = useState<string | null>(null);
@@ -157,7 +162,31 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         return;
       }
 
-      const est = await estimateFromFaces(withBlobs);
+      // Preferred path: one request with every face, so the model reconciles the
+      // views itself and can also report the occluded interior and the physical
+      // condition of the load. Falls back to per-face requests if it fails or the
+      // deployed API predates the endpoint.
+      let est: Awaited<ReturnType<typeof estimateFromFaces>> | null = null;
+      try {
+        const a = await assessPalletFaces(withBlobs);
+        if (a.success) {
+          setAssessment(a);
+          const layerVotes = a.faces
+            .map((f) => f.layers)
+            .filter((n): n is number => typeof n === 'number');
+          est = {
+            consensus: consensusLayers(layerVotes),
+            readings: a.faces.map((f) => ({ slotKey: f.slotKey ?? '', layers: f.layers })),
+            topLayerFull: a.topLayerFull,
+            gaps: a.gaps,
+            damage: a.damage,
+            modelVersion: a.modelVersion,
+          };
+        }
+      } catch {
+        setAssessment(null); // fall through to the per-face path below
+      }
+      if (!est) est = await estimateFromFaces(withBlobs);
       setFaceReadings(est.readings.map((r) => ({ slotKey: r.slotKey, layers: r.layers })));
 
       if (est.consensus.value === null) {
@@ -496,6 +525,58 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                 {facesMsg}
               </div>
             )}
+
+            {/* Bag total from flaps. Every bag's flap faces exactly one side, so the
+                faces sum to the pallet total — no bags-per-layer assumption needed,
+                which makes this directly checkable against the picklist. */}
+            {assessment &&
+              (() => {
+                const { total, source } = bestBagTotal(assessment);
+                if (total === null) return null;
+                const perFace = assessment.faces
+                  .map((f) => f.boxCount ?? f.bagFlaps ?? '—')
+                  .join(' + ');
+                const disagrees = assessment.faces.some((f) => f.countMatchesBoxes === false);
+                return (
+                  <div className="xs soft" style={{ marginTop: 4 }}>
+                    {t('pallet.flapTotal', 'Bag flaps: {perFace} = {total} visible', {
+                      perFace,
+                      total,
+                    })}
+                    {source === 'tally'
+                      ? ` · ${t('pallet.flapTally', 'counted by the model, not located')}`
+                      : ''}
+                    {typeof assessment.interiorBags === 'number' && assessment.interiorBags > 0
+                      ? ` · ${t('pallet.flapInterior', '+{n} hidden inside → {est} total', {
+                          n: assessment.interiorBags,
+                          est: assessment.estimatedPalletTotal ?? total + assessment.interiorBags,
+                        })}`
+                      : ''}
+                    {disagrees
+                      ? ` · ${t('pallet.flapMismatch', "its own tally disagrees with what it located")}`
+                      : ''}
+                  </div>
+                );
+              })()}
+
+            {/* Physical condition — what a world model is actually good at, and it
+                maps onto findings this inspection already records. */}
+            {assessment &&
+              (() => {
+                const issues = physicalIssues(assessment);
+                if (issues.length === 0) return null;
+                return (
+                  <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
+                    <span className="banner__icon">⚠</span>
+                    <div className="banner__body">
+                      {t('pallet.physicalIssues', 'AI flagged the load — check it: {issues}.', {
+                        issues: issues.join(', '),
+                      })}
+                      {assessment.conditionNotes ? ` “${assessment.conditionNotes}”` : ''}
+                    </div>
+                  </div>
+                );
+              })()}
           </div>
         )}
       </section>

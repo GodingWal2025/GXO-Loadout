@@ -292,6 +292,141 @@ export async function estimateFromFaces(
   };
 }
 
+// --- multi-face assessment -------------------------------------------------
+
+export interface AssessedFace {
+  index: number;
+  slotKey: string | null;
+  /** The model's own flap tally for this face. */
+  bagFlaps: number | null;
+  layers: number | null;
+  /** Normalised [x1,y1,x2,y2] boxes, 0-1 of the photo. Present when boxes asked for. */
+  flapBoxes?: number[][];
+  boxCount?: number;
+  /** False when the model's tally disagrees with the boxes it actually located. */
+  countMatchesBoxes?: boolean;
+}
+
+export interface PalletAssessment {
+  success: boolean;
+  faces: AssessedFace[];
+  /** Sum of per-face flap tallies — every bag's flap faces exactly one side. */
+  visibleBagTotal: number | null;
+  /** Same sum computed from located boxes; the more trustworthy of the two. */
+  visibleBagTotalFromBoxes?: number;
+  interiorBags?: number | null;
+  estimatedPalletTotal?: number | null;
+  leaning?: boolean | null;
+  overhang?: boolean | null;
+  wrapIntact?: boolean | null;
+  loadStable?: boolean | null;
+  conditionNotes?: string | null;
+  gaps: boolean;
+  damage: boolean;
+  topLayerFull: boolean;
+  confidence: number | null;
+  rationale: string | null;
+  modelVersion?: string;
+  imageCount?: number;
+  error?: string;
+}
+
+export interface AssessOptions {
+  /** Ask for a box per flap. Costs tokens and latency; the count gets more trustworthy. */
+  wantBoxes?: boolean;
+  /** Ask about bags hidden inside the stack — invisible to any detector. */
+  wantInterior?: boolean;
+  /** Ask about lean, overhang, wrap and stability. */
+  wantCondition?: boolean;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  // Chunked: spreading a ~120KB array into String.fromCharCode at once risks
+  // blowing the argument limit on some mobile browsers.
+  const CHUNK = 0x8000;
+  for (let i = 0; i < buf.length; i += CHUNK) {
+    binary += String.fromCharCode(...buf.subarray(i, i + CHUNK));
+  }
+  return `data:image/jpeg;base64,${btoa(binary)}`;
+}
+
+/**
+ * Assess a whole pallet from several face photos in ONE request.
+ *
+ * Cosmos accepts up to 5 images per call, so the model reconciles the faces
+ * itself — they are views of one rigid object — instead of the client voting over
+ * independent single-photo guesses. That also lets it answer things no single
+ * face supports: the occluded interior count, and whether the load is physically
+ * sound (lean, overhang, wrap, stability), which is what a physical-AI model is
+ * actually built for.
+ *
+ * Kept separate from analyzePalletCount on purpose: adding one field to that
+ * prompt measurably degraded layer counting, so the proven path stays untouched
+ * and each capability here can be switched off to isolate its effect.
+ */
+export async function assessPalletFaces(
+  faces: readonly { slotKey: string; blob: Blob }[],
+  opts: AssessOptions = {}
+): Promise<PalletAssessment> {
+  const images = await Promise.all(
+    faces.map(async (f) => ({
+      slotKey: f.slotKey,
+      dataUrl: await blobToDataUrl(await prepareForVision(f.blob)),
+    }))
+  );
+
+  const res = await fetch(`${apiBase}/api/analyze-pallet-faces`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      images,
+      wantBoxes: opts.wantBoxes !== false,
+      wantInterior: opts.wantInterior !== false,
+      wantCondition: opts.wantCondition !== false,
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`analyze-pallet-faces failed: ${res.status}`);
+  }
+  return (await res.json()) as PalletAssessment;
+}
+
+/**
+ * Best available bag total from an assessment, preferring counted boxes over the
+ * model's own tally.
+ *
+ * Enumerating many small repeated objects is where these models are weakest, so a
+ * self-reported number is the least reliable figure available; a count of boxes it
+ * actually located is better, and auditable. Returns which source was used so the
+ * UI can be honest about it.
+ */
+export function bestBagTotal(
+  a: PalletAssessment
+): { total: number | null; source: 'boxes' | 'tally' | 'none' } {
+  if (typeof a.visibleBagTotalFromBoxes === 'number' && a.visibleBagTotalFromBoxes > 0) {
+    return { total: a.visibleBagTotalFromBoxes, source: 'boxes' };
+  }
+  if (typeof a.visibleBagTotal === 'number' && a.visibleBagTotal > 0) {
+    return { total: a.visibleBagTotal, source: 'tally' };
+  }
+  return { total: null, source: 'none' };
+}
+
+/** Physical problems worth surfacing, as short labels. Empty when the load looks sound. */
+export function physicalIssues(a: PalletAssessment): string[] {
+  const out: string[] = [];
+  if (a.leaning === true) out.push('leaning');
+  if (a.overhang === true) out.push('overhanging the pallet');
+  if (a.wrapIntact === false) out.push('wrap damaged');
+  if (a.loadStable === false) out.push('load may shift');
+  if (a.damage) out.push('bag damage');
+  if (a.gaps) out.push('gaps/missing bags');
+  if (a.topLayerFull === false) out.push('top course short');
+  return out;
+}
+
 /**
  * Send a pallet-face photo to the vision endpoint. Throws on network error /
  * non-2xx (including 501 "not configured" when no backend is set) so the caller

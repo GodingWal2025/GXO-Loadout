@@ -41,6 +41,10 @@ PROMPT = "\n".join([
     # Keep this list in sync with PALLET_COUNT_PROMPT in api/src/index.ts. An
     # isPalletFace gate was tried and removed — see the note there.
     "- layers: how many horizontal layers (courses) are stacked, as an integer.",
+    # Flaps are the primary count: every bag's flap faces exactly one side, so the
+    # four faces sum to the pallet total. Unlike layers this needs no bags-per-layer
+    # assumption, which makes it directly checkable against the picklist.
+    "- bagFlaps: how many individual bag ends (flaps) are visible on this face? A flap is the folded, sewn end of one bag, usually carrying a small printed batch label. Count each visible flap once. Do NOT count the long printed bag faces, and do not count flaps on other pallets. Integer, or null if you cannot tell.",
     "- topLayerFull: is the top layer complete, or short/partial? boolean.",
     "- gaps: are there obvious missing bags or holes in the stack? boolean.",
     "- damage: any torn, crushed, or leaking bags visible? boolean.",
@@ -80,6 +84,11 @@ def pallet_of(filename):
     """'Pallet4.2.jpg' -> '4';  'Pallet4-60.jpg' -> '4'."""
     m = re.match(r"[Pp]allet\s*(\d+)", os.path.splitext(filename)[0])
     return m.group(1) if m else os.path.splitext(filename)[0]
+
+
+def is_closeup(filename):
+    """'-NN' marks the dedicated bag-flap close-up slot, not one of the four faces."""
+    return bool(re.search(r"-\d+$", os.path.splitext(filename)[0]))
 
 
 def bags_of(filename):
@@ -140,6 +149,13 @@ def main():
             expected[pallet_of(n)] = round(b / args.bags_per_layer)
 
     per_pallet = defaultdict(list)
+    per_pallet_flaps = defaultdict(list)
+    # Bag total per pallet straight off the SKU label, for scoring flap sums.
+    expected_bags = {}
+    for n in names:
+        b = bags_of(n)
+        if b:
+            expected_bags[pallet_of(n)] = b
     rows, latencies = [], []
 
     print(f"model={args.model} base={args.base} samples={args.samples}\n")
@@ -151,7 +167,7 @@ def main():
         with open(path, "rb") as fh:
             jpeg = fh.read()
 
-        votes, secs, face_flags = [], [], []
+        votes, secs, face_flags, flap_votes = [], [], [], []
         err = ""
         for _ in range(args.samples):
             try:
@@ -171,6 +187,8 @@ def main():
                 face_flags.append(parsed["isPalletFace"])
             if parsed and isinstance(parsed.get("layers"), int):
                 votes.append(parsed["layers"])
+            if parsed and isinstance(parsed.get("bagFlaps"), int):
+                flap_votes.append(parsed["bagFlaps"])
 
         # Majority verdict on "is this even a pallet face". False means the count
         # should be thrown away rather than voted on.
@@ -199,8 +217,14 @@ def main():
         else:
             mark = "  ok" if layers == exp else f"  MISS by {layers - exp:+d}"
         print(f"{n:<20}{layers:>7}{exp if exp else '-':>5}{statistics.mean(secs):>7.1f}{mark}{spread}")
+        flaps = int(statistics.median(flap_votes)) if flap_votes else None
+        # Only the four FACE photos contribute to the sum. A '-NN' file is the
+        # dedicated bag-flap close-up slot; counting it would double-count bags
+        # already counted on whichever face they belong to.
+        if flaps is not None and is_face is not False and not is_closeup(n):
+            per_pallet_flaps[pid].append(flaps)
         rows.append({"file": n, "pallet": pid, "layers": layers, "votes": votes,
-                     "expected": exp, "isPalletFace": is_face})
+                     "expected": exp, "isPalletFace": is_face, "bagFlaps": flaps})
 
     # --- summary -----------------------------------------------------------
     # Gate check. In this dataset a '-NN' suffix marks a deliberate close-up of a
@@ -255,6 +279,29 @@ def main():
         print(f"  pallet {pid:<3} faces={vals} -> {vote}  expected={exp if exp else '-'}  {note}")
     if pallet_scored:
         print(f"  pallets correct: {pallet_hits}/{pallet_scored}")
+
+    # Flaps are scored differently from layers: every bag's flap faces exactly one
+    # side, so the four faces should SUM to the pallet total. No bags-per-layer
+    # assumption, so this is checkable straight against the SKU label.
+    if per_pallet_flaps:
+        print("\n--- bag flaps, summed across faces ---")
+        hits = scored_n = 0
+        for pid in sorted(per_pallet_flaps):
+            vals = per_pallet_flaps[pid]
+            total = sum(vals)
+            exp = expected_bags.get(pid)
+            note = ""
+            if exp:
+                scored_n += 1
+                err_pct = 100 * (total - exp) / exp
+                if total == exp:
+                    hits += 1
+                    note = "ok"
+                else:
+                    note = f"{total - exp:+d} ({err_pct:+.0f}%)"
+            print(f"  pallet {pid:<3} faces={vals} sum={total:<4} expected={exp if exp else '-':<4} {note}")
+        if scored_n:
+            print(f"  exact pallet totals: {hits}/{scored_n}")
 
     if latencies:
         print(f"\n--- latency ---\n  mean {statistics.mean(latencies):.1f}s  "

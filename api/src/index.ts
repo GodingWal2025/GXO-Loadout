@@ -995,6 +995,264 @@ export async function analyzePalletCount(request: HttpRequest, context: Invocati
     }
 }
 
+// ---------------------------------------------------------------------------
+// Multi-face pallet assessment.
+//
+// A deliberately SEPARATE endpoint from analyze-pallet-count rather than an
+// extension of it. Adding a single field to that prompt once measurably degraded
+// layer counting, so the proven single-image path stays untouched and this richer
+// one can be measured against it and switched off per-capability.
+//
+// Four things this does that the single-image path cannot:
+//  1. Sends every face in ONE request. Cosmos accepts up to 5 images
+//     (limit_mm_per_prompt), so it reconciles four views of one rigid object
+//     itself instead of us voting over four independent guesses in client code.
+//  2. Asks for bag-flap BOUNDING BOXES, not a tally. Enumerating many small
+//     repeated objects is the classic VLM weakness; counting returned boxes moves
+//     the count into code, and the boxes are auditable (draw them and see what it
+//     found) and reusable as pre-labels for training a detector.
+//  3. Asks about the OCCLUDED interior, which a detector fundamentally cannot see
+//     — the reason a visible-face count is not a pallet total.
+//  4. Asks for physical CONDITION (lean, overhang, wrap, stability). This is what
+//     a physical-AI world model is actually built for, and it maps onto findings
+//     the inspection already records. A miscount gets caught at the next scan; a
+//     load that shifts in a trailer does not.
+//
+// Every capability is opt-in per request so each can be evaluated on its own, and
+// so an expensive one can be dropped if it pushes latency toward the 45s Static
+// Web Apps ceiling.
+// ---------------------------------------------------------------------------
+
+// Boxes and per-face reasoning are token-hungry: four faces of roughly a dozen
+// flaps each is several hundred numbers before any chain of thought. Overridable
+// because this is also the knob to turn down first if responses approach 45s.
+const cosmosAssessMaxTokens = Number(process.env.COSMOS_NIM_ASSESS_MAX_TOKENS) || 4096;
+
+const MAX_ASSESS_IMAGES = 5; // Cosmos limit_mm_per_prompt.image
+
+function buildAssessPrompt(opts: { boxes: boolean; interior: boolean; condition: boolean }): string {
+    const lines = [
+        "You are inspecting ONE warehouse pallet stacked with bags of product.",
+        "You are given several photos of the SAME pallet from different sides, labelled in order.",
+        "They show one rigid object, so reason across them together: a bag counted on one side must not be counted again on another.",
+        "",
+        "Report a JSON object with these keys:",
+        "- faces: an array with one entry per photo, in the order given, each { index, bagFlaps, layers }.",
+        "    * bagFlaps: the number of individual bag ENDS (flaps) visible on that side. A flap is the folded, sewn end of one bag, usually carrying a small printed batch label. Do NOT count the long printed bag faces, and ignore other pallets in the background.",
+        "    * layers: how many horizontal courses are stacked, as seen on that side.",
+    ];
+
+    if (opts.boxes) {
+        lines.push(
+            "    * flapBoxes: one box per visible flap, as [x1, y1, x2, y2] NORMALISED to 0-1 of that photo's width and height. Be exhaustive and do not merge adjacent flaps into one box. bagFlaps must equal the number of boxes."
+        );
+    }
+
+    lines.push(
+        "- visibleBagTotal: the sum of bagFlaps across all faces, as an integer.",
+    );
+
+    if (opts.interior) {
+        lines.push(
+            "- interiorBags: bags fully enclosed by the outer ring and therefore not visible on ANY face, as an integer (0 if the stack is only one bag deep).",
+            "- estimatedPalletTotal: visibleBagTotal + interiorBags."
+        );
+    }
+
+    if (opts.condition) {
+        lines.push(
+            "- leaning: is the stack visibly tilted or slumped to one side? boolean.",
+            "- overhang: does any bag or course extend past the edge of the wooden pallet? boolean.",
+            "- wrapIntact: is the stretch wrap fully intact, i.e. NOT torn, cut, or hanging loose? boolean.",
+            "- loadStable: taken as a whole, would this load stay put during normal transit? boolean.",
+            "- conditionNotes: one short sentence on anything physically wrong, or null if nothing is."
+        );
+    }
+
+    lines.push(
+        "- gaps: are there obvious missing bags or holes in the stack? boolean.",
+        "- damage: any torn, crushed, or leaking bags visible? boolean.",
+        "- topLayerFull: is the top course complete rather than short/partial? boolean.",
+        "- confidence: your confidence from 0 to 1.",
+        "- rationale: one short sentence explaining what you saw.",
+        "Answer using the following format:<think>Your reasoning.</think>",
+        "Immediately after the </think> tag, write ONLY the JSON object and no extra text."
+    );
+
+    return lines.join("\n");
+}
+
+export async function analyzePalletFaces(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    if (!cosmosNimUrl) {
+        return {
+            status: 501,
+            jsonBody: {
+                error: "Pallet vision not configured",
+                detail: "Set COSMOS_NIM_URL in the Static Web App environment variables.",
+            },
+        };
+    }
+
+    try {
+        const body = (await request.json().catch(() => null)) as any;
+        const images: any[] = Array.isArray(body?.images) ? body.images : [];
+        if (images.length === 0) {
+            return { status: 400, jsonBody: { error: "Expected { images: [{ slotKey, dataUrl }] }" } };
+        }
+        if (images.length > MAX_ASSESS_IMAGES) {
+            return {
+                status: 400,
+                jsonBody: { error: `At most ${MAX_ASSESS_IMAGES} images per request`, got: images.length },
+            };
+        }
+
+        // Default every capability ON; callers turn one off to isolate its effect
+        // on the others, which is how the earlier prompt regression was caught.
+        const want = {
+            boxes: body?.wantBoxes !== false,
+            interior: body?.wantInterior !== false,
+            condition: body?.wantCondition !== false,
+        };
+
+        const content: any[] = [{ type: "text", text: buildAssessPrompt(want) }];
+        images.forEach((img, i) => {
+            const url = typeof img?.dataUrl === "string" ? img.dataUrl : "";
+            if (!url.startsWith("data:image/")) return;
+            // Label each image so "faces[i]" in the reply maps back to a real slot.
+            content.push({ type: "text", text: `Photo ${i} (${img?.slotKey ?? "unlabelled"}):` });
+            content.push({ type: "image_url", image_url: { url } });
+        });
+        if (content.length === 1) {
+            return { status: 400, jsonBody: { error: "No usable data:image/... URLs supplied" } };
+        }
+
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (cosmosNimKey) headers["Authorization"] = `Bearer ${cosmosNimKey}`;
+
+        const resp = await fetch(`${cosmosNimUrl}/chat/completions`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+                model: cosmosNimModel,
+                messages: [{ role: "user", content }],
+                max_tokens: cosmosAssessMaxTokens,
+                temperature: 0,
+            }),
+        });
+
+        const debug = request.query.get("debug") === "1";
+
+        if (!resp.ok) {
+            const detail = await resp.text().catch(() => "");
+            context.log(`NIM assess error ${resp.status}: ${detail.slice(0, 500)}`);
+            return {
+                status: 502,
+                jsonBody: {
+                    error: "Pallet vision backend error",
+                    status: resp.status,
+                    ...(debug ? { detail: detail.slice(0, 500), model: cosmosNimModel } : {}),
+                },
+            };
+        }
+
+        const completion = (await resp.json()) as any;
+        const raw: string = completion?.choices?.[0]?.message?.content ?? "";
+        const parsed = extractJsonObject(raw);
+        if (!parsed) {
+            return {
+                status: 200,
+                jsonBody: {
+                    success: false,
+                    error: "Could not parse model output",
+                    ...(debug ? { raw } : {}),
+                },
+            };
+        }
+
+        const toNum = (v: any) => {
+            const n = typeof v === "number" ? v : Number(v);
+            return Number.isFinite(n) ? n : null;
+        };
+        const toBool = (v: any) => v === true || v === "true";
+        const toOptBool = (v: any) => (v === true || v === "true" ? true : v === false || v === "false" ? false : null);
+
+        // Normalised [x1,y1,x2,y2] only. A box outside 0-1, inverted, or the wrong
+        // arity is dropped rather than passed on — a bad box would corrupt both the
+        // count and any overlay drawn from it.
+        const cleanBoxes = (v: any): number[][] =>
+            (Array.isArray(v) ? v : [])
+                .map((b: any) => (Array.isArray(b) ? b.map(toNum) : null))
+                .filter(
+                    (b: any): b is number[] =>
+                        Array.isArray(b) &&
+                        b.length === 4 &&
+                        b.every((n: any) => typeof n === "number" && n >= 0 && n <= 1) &&
+                        b[2] > b[0] &&
+                        b[3] > b[1]
+                );
+
+        const faces = (Array.isArray(parsed.faces) ? parsed.faces : []).map((f: any, i: number) => {
+            const boxes = cleanBoxes(f?.flapBoxes);
+            const claimed = toNum(f?.bagFlaps);
+            return {
+                index: toNum(f?.index) ?? i,
+                slotKey: images[toNum(f?.index) ?? i]?.slotKey ?? images[i]?.slotKey ?? null,
+                bagFlaps: claimed,
+                layers: toNum(f?.layers),
+                ...(want.boxes
+                    ? {
+                          flapBoxes: boxes,
+                          // Counting the boxes is the more trustworthy number; keeping both
+                          // exposes when the model's own tally disagrees with what it located.
+                          boxCount: boxes.length,
+                          countMatchesBoxes: claimed !== null && claimed === boxes.length,
+                      }
+                    : {}),
+            };
+        });
+
+        const flapSum = faces.reduce((s: number, f: any) => s + (f.bagFlaps ?? 0), 0);
+        const boxSum = faces.reduce((s: number, f: any) => s + (f.boxCount ?? 0), 0);
+
+        return {
+            status: 200,
+            jsonBody: {
+                success: true,
+                faces,
+                // Recomputed here rather than trusting the model's own arithmetic.
+                visibleBagTotal: flapSum || toNum(parsed.visibleBagTotal),
+                ...(want.boxes ? { visibleBagTotalFromBoxes: boxSum } : {}),
+                ...(want.interior
+                    ? {
+                          interiorBags: toNum(parsed.interiorBags),
+                          estimatedPalletTotal: toNum(parsed.estimatedPalletTotal),
+                      }
+                    : {}),
+                ...(want.condition
+                    ? {
+                          leaning: toOptBool(parsed.leaning),
+                          overhang: toOptBool(parsed.overhang),
+                          wrapIntact: toOptBool(parsed.wrapIntact),
+                          loadStable: toOptBool(parsed.loadStable),
+                          conditionNotes:
+                              typeof parsed.conditionNotes === "string" ? parsed.conditionNotes : null,
+                      }
+                    : {}),
+                gaps: toBool(parsed.gaps),
+                damage: toBool(parsed.damage),
+                topLayerFull: toBool(parsed.topLayerFull),
+                confidence: toNum(parsed.confidence),
+                rationale: typeof parsed.rationale === "string" ? parsed.rationale : null,
+                modelVersion: cosmosNimModel,
+                imageCount: images.length,
+            },
+        };
+    } catch (error) {
+        context.log("Error assessing pallet faces:", error);
+        return { status: 500, jsonBody: { error: "Error assessing pallet faces" } };
+    }
+}
+
 export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Syncing inspection. URL: "${request.url}"`);
     try {
@@ -1304,6 +1562,12 @@ app.http('analyze-pallet-count', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: analyzePalletCount
+});
+
+app.http('analyze-pallet-faces', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: analyzePalletFaces
 });
 
 app.http('sync-site', {
