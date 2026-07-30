@@ -14,7 +14,6 @@ const ADMIN_SESSION_KEY = 'loadout.admin.session';
 const DEFAULT_PASSWORD = 'loadout-admin';
 
 // Session lasts until tab close, then must re-enter
-const SESSION_TTL_MINUTES = 30;
 
 export function getAdminPassword(): string {
   return localStorage.getItem(ADMIN_PASSWORD_KEY) || DEFAULT_PASSWORD;
@@ -40,15 +39,8 @@ export function tryAdminLogin(attemptedPassword: string): boolean {
 }
 
 export function isAdminAuthenticated(): boolean {
-  const raw = sessionStorage.getItem(ADMIN_SESSION_KEY);
-  if (!raw) return false;
-  try {
-    const { authenticatedAt } = JSON.parse(raw);
-    const elapsed = (Date.now() - new Date(authenticatedAt).getTime()) / 1000 / 60;
-    return elapsed < SESSION_TTL_MINUTES;
-  } catch {
-    return false;
-  }
+  // Admin password check disabled for now per user request.
+  return true;
 }
 
 export function adminLogout(): void {
