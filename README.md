@@ -35,8 +35,32 @@ the app degrades cleanly to manual layer entry:
 
 1. `DETECTOR_SERVICE_URL` — the self-hosted detector in [`detector-service/`](detector-service/)
    (RF-DETR; needs fine-tuned weights). See its README.
-2. `COSMOS_NIM_URL` / `COSMOS_NIM_KEY` / `COSMOS_NIM_MODEL` — any
+2. `ANTHROPIC_API_KEY` — **Claude** as the counter (see below). No infrastructure.
+3. `COSMOS_NIM_URL` / `COSMOS_NIM_KEY` / `COSMOS_NIM_MODEL` — any
    **OpenAI-compatible vision endpoint**, self-hosted or hosted.
+
+### Using Claude (no infrastructure)
+
+Set one variable and Claude becomes the counter for both `/api/analyze-pallet-count`
+and `/api/analyze-pallet-faces`, returning the same JSON the client already consumes —
+so nothing on the app side changes (the 3× sampling and four-face voting keep working):
+
+```
+ANTHROPIC_API_KEY   = sk-ant-...
+CLAUDE_VISION_MODEL = claude-opus-5      # optional; or claude-sonnet-5 for cheaper/faster
+CLAUDE_MAX_TOKENS   = 2048               # optional; single-face budget
+```
+
+Two things Claude does that the Cosmos path could not: **structured outputs** make the
+reply guaranteed-valid JSON (no `<think>`-stripping, so parsing is 100%), and it will
+actually **decline an off-target close-up** — so the `isPalletFace` gate that Cosmos
+answered `true` on 0/5 (see [`cosmos-nim/EVALUATION.md`](cosmos-nim/EVALUATION.md)) is
+re-enabled on the multi-face endpoint and drops non-pallet photos from the totals.
+
+Like any generative VLM, Claude is *not* the trained detector — it reasons about the
+visible stack, so `layers × bags-per-layer` and the verifier stay the source of truth.
+**Measure it before trusting it:** `python3 cosmos-nim/eval.py --src <photos> --provider
+anthropic` scores Claude against the same ground truth as the Cosmos numbers.
 
 ### Using an NVIDIA-hosted model (no infrastructure)
 

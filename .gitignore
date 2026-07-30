@@ -11,3 +11,7 @@ dist-ssr
 local.settings.json
 !local.settings.json.example
 .DS_Store
+
+# Python
+__pycache__/
+*.pyc

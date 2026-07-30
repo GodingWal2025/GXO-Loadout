@@ -1,4 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
+import Anthropic from "@anthropic-ai/sdk";
 import { CosmosClient } from "@azure/cosmos";
 import { BlobServiceClient, generateBlobSASQueryParameters, ContainerSASPermissions, StorageSharedKeyCredential } from "@azure/storage-blob";
 import { DocumentAnalysisClient, AzureKeyCredential } from "@azure/ai-form-recognizer";
@@ -788,6 +789,95 @@ const cosmosNimMaxTokens = Number(process.env.COSMOS_NIM_MAX_TOKENS) || 1536;
 const detectorServiceUrl = (process.env.DETECTOR_SERVICE_URL || "").trim().replace(/\/+$/, "");
 const detectorServiceKey = (process.env.DETECTOR_SERVICE_KEY || "").trim();
 
+// Claude (Anthropic) vision backend. Set ANTHROPIC_API_KEY to make Claude the
+// pallet counter; it returns the same JSON contract and takes precedence over the
+// Cosmos NIM (but not the RF-DETR detector service). Precedence across the whole
+// endpoint: detector -> Claude -> Cosmos -> 501.
+//
+// Two reasons Claude is cleaner than the reasoning-VLM path: structured outputs
+// make the reply guaranteed-valid JSON (no <think>-stripping), and it will
+// actually decline an off-target close-up, so the isPalletFace gate that Cosmos
+// answered `true` on 0/5 (see cosmos-nim/EVALUATION.md) becomes usable again on
+// the multi-face endpoint. Like any generative VLM it reasons about the visible
+// stack rather than counting individual bags — the client still multiplies
+// layers by bags-per-layer and the verifier confirms.
+const anthropicApiKey = (process.env.ANTHROPIC_API_KEY || "").trim();
+const claudeVisionModel = (process.env.CLAUDE_VISION_MODEL || "claude-opus-5").trim();
+// Room for adaptive thinking plus the JSON object; a budget that runs out
+// mid-thought yields no object at all. Static Web Apps still cuts off at 45s.
+const claudeMaxTokens = Number(process.env.CLAUDE_MAX_TOKENS) || 2048;
+const claudeAssessMaxTokens = Number(process.env.CLAUDE_ASSESS_MAX_TOKENS) || 4096;
+
+// Constructed only when a key is present, so the module still loads and the other
+// backends keep working with no Anthropic credentials configured.
+const anthropicClient = anthropicApiKey ? new Anthropic({ apiKey: anthropicApiKey }) : null;
+
+// Nullable JSON-schema fragments for structured outputs. Anthropic's structured
+// outputs require every property listed in `required` and `additionalProperties:
+// false`, so "unknown" is expressed as an explicit null rather than an omitted key.
+const nullableInt = { anyOf: [{ type: "integer" }, { type: "null" }] };
+const nullableNum = { anyOf: [{ type: "number" }, { type: "null" }] };
+const nullableStr = { anyOf: [{ type: "string" }, { type: "null" }] };
+
+const CLAUDE_PALLET_SCHEMA = {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+        layers: nullableInt,
+        topLayerFull: { type: "boolean" },
+        gaps: { type: "boolean" },
+        damage: { type: "boolean" },
+        estimatedBags: nullableInt,
+        confidence: nullableNum,
+        rationale: nullableStr,
+    },
+    required: ["layers", "topLayerFull", "gaps", "damage", "estimatedBags", "confidence", "rationale"],
+};
+
+// Same counting guidance as PALLET_COUNT_PROMPT, minus the <think>/JSON-format
+// trailer — structured outputs enforce the shape, so there is no narration to
+// fence off and nothing to strip.
+const CLAUDE_PALLET_PROMPT = [
+    "You are inspecting one face of a warehouse pallet stacked with bags of product.",
+    "Bags sag and occlude each other, so do NOT try to count individual bags.",
+    "Reason about the visible stack and report the layer count and any anomalies:",
+    "- layers: how many horizontal layers (courses) are stacked, as an integer, or null if you genuinely cannot tell.",
+    "- topLayerFull: is the top layer complete, or short/partial?",
+    "- gaps: are there obvious missing bags or holes in the stack?",
+    "- damage: any torn, crushed, or leaking bags visible?",
+    "- estimatedBags: your best whole-number estimate of total bags on this face, or null if unsure.",
+    "- confidence: your confidence from 0 to 1.",
+    "- rationale: one short sentence explaining what you saw.",
+].join("\n");
+
+// Concatenate Claude's text blocks. With structured outputs this is the JSON
+// object; parse it directly and fall back to the balanced-brace scan only if the
+// model somehow wrapped it in prose.
+function claudeText(msg: any): string {
+    return (msg?.content ?? [])
+        .filter((b: any) => b?.type === "text")
+        .map((b: any) => b.text)
+        .join("");
+}
+
+function parseClaudeJson(msg: any): any | null {
+    const text = claudeText(msg);
+    if (!text) return null;
+    try {
+        return JSON.parse(text);
+    } catch {
+        return extractJsonObject(text);
+    }
+}
+
+// A phone photo prepared by prepareForVision is a data:image/jpeg URL; accept png
+// too. Returns the Anthropic image `source`, or null for anything unparseable.
+function dataUrlToClaudeSource(url: string): { type: "base64"; media_type: string; data: string } | null {
+    const m = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(url || "");
+    if (!m) return null;
+    return { type: "base64", media_type: m[1], data: m[2] };
+}
+
 const PALLET_COUNT_PROMPT = [
     "You are inspecting one face of a warehouse pallet stacked with bags of product.",
     "Bags sag and occlude each other, so DO NOT try to count individual bags.",
@@ -883,6 +973,70 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
     return { status: 200, jsonBody: await resp.json() };
 }
 
+// Analyze one pallet-face photo with Claude. Same { success, layers, ... }
+// contract as the Cosmos and detector paths, so the client is unchanged.
+async function analyzeWithClaude(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const buffer = Buffer.from(await request.arrayBuffer());
+    if (!buffer.length) {
+        return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+    }
+    const debug = request.query.get("debug") === "1";
+
+    const msg = (await anthropicClient!.messages.create({
+        model: claudeVisionModel,
+        max_tokens: claudeMaxTokens,
+        // Guaranteed-valid JSON in the exact shape below.
+        output_config: { format: { type: "json_schema", schema: CLAUDE_PALLET_SCHEMA } },
+        messages: [
+            {
+                role: "user",
+                content: [
+                    { type: "text", text: CLAUDE_PALLET_PROMPT },
+                    {
+                        type: "image",
+                        source: { type: "base64", media_type: "image/jpeg", data: buffer.toString("base64") },
+                    },
+                ],
+            },
+        ],
+    } as any)) as any;
+
+    // Safety classifiers can decline a request (HTTP 200, stop_reason "refusal");
+    // surface it as an un-parsed result rather than reading empty content.
+    if (msg?.stop_reason === "refusal") {
+        return { status: 200, jsonBody: { success: false, error: "Claude declined the image" } };
+    }
+
+    const parsed = parseClaudeJson(msg);
+    if (!parsed) {
+        return {
+            status: 200,
+            jsonBody: { success: false, error: "Could not parse Claude output", ...(debug ? { raw: claudeText(msg) } : {}) },
+        };
+    }
+
+    const toBool = (v: any) => v === true || v === "true";
+    const toNum = (v: any) => {
+        const n = typeof v === "number" ? v : Number(v);
+        return Number.isFinite(n) ? n : null;
+    };
+
+    return {
+        status: 200,
+        jsonBody: {
+            success: true,
+            layers: toNum(parsed.layers),
+            topLayerFull: toBool(parsed.topLayerFull),
+            gaps: toBool(parsed.gaps),
+            damage: toBool(parsed.damage),
+            estimatedBags: toNum(parsed.estimatedBags),
+            confidence: toNum(parsed.confidence),
+            rationale: typeof parsed.rationale === "string" ? parsed.rationale : null,
+            modelVersion: claudeVisionModel,
+        },
+    };
+}
+
 export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     if (detectorServiceUrl) {
         try {
@@ -893,12 +1047,21 @@ export async function analyzePalletCount(request: HttpRequest, context: Invocati
         }
     }
 
+    if (anthropicClient) {
+        try {
+            return await analyzeWithClaude(request, context);
+        } catch (error) {
+            context.log("Error calling Claude vision:", error);
+            return { status: 500, jsonBody: { error: "Error analyzing pallet count" } };
+        }
+    }
+
     if (!cosmosNimUrl) {
         return {
             status: 501,
             jsonBody: {
                 error: "Pallet vision not configured",
-                detail: "Set DETECTOR_SERVICE_URL (or COSMOS_NIM_URL) in the Function App settings.",
+                detail: "Set DETECTOR_SERVICE_URL, ANTHROPIC_API_KEY, or COSMOS_NIM_URL in the Function App settings.",
             },
         };
     }
@@ -1030,17 +1193,24 @@ const cosmosAssessMaxTokens = Number(process.env.COSMOS_NIM_ASSESS_MAX_TOKENS) |
 
 const MAX_ASSESS_IMAGES = 5; // Cosmos limit_mm_per_prompt.image
 
-function buildAssessPrompt(opts: { boxes: boolean; interior: boolean; condition: boolean }): string {
+function buildAssessPrompt(opts: { boxes: boolean; interior: boolean; condition: boolean; gate?: boolean }): string {
+    const faceShape = opts.gate ? "{ index, bagFlaps, layers, isPalletFace }" : "{ index, bagFlaps, layers }";
     const lines = [
         "You are inspecting ONE warehouse pallet stacked with bags of product.",
         "You are given several photos of the SAME pallet from different sides, labelled in order.",
         "They show one rigid object, so reason across them together: a bag counted on one side must not be counted again on another.",
         "",
         "Report a JSON object with these keys:",
-        "- faces: an array with one entry per photo, in the order given, each { index, bagFlaps, layers }.",
+        `- faces: an array with one entry per photo, in the order given, each ${faceShape}.`,
         "    * bagFlaps: the number of individual bag ENDS (flaps) visible on that side. A flap is the folded, sewn end of one bag, usually carrying a small printed batch label. Do NOT count the long printed bag faces, and ignore other pallets in the background.",
         "    * layers: how many horizontal courses are stacked, as seen on that side.",
     ];
+
+    if (opts.gate) {
+        lines.push(
+            "    * isPalletFace: true if this photo shows a real pallet stack face; false if it is a close-up of a single label, the floor, a person, or otherwise not a whole pallet face. A face marked false is excluded from the pallet's counts."
+        );
+    }
 
     if (opts.boxes) {
         lines.push(
@@ -1082,13 +1252,145 @@ function buildAssessPrompt(opts: { boxes: boolean; interior: boolean; condition:
     return lines.join("\n");
 }
 
+// Map a parsed multi-face model reply onto the assessment contract. Shared by
+// the Cosmos and Claude paths so both normalise counts identically. `gate` reads
+// a per-face isPalletFace flag (Claude only) and drops any face marked false from
+// the summed totals — the off-target-photo defence that Cosmos could not honour.
+function assessJsonBody(
+    parsed: any,
+    images: any[],
+    want: { boxes: boolean; interior: boolean; condition: boolean },
+    modelVersion: string,
+    gate: boolean
+): any {
+    const toNum = (v: any) => {
+        const n = typeof v === "number" ? v : Number(v);
+        return Number.isFinite(n) ? n : null;
+    };
+    const toBool = (v: any) => v === true || v === "true";
+    const toOptBool = (v: any) => (v === true || v === "true" ? true : v === false || v === "false" ? false : null);
+
+    // Normalised [x1,y1,x2,y2] only. A box outside 0-1, inverted, or the wrong
+    // arity is dropped rather than passed on — a bad box would corrupt both the
+    // count and any overlay drawn from it.
+    const cleanBoxes = (v: any): number[][] =>
+        (Array.isArray(v) ? v : [])
+            .map((b: any) => (Array.isArray(b) ? b.map(toNum) : null))
+            .filter(
+                (b: any): b is number[] =>
+                    Array.isArray(b) &&
+                    b.length === 4 &&
+                    b.every((n: any) => typeof n === "number" && n >= 0 && n <= 1) &&
+                    b[2] > b[0] &&
+                    b[3] > b[1]
+            );
+
+    const faces = (Array.isArray(parsed.faces) ? parsed.faces : []).map((f: any, i: number) => {
+        const boxes = cleanBoxes(f?.flapBoxes);
+        const claimed = toNum(f?.bagFlaps);
+        const isFace = gate ? toOptBool(f?.isPalletFace) : null;
+        return {
+            index: toNum(f?.index) ?? i,
+            slotKey: images[toNum(f?.index) ?? i]?.slotKey ?? images[i]?.slotKey ?? null,
+            bagFlaps: claimed,
+            layers: toNum(f?.layers),
+            ...(gate ? { isPalletFace: isFace } : {}),
+            ...(want.boxes
+                ? {
+                      flapBoxes: boxes,
+                      // Counting the boxes is the more trustworthy number; keeping both
+                      // exposes when the model's own tally disagrees with what it located.
+                      boxCount: boxes.length,
+                      countMatchesBoxes: claimed !== null && claimed === boxes.length,
+                  }
+                : {}),
+        };
+    });
+
+    // A face the model says is not a pallet face contributes nothing to the totals.
+    const counted = faces.filter((f: any) => f.isPalletFace !== false);
+    const flapSum = counted.reduce((s: number, f: any) => s + (f.bagFlaps ?? 0), 0);
+    const boxSum = counted.reduce((s: number, f: any) => s + (f.boxCount ?? 0), 0);
+
+    return {
+        success: true,
+        faces,
+        // Recomputed here rather than trusting the model's own arithmetic.
+        visibleBagTotal: flapSum || toNum(parsed.visibleBagTotal),
+        ...(want.boxes ? { visibleBagTotalFromBoxes: boxSum } : {}),
+        ...(want.interior
+            ? {
+                  interiorBags: toNum(parsed.interiorBags),
+                  estimatedPalletTotal: toNum(parsed.estimatedPalletTotal),
+              }
+            : {}),
+        ...(want.condition
+            ? {
+                  leaning: toOptBool(parsed.leaning),
+                  overhang: toOptBool(parsed.overhang),
+                  wrapIntact: toOptBool(parsed.wrapIntact),
+                  loadStable: toOptBool(parsed.loadStable),
+                  conditionNotes: typeof parsed.conditionNotes === "string" ? parsed.conditionNotes : null,
+              }
+            : {}),
+        gaps: toBool(parsed.gaps),
+        damage: toBool(parsed.damage),
+        topLayerFull: toBool(parsed.topLayerFull),
+        confidence: toNum(parsed.confidence),
+        rationale: typeof parsed.rationale === "string" ? parsed.rationale : null,
+        modelVersion,
+        imageCount: images.length,
+    };
+}
+
+// Assess several faces of one pallet with Claude, in a single request. Reuses the
+// proven <think>+JSON prompt (extractJsonObject strips the think block) plus the
+// isPalletFace gate, and shares assessJsonBody with the Cosmos path.
+async function analyzeFacesWithClaude(
+    images: any[],
+    want: { boxes: boolean; interior: boolean; condition: boolean },
+    debug: boolean
+): Promise<HttpResponseInit> {
+    const content: any[] = [{ type: "text", text: buildAssessPrompt({ ...want, gate: true }) }];
+    for (let i = 0; i < images.length; i++) {
+        const source = dataUrlToClaudeSource(typeof images[i]?.dataUrl === "string" ? images[i].dataUrl : "");
+        if (!source) continue;
+        // Label each image so faces[i] in the reply maps back to a real slot.
+        content.push({ type: "text", text: `Photo ${i} (${images[i]?.slotKey ?? "unlabelled"}):` });
+        content.push({ type: "image", source });
+    }
+    if (content.length === 1) {
+        return { status: 400, jsonBody: { error: "No usable data:image/... URLs supplied" } };
+    }
+
+    const msg = (await anthropicClient!.messages.create({
+        model: claudeVisionModel,
+        max_tokens: claudeAssessMaxTokens,
+        messages: [{ role: "user", content }],
+    } as any)) as any;
+
+    if (msg?.stop_reason === "refusal") {
+        return { status: 200, jsonBody: { success: false, error: "Claude declined the image(s)" } };
+    }
+
+    const parsed = parseClaudeJson(msg);
+    if (!parsed) {
+        return {
+            status: 200,
+            jsonBody: { success: false, error: "Could not parse Claude output", ...(debug ? { raw: claudeText(msg) } : {}) },
+        };
+    }
+
+    return { status: 200, jsonBody: assessJsonBody(parsed, images, want, claudeVisionModel, true) };
+}
+
 export async function analyzePalletFaces(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    if (!cosmosNimUrl) {
+    if (!cosmosNimUrl && !anthropicClient) {
         return {
             status: 501,
             jsonBody: {
                 error: "Pallet vision not configured",
-                detail: "Set COSMOS_NIM_URL in the Static Web App environment variables.",
+                detail: "Set ANTHROPIC_API_KEY or COSMOS_NIM_URL in the Static Web App environment variables.",
             },
         };
     }
@@ -1113,6 +1415,11 @@ export async function analyzePalletFaces(request: HttpRequest, context: Invocati
             interior: body?.wantInterior !== false,
             condition: body?.wantCondition !== false,
         };
+
+        // Claude takes precedence when configured, and carries the isPalletFace gate.
+        if (anthropicClient) {
+            return await analyzeFacesWithClaude(images, want, request.query.get("debug") === "1");
+        }
 
         const content: any[] = [{ type: "text", text: buildAssessPrompt(want) }];
         images.forEach((img, i) => {
@@ -1169,84 +1476,7 @@ export async function analyzePalletFaces(request: HttpRequest, context: Invocati
             };
         }
 
-        const toNum = (v: any) => {
-            const n = typeof v === "number" ? v : Number(v);
-            return Number.isFinite(n) ? n : null;
-        };
-        const toBool = (v: any) => v === true || v === "true";
-        const toOptBool = (v: any) => (v === true || v === "true" ? true : v === false || v === "false" ? false : null);
-
-        // Normalised [x1,y1,x2,y2] only. A box outside 0-1, inverted, or the wrong
-        // arity is dropped rather than passed on — a bad box would corrupt both the
-        // count and any overlay drawn from it.
-        const cleanBoxes = (v: any): number[][] =>
-            (Array.isArray(v) ? v : [])
-                .map((b: any) => (Array.isArray(b) ? b.map(toNum) : null))
-                .filter(
-                    (b: any): b is number[] =>
-                        Array.isArray(b) &&
-                        b.length === 4 &&
-                        b.every((n: any) => typeof n === "number" && n >= 0 && n <= 1) &&
-                        b[2] > b[0] &&
-                        b[3] > b[1]
-                );
-
-        const faces = (Array.isArray(parsed.faces) ? parsed.faces : []).map((f: any, i: number) => {
-            const boxes = cleanBoxes(f?.flapBoxes);
-            const claimed = toNum(f?.bagFlaps);
-            return {
-                index: toNum(f?.index) ?? i,
-                slotKey: images[toNum(f?.index) ?? i]?.slotKey ?? images[i]?.slotKey ?? null,
-                bagFlaps: claimed,
-                layers: toNum(f?.layers),
-                ...(want.boxes
-                    ? {
-                          flapBoxes: boxes,
-                          // Counting the boxes is the more trustworthy number; keeping both
-                          // exposes when the model's own tally disagrees with what it located.
-                          boxCount: boxes.length,
-                          countMatchesBoxes: claimed !== null && claimed === boxes.length,
-                      }
-                    : {}),
-            };
-        });
-
-        const flapSum = faces.reduce((s: number, f: any) => s + (f.bagFlaps ?? 0), 0);
-        const boxSum = faces.reduce((s: number, f: any) => s + (f.boxCount ?? 0), 0);
-
-        return {
-            status: 200,
-            jsonBody: {
-                success: true,
-                faces,
-                // Recomputed here rather than trusting the model's own arithmetic.
-                visibleBagTotal: flapSum || toNum(parsed.visibleBagTotal),
-                ...(want.boxes ? { visibleBagTotalFromBoxes: boxSum } : {}),
-                ...(want.interior
-                    ? {
-                          interiorBags: toNum(parsed.interiorBags),
-                          estimatedPalletTotal: toNum(parsed.estimatedPalletTotal),
-                      }
-                    : {}),
-                ...(want.condition
-                    ? {
-                          leaning: toOptBool(parsed.leaning),
-                          overhang: toOptBool(parsed.overhang),
-                          wrapIntact: toOptBool(parsed.wrapIntact),
-                          loadStable: toOptBool(parsed.loadStable),
-                          conditionNotes:
-                              typeof parsed.conditionNotes === "string" ? parsed.conditionNotes : null,
-                      }
-                    : {}),
-                gaps: toBool(parsed.gaps),
-                damage: toBool(parsed.damage),
-                topLayerFull: toBool(parsed.topLayerFull),
-                confidence: toNum(parsed.confidence),
-                rationale: typeof parsed.rationale === "string" ? parsed.rationale : null,
-                modelVersion: cosmosNimModel,
-                imageCount: images.length,
-            },
-        };
+        return { status: 200, jsonBody: assessJsonBody(parsed, images, want, cosmosNimModel, false) };
     } catch (error) {
         context.log("Error assessing pallet faces:", error);
         return { status: 500, jsonBody: { error: "Error assessing pallet faces" } };
