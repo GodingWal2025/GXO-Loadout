@@ -1068,9 +1068,9 @@ function BatchSectionRow({
   );
 }
 
-// Layer-geometry counter. Standard palletization = bagsPerLayer × layerCount,
+// Layer-geometry counter. Standard palletization = bagsPerLayer × layerCount + partial,
 // which is more reliable than eyeballing sagging bags. The verifier enters the
-// two numbers (layers are easy to see from the side) and applies the product to
+// three numbers (layers are easy to see from the side) and applies the product to
 // the actual bag count. Inputs persist on the section so the math is auditable.
 function LayerCountHelper({
   section,
@@ -1082,9 +1082,14 @@ function LayerCountHelper({
   const t = useT();
   const perLayer = section.bagsPerLayer;
   const layers = section.layerCount;
-  const computed =
+  const partial = section.partialLayerBags;
+  const fullStackBags =
     typeof perLayer === 'number' && perLayer > 0 && typeof layers === 'number' && layers > 0
       ? perLayer * layers
+      : null;
+  const computed =
+    fullStackBags !== null
+      ? fullStackBags + (typeof partial === 'number' && partial > 0 ? partial : 0)
       : null;
   const alreadyApplied = computed !== null && section.actualBagCount.value === computed;
 
@@ -1099,8 +1104,8 @@ function LayerCountHelper({
   };
 
   // Photograph the pallet face and let the vision model estimate the LAYER
-  // count (not individual bags). It pre-fills Layers; the verifier still sets
-  // bags/layer and confirms. Degrades to manual entry if the model is
+  // count (not individual bags). It pre-fills Full Stack; the verifier still sets
+  // Full Layer and confirms. Degrades to manual entry if the model is
   // unconfigured or unreachable.
   const captureForAi = useCameraCapture(async (blob) => {
     setAiBusy(true);
@@ -1152,24 +1157,35 @@ function LayerCountHelper({
         style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 8 }}
       >
         <div className="field" style={{ margin: 0, minWidth: 110, flex: '1 1 110px' }}>
-          <div className="field__label">{t('pallet.bagsPerLayer', 'Bags / layer')}</div>
+          <div className="field__label">{t('pallet.fullLayer', 'Full layer')}</div>
           <input
             type="number"
             inputMode="numeric"
             value={perLayer ?? ''}
-            placeholder={t('pallet.bagsPerLayerHint', 'e.g. 8')}
+            placeholder={t('pallet.fullLayerHint', 'bags per layer')}
             onChange={(e) => onUpdate({ bagsPerLayer: parse(e.target.value) })}
           />
         </div>
         <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--ink-faint)' }}>×</div>
         <div className="field" style={{ margin: 0, minWidth: 90, flex: '1 1 90px' }}>
-          <div className="field__label">{t('pallet.layers', 'Layers')}</div>
+          <div className="field__label">{t('pallet.fullStack', 'Full stack')}</div>
           <input
             type="number"
             inputMode="numeric"
             value={layers ?? ''}
-            placeholder={t('pallet.layersHint', 'e.g. 6')}
+            placeholder={t('pallet.fullStackHint', 'full layers')}
             onChange={(e) => onUpdate({ layerCount: parse(e.target.value) })}
+          />
+        </div>
+        <div style={{ alignSelf: 'center', paddingBottom: 8, color: 'var(--ink-faint)' }}>+</div>
+        <div className="field" style={{ margin: 0, minWidth: 90, flex: '1 1 90px' }}>
+          <div className="field__label">{t('pallet.partial', 'Partial')}</div>
+          <input
+            type="number"
+            inputMode="numeric"
+            value={partial ?? ''}
+            placeholder={t('pallet.partialHint', 'top bags')}
+            onChange={(e) => onUpdate({ partialLayerBags: parse(e.target.value) })}
           />
         </div>
         <div style={{ alignSelf: 'center', paddingBottom: 8, whiteSpace: 'nowrap' }}>

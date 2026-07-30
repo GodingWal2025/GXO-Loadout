@@ -41,10 +41,12 @@ export const pallet: Record<string, string> = {
   'pallet.mismatchDiff': 'diferencia {diff}',
 
   // ---- Layer counter ----
-  'pallet.bagsPerLayer': 'Bolsas / capa',
-  'pallet.bagsPerLayerHint': 'ej. 8',
-  'pallet.layers': 'Capas',
-  'pallet.layersHint': 'ej. 6',
+  'pallet.fullLayer': 'Capa completa',
+  'pallet.fullLayerHint': 'bolsas por capa',
+  'pallet.fullStack': 'Estiba completa',
+  'pallet.fullStackHint': 'capas completas',
+  'pallet.partial': 'Parcial',
+  'pallet.partialHint': 'bolsas arriba',
   'pallet.bagsUnit': 'bolsas',
   'pallet.layerApplied': '✓ Aplicado',
   'pallet.layerApply': 'Usar como cantidad real',

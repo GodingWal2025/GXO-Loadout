@@ -179,6 +179,7 @@ export interface BatchSection {
   // people), so this arithmetic is the primary count; the verifier confirms.
   bagsPerLayer?: number;
   layerCount?: number;
+  partialLayerBags?: number;
 
   // --- vision assist audit trail ------------------------------------------
   // `layerCount` above holds the CONFIRMED value, which a verifier may have
