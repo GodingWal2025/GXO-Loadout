@@ -176,8 +176,16 @@ export async function prepareForVision(blob: Blob): Promise<Blob> {
  * requests. Measured effect of reducing three readings to their consensus
  * (cosmos-nim/EVALUATION.md): a single reading is right ~55% of the time either
  * way, but across a pallet's faces it took the result from 5 correct / 1 wrong
- * to 6 correct / 0 wrong. Costs ~3s of wall clock since the calls run
- * concurrently, well inside the 45s Static Web Apps ceiling.
+ * to 6 correct / 0 wrong.
+ *
+ * Costs ~12s of wall clock measured against production, NOT the ~3s a single call
+ * takes — the requests do not batch end to end, they largely serialize through the
+ * Function and the NIM. Still inside the 45s Static Web Apps ceiling with ~30s to
+ * spare, but raising this number is not free: 5 samples would land near the limit.
+ *
+ * This does not rescue a photo the model simply reads wrong — three samples of one
+ * face have agreed on an incorrect count. Voting across DIFFERENT faces is what
+ * corrects that, which is why each press adds a separate face vote.
  */
 const SAMPLES_PER_PHOTO = 3;
 
