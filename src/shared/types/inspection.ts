@@ -168,28 +168,6 @@ export interface BatchSection {
   bagsPerLayer?: number;
   layerCount?: number;
   partialLayerBags?: number;
-
-  // --- vision assist audit trail ------------------------------------------
-  // `layerCount` above holds the CONFIRMED value, which a verifier may have
-  // corrected. These keep what the model actually said, so the pair
-  // (suggestion, confirmation) survives. That pair is the whole basis for
-  // measuring accuracy and for fine-tuning later — without it a correction
-  // silently erases the only label the workflow ever produces.
-  // See cosmos-nim/EVALUATION.md.
-  //
-  // Every layer estimate returned for this section, oldest first — one per
-  // press of "estimate from photo", so photographing several faces of the
-  // pallet accumulates votes. Measured single-face accuracy is ~65%, but the
-  // median across faces was right on 4 of 5 pallets.
-  aiLayerSamples?: number[];
-  /** Median of aiLayerSamples at the time it was applied to layerCount. */
-  aiSuggestedLayers?: number;
-  aiModelVersion?: string;
-  aiSuggestedAt?: string;
-  /** Anomaly flags from the most recent estimate, kept for the same reason. */
-  aiTopLayerFull?: boolean;
-  aiGaps?: boolean;
-  aiDamage?: boolean;
 }
 
 export interface PalletInspection {
