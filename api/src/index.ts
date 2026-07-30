@@ -964,20 +964,34 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
     const key = request.headers.get("x-detector-key") || detectorServiceKey;
     if (key) headers["Authorization"] = `Bearer ${key}`;
 
-    const resp = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        body: buffer,
-    });
+    context.log(`Proxying pallet count to detector: ${endpoint}`);
 
-    if (!resp.ok) {
-        const detail = await resp.text().catch(() => "");
-        context.log(`Detector service error ${resp.status}: ${detail.slice(0, 500)}`);
-        return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status, detail: detail.slice(0, 500) } };
+    try {
+        const resp = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: buffer,
+        });
+
+        if (!resp.ok) {
+            const detail = await resp.text().catch(() => "");
+            context.log(`Detector service error ${resp.status}: ${detail.slice(0, 500)}`);
+            return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status, detail: detail.slice(0, 500), endpoint } };
+        }
+
+        // The service emits the exact { success, layers, ... } shape the client wants.
+        return { status: 200, jsonBody: await resp.json() };
+    } catch (err: any) {
+        context.log(`Failed to fetch detector at ${endpoint}:`, err);
+        return {
+            status: 502,
+            jsonBody: {
+                error: "Could not reach detector service",
+                detail: String(err?.message || err),
+                endpoint,
+            },
+        };
     }
-
-    // The service emits the exact { success, layers, ... } shape the client wants.
-    return { status: 200, jsonBody: await resp.json() };
 }
 
 async function analyzeFacesWithDetector(

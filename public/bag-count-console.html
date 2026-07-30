@@ -643,8 +643,8 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
   }
 
   function banner501(status, j) {
-    if (status === 501) return `<div class="banner"><b>Vision backend not configured.</b> ${escapeHtml(j.detail||"Set ANTHROPIC_API_KEY in the app's environment variables.")}</div>`;
-    return `<div class="banner err"><b>HTTP ${status}.</b> ${escapeHtml((j.error||"")+" "+(j.detail||""))}${j.detail?"":""}</div>` + (j.raw?raw(j):"");
+    if (status === 501) return `<div class="banner"><b>Vision backend not configured.</b> ${escapeHtml(j.detail||"Set DETECTOR_SERVICE_URL or ANTHROPIC_API_KEY in the app's environment variables.")}</div>` + raw(j);
+    return `<div class="banner err"><b>HTTP ${status}.</b> ${escapeHtml((j.error||"") + (j.detail ? ": " + j.detail : ""))}</div>` + raw(j);
   }
   function networkMsg(e) {
     return `Request failed (${escapeHtml(String(e.message||e))}). If you set DETECTOR_SERVICE_URL in Azure (Option B), <b>leave the Base URL field BLANK</b> so requests pass through your Azure Function (/api/*), which proxies to Brev server-to-server with no browser CORS or SSL issues.`;
