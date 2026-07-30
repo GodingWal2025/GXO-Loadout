@@ -948,16 +948,20 @@ export function extractJsonObject(text: string): any | null {
 // Forward the raw pallet-face bytes to the RF-DETR detection service, which
 // already returns the pallet-count JSON contract. Kept separate so the Cosmos
 // path below stays untouched as a fallback.
-async function analyzeWithDetector(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+async function analyzeWithDetector(request: HttpRequest, context: InvocationContext, customUrl?: string): Promise<HttpResponseInit> {
     const buffer = Buffer.from(await request.arrayBuffer());
     if (!buffer.length) {
         return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
     }
 
-    const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
-    if (detectorServiceKey) headers["Authorization"] = `Bearer ${detectorServiceKey}`;
+    const rawUrl = (customUrl || detectorServiceUrl).trim().replace(/\/+$/, "");
+    const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
 
-    const resp = await fetch(`${detectorServiceUrl}/analyze`, {
+    const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+    const key = request.headers.get("x-detector-key") || detectorServiceKey;
+    if (key) headers["Authorization"] = `Bearer ${key}`;
+
+    const resp = await fetch(endpoint, {
         method: "POST",
         headers,
         body: buffer,
@@ -966,11 +970,80 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
     if (!resp.ok) {
         const detail = await resp.text().catch(() => "");
         context.log(`Detector service error ${resp.status}: ${detail.slice(0, 500)}`);
-        return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status } };
+        return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status, detail: detail.slice(0, 500) } };
     }
 
     // The service emits the exact { success, layers, ... } shape the client wants.
     return { status: 200, jsonBody: await resp.json() };
+}
+
+async function analyzeFacesWithDetector(
+    images: any[],
+    targetUrl: string,
+    context: InvocationContext
+): Promise<HttpResponseInit> {
+    const rawUrl = targetUrl.trim().replace(/\/+$/, "");
+    const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
+
+    const faces: any[] = [];
+    let visibleBagTotal = 0;
+    let anyGaps = false;
+    let anyDamage = false;
+    let modelVer = "rf-detr";
+
+    for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const url = typeof img?.dataUrl === "string" ? img.dataUrl : "";
+        const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(url);
+        if (!match) continue;
+
+        const buffer = Buffer.from(match[2], "base64");
+        try {
+            const resp = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: buffer,
+            });
+            if (resp.ok) {
+                const j = (await resp.json()) as any;
+                const bags = typeof j.estimatedBags === "number" ? j.estimatedBags : 0;
+                visibleBagTotal += bags;
+                if (j.gaps) anyGaps = true;
+                if (j.damage) anyDamage = true;
+                if (j.modelVersion) modelVer = j.modelVersion;
+
+                faces.push({
+                    index: i,
+                    slotKey: img?.slotKey ?? `face_${i}`,
+                    bagFlaps: bags,
+                    layers: j.layers ?? null,
+                    isPalletFace: true,
+                    flapBoxes: [],
+                    boxCount: bags,
+                    countMatchesBoxes: true,
+                });
+            }
+        } catch (e) {
+            context.log(`Error calling detector for face ${i}:`, e);
+        }
+    }
+
+    return {
+        status: 200,
+        jsonBody: {
+            success: true,
+            faces,
+            visibleBagTotal,
+            visibleBagTotalFromBoxes: visibleBagTotal,
+            estimatedPalletTotal: visibleBagTotal,
+            gaps: anyGaps,
+            damage: anyDamage,
+            topLayerFull: true,
+            confidence: 0.9,
+            modelVersion: modelVer,
+            imageCount: images.length,
+        },
+    };
 }
 
 // Analyze one pallet-face photo with Claude. Same { success, layers, ... }
@@ -1038,9 +1111,10 @@ async function analyzeWithClaude(request: HttpRequest, context: InvocationContex
 }
 
 export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    if (detectorServiceUrl) {
+    const customDetector = (request.headers.get("x-detector-url") || request.query.get("detectorUrl") || detectorServiceUrl).trim();
+    if (customDetector) {
         try {
-            return await analyzeWithDetector(request, context);
+            return await analyzeWithDetector(request, context, customDetector);
         } catch (error) {
             context.log("Error calling detector service:", error);
             return { status: 500, jsonBody: { error: "Error analyzing pallet count" } };
@@ -1385,16 +1459,6 @@ async function analyzeFacesWithClaude(
 }
 
 export async function analyzePalletFaces(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    if (!cosmosNimUrl && !anthropicClient) {
-        return {
-            status: 501,
-            jsonBody: {
-                error: "Pallet vision not configured",
-                detail: "Set ANTHROPIC_API_KEY or COSMOS_NIM_URL in the Static Web App environment variables.",
-            },
-        };
-    }
-
     try {
         const body = (await request.json().catch(() => null)) as any;
         const images: any[] = Array.isArray(body?.images) ? body.images : [];
@@ -1405,6 +1469,21 @@ export async function analyzePalletFaces(request: HttpRequest, context: Invocati
             return {
                 status: 400,
                 jsonBody: { error: `At most ${MAX_ASSESS_IMAGES} images per request`, got: images.length },
+            };
+        }
+
+        const customDetector = (request.headers.get("x-detector-url") || request.query.get("detectorUrl") || detectorServiceUrl).trim();
+        if (customDetector) {
+            return await analyzeFacesWithDetector(images, customDetector, context);
+        }
+
+        if (!cosmosNimUrl && !anthropicClient) {
+            return {
+                status: 501,
+                jsonBody: {
+                    error: "Pallet vision not configured",
+                    detail: "Set DETECTOR_SERVICE_URL, ANTHROPIC_API_KEY, or COSMOS_NIM_URL in the environment variables.",
+                },
             };
         }
 

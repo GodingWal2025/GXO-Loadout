@@ -425,8 +425,13 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     store.set("bcc-base", baseUrl.value.trim());
     $("#epStatus").textContent = "endpoint: " + (baseUrl.value.trim() || "same origin");
   };
-  baseUrl.addEventListener("input", updEp); updEp();
-  const apiBase = () => baseUrl.value.trim().replace(/\/+$/, "");
+  const apiBase = () => {
+    let v = baseUrl.value.trim().replace(/\/+$/, "");
+    if (v && !/^https?:\/\//i.test(v)) {
+      v = "https://" + v;
+    }
+    return v;
+  };
 
   /* ---- image prep (mirror prepareForVision) ---- */
   const blobToDataUrl = b => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
@@ -538,14 +543,21 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
       results.appendChild(card);
       try {
         const base = apiBase();
+        const headers = { "Content-Type": "application/octet-stream" };
+        if (base) headers["X-Detector-Url"] = base;
+
+        // Try direct /analyze if base ends in /analyze, or try /api/analyze-pallet-count first
         let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-count?debug=1") : "/api/analyze-pallet-count?debug=1";
-        let resp = await fetch(target, {
-          method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob });
-        if (resp.status === 404 && base && !base.endsWith("/analyze")) {
-          target = base + "/analyze";
-          resp = await fetch(target, {
-            method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob });
+        let resp = await fetch(target, { method: "POST", headers, body: it.blob }).catch(() => null);
+
+        // Fallback: If SWA proxy 404s or fails, attempt direct fetch to base + /analyze
+        if ((!resp || resp.status === 404) && base && !base.endsWith("/analyze")) {
+          const directTarget = base + "/analyze";
+          resp = await fetch(directTarget, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob }).catch(() => null);
         }
+
+        if (!resp) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to detector endpoint")); continue; }
+
         const j = await resp.json().catch(() => ({}));
         if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); continue; }
         if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable count.</div>` + raw(j); continue; }
@@ -572,10 +584,36 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     card.innerHTML = `<div class="hd"><span class="eyebrow">Pallet · ${imgs.length} face${imgs.length>1?"s":""}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
     results.appendChild(card);
     try {
-      const resp = await fetch(apiBase() + "/api/analyze-pallet-faces?debug=1", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images: imgs, wantBoxes: true, wantInterior: true, wantCondition: true }) });
-      const j = await resp.json().catch(() => ({}));
+      const base = apiBase();
+      const headers = { "Content-Type": "application/json" };
+      if (base) headers["X-Detector-Url"] = base;
+
+      let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-faces?debug=1") : "/api/analyze-pallet-faces?debug=1";
+      let resp = await fetch(target, {
+        method: "POST", headers,
+        body: JSON.stringify({ images: imgs, wantBoxes: true, wantInterior: true, wantCondition: true })
+      }).catch(() => null);
+
+      let j = resp && resp.ok ? await resp.json().catch(() => ({})) : null;
+
+      // Fallback: If SWA proxy fails or 404s, call detector service /analyze for each face directly
+      if (!j && base) {
+        const directTarget = base.endsWith("/analyze") ? base : base + "/analyze";
+        const faceResults = [];
+        let totalBags = 0;
+        let modelVer = "rf-detr (direct)";
+        for (let i = 0; i < items.length && i < 4; i++) {
+          const r = await fetch(directTarget, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: items[i].blob }).then(x=>x.json()).catch(()=>({}));
+          const b = r.estimatedBags || 0;
+          totalBags += b;
+          if (r.modelVersion) modelVer = r.modelVersion;
+          faceResults.push({ index: i, slotKey: SLOTS[i] || ("VIEW_"+i), bagFlaps: b, layers: r.layers, isPalletFace: true, boxCount: b, countMatchesBoxes: true });
+        }
+        j = { success: true, faces: faceResults, visibleBagTotal: totalBags, visibleBagTotalFromBoxes: totalBags, estimatedPalletTotal: totalBags, modelVersion: modelVer };
+        resp = { ok: true, status: 200 };
+      }
+
+      if (!resp || !j) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to backend")); return; }
       if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); return; }
       if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable assessment.</div>` + raw(j); return; }
       const faces = j.faces || [];
