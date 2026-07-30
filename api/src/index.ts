@@ -1160,11 +1160,25 @@ export async function getInspections(request: HttpRequest, context: InvocationCo
             status: 200, 
             jsonBody: { success: true, resources } 
         };
-    } catch (error) {
+    } catch (error: any) {
         context.log("Error fetching inspections:", error);
+        // The bare 500 hides why Cosmos rejected the query (missing db/container,
+        // bad key, throttling). Echo the Cosmos error code/message behind ?debug=1
+        // so it is diagnosable without Application Insights access. No secrets are
+        // in a Cosmos error body — the connection string is never part of it.
+        const debug = request.query.get("debug") === "1";
         return {
             status: 500,
-            jsonBody: { error: "Error fetching inspections" }
+            jsonBody: {
+                error: "Error fetching inspections",
+                ...(debug
+                    ? {
+                          detail: String(error?.message || error),
+                          code: error?.code ?? error?.statusCode ?? null,
+                          name: error?.name ?? null,
+                      }
+                    : {}),
+            },
         };
     }
 }
