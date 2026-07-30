@@ -38,6 +38,8 @@ PROMPT = "\n".join([
     "You are inspecting one face of a warehouse pallet stacked with bags of product.",
     "Bags sag and occlude each other, so DO NOT try to count individual bags.",
     "Instead reason about the visible stack and report:",
+    # Keep this list in sync with PALLET_COUNT_PROMPT in api/src/index.ts. An
+    # isPalletFace gate was tried and removed — see the note there.
     "- layers: how many horizontal layers (courses) are stacked, as an integer.",
     "- topLayerFull: is the top layer complete, or short/partial? boolean.",
     "- gaps: are there obvious missing bags or holes in the stack? boolean.",
@@ -149,7 +151,7 @@ def main():
         with open(path, "rb") as fh:
             jpeg = fh.read()
 
-        votes, secs = [], []
+        votes, secs, face_flags = [], [], []
         err = ""
         for _ in range(args.samples):
             try:
@@ -163,8 +165,18 @@ def main():
                 err = str(e)[:120]
                 break
             secs.append(elapsed)
+            # Only recorded if the prompt actually asks for it, so the gate report
+            # stays silent rather than reporting a field nobody returned.
+            if parsed is not None and "isPalletFace" in parsed:
+                face_flags.append(parsed["isPalletFace"])
             if parsed and isinstance(parsed.get("layers"), int):
                 votes.append(parsed["layers"])
+
+        # Majority verdict on "is this even a pallet face". False means the count
+        # should be thrown away rather than voted on.
+        is_face = None
+        if face_flags:
+            is_face = face_flags.count(True) >= face_flags.count(False)
 
         pid = pallet_of(n)
         exp = expected.get(pid)
@@ -175,15 +187,50 @@ def main():
 
         layers = int(statistics.median(votes))
         latencies.extend(secs)
-        per_pallet[pid].append(layers)
+        # A photo the model says is not a pallet face contributes nothing to the
+        # pallet's vote — that is the whole point of the gate.
+        if is_face is not False:
+            per_pallet[pid].append(layers)
         spread = f" spread={sorted(votes)}" if len(set(votes)) > 1 else ""
-        mark = "" if exp is None else ("  ok" if layers == exp else f"  MISS by {layers - exp:+d}")
+        if is_face is False:
+            mark = "  [gated: not a pallet face]"
+        elif exp is None:
+            mark = ""
+        else:
+            mark = "  ok" if layers == exp else f"  MISS by {layers - exp:+d}"
         print(f"{n:<20}{layers:>7}{exp if exp else '-':>5}{statistics.mean(secs):>7.1f}{mark}{spread}")
-        rows.append({"file": n, "pallet": pid, "layers": layers, "votes": votes, "expected": exp})
+        rows.append({"file": n, "pallet": pid, "layers": layers, "votes": votes,
+                     "expected": exp, "isPalletFace": is_face})
 
     # --- summary -----------------------------------------------------------
-    print("\n--- per-face accuracy ---")
-    scored = [r for r in rows if r.get("expected") and "layers" in r]
+    # Gate check. In this dataset a '-NN' suffix marks a deliberate close-up of a
+    # bag label (Pallet4-60.jpg), so those SHOULD be gated out; PalletN.M files are
+    # real pallet faces and should pass.
+    # Only meaningful when the prompt actually asked for the flag; otherwise every
+    # value is None and the report would invent a 0/N failure out of nothing.
+    gated = [r for r in rows if r.get("isPalletFace") is not None]
+    if gated:
+        print("\n--- isPalletFace gate ---")
+        closeups = [r for r in gated if re.search(r"-\d+$", os.path.splitext(r["file"])[0])]
+        faces = [r for r in gated if r not in closeups]
+        if closeups:
+            caught = sum(1 for r in closeups if r["isPalletFace"] is False)
+            print(f"  close-ups correctly rejected: {caught}/{len(closeups)}")
+            missed = [r["file"] for r in closeups if r["isPalletFace"] is not False]
+            if missed:
+                print(f"    still counted (bad): {', '.join(missed)}")
+        if faces:
+            kept = sum(1 for r in faces if r["isPalletFace"] is not False)
+            print(f"  real faces kept:              {kept}/{len(faces)}")
+            lost = [r["file"] for r in faces if r["isPalletFace"] is False]
+            if lost:
+                print(f"    wrongly rejected (bad): {', '.join(lost)}")
+
+    print("\n--- per-face accuracy (gated photos excluded) ---")
+    scored = [
+        r for r in rows
+        if r.get("expected") and "layers" in r and r.get("isPalletFace") is not False
+    ]
     if scored:
         hits = sum(1 for r in scored if r["layers"] == r["expected"])
         within1 = sum(1 for r in scored if abs(r["layers"] - r["expected"]) <= 1)

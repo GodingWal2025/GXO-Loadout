@@ -792,6 +792,12 @@ const PALLET_COUNT_PROMPT = [
     "You are inspecting one face of a warehouse pallet stacked with bags of product.",
     "Bags sag and occlude each other, so DO NOT try to count individual bags.",
     "Instead reason about the visible stack and report:",
+    // NOTE: an `isPalletFace` gate was tried here and REMOVED after measurement.
+    // The intent was to reject label close-ups, which otherwise return 1-5 layers
+    // at 0.95 confidence. The model answered `true` on 0 of 5 close-ups — it never
+    // declines — and adding the field also degraded layer counting (pallets 2-6
+    // fell from 5/5 to 2/5 on the same photos). See cosmos-nim/EVALUATION.md.
+    // Off-target photos remain an open, unsolved risk.
     "- layers: how many horizontal layers (courses) are stacked, as an integer.",
     "- topLayerFull: is the top layer complete, or short/partial? boolean.",
     "- gaps: are there obvious missing bags or holes in the stack? boolean.",

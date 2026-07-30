@@ -6,6 +6,45 @@ to a 1024px long edge (~150 KB), using the **byte-identical production prompt**.
 
 Reproduce with [`eval.py`](eval.py).
 
+> **Read the caveat before the numbers.** Layer counts vary run to run on identical
+> input (vLLM continuous batching; `temperature: 0` does not make this deterministic).
+> The same photo returned 10, then 8, then 8 on consecutive requests. **Any single
+> run is weak evidence** — an early run here showed 5/5 pallets correct and a later
+> one 2/5 on the same photos. Use `--samples` and compare summaries, not anecdotes.
+
+## Sampling: measured effect
+
+Reducing three readings of one photo to their consensus, real pallet faces only
+(close-up label shots excluded — see below):
+
+| | Per-face exact | Pallets ok | tie | miss |
+|---|---|---|---|---|
+| 1 sample | 15/27 (56%) | 5 | 1 | 1 |
+| **median of 3** | 14/27 (52%) | **6** | 1 | **0** |
+
+Sampling does **not** make a single reading better. It removes pallet-level misses,
+which is what actually matters, so the client analyzes each photo 3× concurrently
+(`SAMPLES_PER_PHOTO` in `palletVision.ts`) — about 3s of wall clock.
+
+It also corrected an earlier wrong conclusion here: pallet 8 (Channel brand) was
+recorded as a miss on the theory it stacks differently. With sampling it resolves to
+10, so 6 bags/layer holds across products and the earlier `6` was noise.
+
+## A gate that did NOT work
+
+An `isPalletFace` boolean was added to the prompt to reject label close-ups, then
+removed after measurement:
+
+- **0 of 5 close-ups rejected.** The model answered `true` on every one, including
+  an extreme single-label macro shot. It does not decline.
+- Adding the field **degraded counting** — pallets 2-6 fell from 5/5 to 2/5 on the
+  same photos, presumably because it reshapes the reasoning trace.
+
+Off-target photos therefore remain an **open, unsolved risk**. Voting cannot detect
+them: a close-up reads 1-5 layers at 0.95 confidence and is indistinguishable from a
+short stack. A separate classifier, or requiring the estimate to run only on the
+designated pallet-face photo slot, is the likely fix.
+
 ## Layer count, all faces
 
 Ground truth: the SKU label gives the pallet quantity, and 60 bags ÷ 6 per layer = **10

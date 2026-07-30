@@ -10,8 +10,8 @@ import type { Inspection, BatchSection } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import {
-  analyzePalletCount,
   consensusLayers,
+  estimatePalletFace,
   type PalletCountResult,
 } from '../shared/services/palletVision';
 import { useT } from '../shared/i18n/LanguageContext';
@@ -816,7 +816,9 @@ function LayerCountHelper({
     setAiBusy(true);
     setAiMsg(null);
     try {
-      const r = await analyzePalletCount(blob);
+      // Analyzes the photo several times and uses the consensus — the model is
+      // not deterministic, and this removed every pallet-level miss in testing.
+      const r = await estimatePalletFace(blob);
       setAi(r);
       if (r.success && typeof r.layers === 'number' && r.layers > 0) {
         // Accumulate one vote per press so photographing several faces of the

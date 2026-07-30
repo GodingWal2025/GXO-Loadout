@@ -169,13 +169,59 @@ export async function prepareForVision(blob: Blob): Promise<Blob> {
 }
 
 /**
+ * How many times one photo is analyzed per estimate.
+ *
+ * The model is not deterministic even at temperature 0 (vLLM continuous
+ * batching): the same pallet photo returned 10, then 8, then 8 on consecutive
+ * requests. Measured effect of reducing three readings to their consensus
+ * (cosmos-nim/EVALUATION.md): a single reading is right ~55% of the time either
+ * way, but across a pallet's faces it took the result from 5 correct / 1 wrong
+ * to 6 correct / 0 wrong. Costs ~3s of wall clock since the calls run
+ * concurrently, well inside the 45s Static Web Apps ceiling.
+ */
+const SAMPLES_PER_PHOTO = 3;
+
+/**
+ * Analyze one photo several times and reduce it to a single reading.
+ *
+ * Returns the consensus layer count with the rest of the fields from the first
+ * successful response. Rejects only if EVERY attempt failed, so one flaky
+ * request doesn't cost the inspector a retake.
+ */
+export async function estimatePalletFace(blob: Blob): Promise<PalletCountResult> {
+  const upload = await prepareForVision(blob);
+
+  const settled = await Promise.allSettled(
+    Array.from({ length: SAMPLES_PER_PHOTO }, () => postForAnalysis(upload))
+  );
+  const ok = settled
+    .filter((s): s is PromiseFulfilledResult<PalletCountResult> => s.status === 'fulfilled')
+    .map((s) => s.value);
+
+  if (ok.length === 0) {
+    const first = settled[0];
+    throw first && first.status === 'rejected'
+      ? first.reason
+      : new Error('analyze-pallet-count failed');
+  }
+
+  const layers = consensusLayers(
+    ok.map((r) => r.layers).filter((n): n is number => typeof n === 'number')
+  );
+  return { ...ok[0], layers: layers.value ?? ok[0].layers };
+}
+
+/**
  * Send a pallet-face photo to the vision endpoint. Throws on network error /
  * non-2xx (including 501 "not configured" when no backend is set) so the caller
  * can fall back to the manual layer entry.
  */
 export async function analyzePalletCount(blob: Blob): Promise<PalletCountResult> {
-  const upload = await prepareForVision(blob);
+  return postForAnalysis(await prepareForVision(blob));
+}
 
+/** POST already-prepared bytes. Shared so multi-sampling resizes only once. */
+async function postForAnalysis(upload: Blob): Promise<PalletCountResult> {
   const res = await fetch(`${apiBase}/api/analyze-pallet-count`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
