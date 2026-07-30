@@ -16,7 +16,7 @@ import type {
   CrossReferenceResult,
   ReturnsBOLData,
 } from '../types/inspection';
-import { emptySuggestable } from '../types/inspection';
+import { emptySuggestable, getPhotoRotation } from '../types/inspection';
 import { expectedBags } from '../rules/uomRules';
 import { dbSaveInspection } from '../services/db';
 
@@ -117,6 +117,7 @@ export type Action =
   | { type: 'ADD_PALLET_PHOTO'; palletIndex: number; photo: InspectionPhoto }
   | { type: 'REPLACE_PALLET_PHOTO'; palletIndex: number; slotKey: string; photo: InspectionPhoto }
   | { type: 'SET_PHOTO_QUALITY_FLAG'; photoId: string; flag?: QualityFlag }
+  | { type: 'ROTATE_PHOTO'; photoId: string }
   | { type: 'SET_PALLET_QUALITY_FLAG'; index: number; flag?: QualityFlag }
   | { type: 'SET_INSPECTION_QUALITY_FLAG'; flag?: QualityFlag }
   | { type: 'SET_STAGING'; field: keyof Inspection['staging']; value: any }
@@ -487,6 +488,27 @@ function reducer(state: Inspection, action: Action): Inspection {
           ...state.staging,
           overviewPhotos: update(state.staging.overviewPhotos),
           coverSheetPhotos: update(state.staging.coverSheetPhotos),
+        },
+        pallets: state.pallets.map((p) => ({ ...p, photos: update(p.photos) })),
+      };
+      break;
+    }
+
+    case 'ROTATE_PHOTO': {
+      const update = (photos: InspectionPhoto[]) =>
+        photos.map((p) => {
+          if (p.id !== action.photoId) return p;
+          const current = getPhotoRotation(p);
+          const nextRot = (current + 90) % 360;
+          return { ...p, rotation: nextRot };
+        });
+      next = {
+        ...state,
+        staging: {
+          ...state.staging,
+          overviewPhotos: update(state.staging.overviewPhotos),
+          coverSheetPhotos: update(state.staging.coverSheetPhotos),
+          finalLanePhotos: update(state.staging.finalLanePhotos || []),
         },
         pallets: state.pallets.map((p) => ({ ...p, photos: update(p.photos) })),
       };

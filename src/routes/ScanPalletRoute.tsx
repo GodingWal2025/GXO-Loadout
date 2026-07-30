@@ -543,6 +543,9 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           onQualityFlag={(photoId: any, flag: any) =>
             dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })
           }
+          onRotatePhoto={(photoId: string) =>
+            dispatch({ type: 'ROTATE_PHOTO', photoId })
+          }
           readOnly={readOnly}
         />
 

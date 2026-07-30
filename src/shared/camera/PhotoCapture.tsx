@@ -6,6 +6,7 @@ import type {
   PhotoMetadata,
   QualityFlag,
 } from '../types/inspection';
+import { getPhotoRotation } from '../types/inspection';
 import { useCameraCapture } from './useCameraCapture';
 import { dbSavePhotoBlob } from '../services/db';
 import { compressPhoto } from './compressPhoto';
@@ -37,6 +38,7 @@ interface SlotPhotoCaptureProps {
   existingPhoto?: InspectionPhoto;
   onCaptured: (photo: InspectionPhoto) => void;
   onQualityFlag: (photoId: string, flag?: QualityFlag) => void;
+  onRotatePhoto?: (photoId: string) => void;
   currentUser: string;
   /** View mode on a completed inspection — photos can be opened but not changed. */
   readOnly?: boolean;
@@ -53,6 +55,7 @@ export function SlotPhotoCapture({
   existingPhoto,
   onCaptured,
   onQualityFlag,
+  onRotatePhoto,
   currentUser,
   readOnly = false,
   allowLandscape = false,
@@ -60,6 +63,18 @@ export function SlotPhotoCapture({
   const [pending, setPending] = useState<PendingCapture | null>(null);
   const [viewing, setViewing] = useState(false);
   const displayUrl = usePhotoUrl(existingPhoto);
+  const [localRotation, setLocalRotation] = useState<number | null>(null);
+
+  const initialRotation = getPhotoRotation(existingPhoto);
+  const effectiveRotation = localRotation !== null ? localRotation : initialRotation;
+
+  const handleRotate = () => {
+    const nextRot = (effectiveRotation + 90) % 360;
+    setLocalRotation(nextRot);
+    if (onRotatePhoto && existingPhoto) {
+      onRotatePhoto(existingPhoto.id);
+    }
+  };
 
   const capture = useCameraCapture(async (blob) => {
     const quality = await checkImageQuality(blob, { allowLandscape });
@@ -150,8 +165,18 @@ export function SlotPhotoCapture({
   return (
     <>
       {/* Tapping a filled slot ENLARGES the photo; retake is a button inside the viewer */}
-      <div className={tileClass} onClick={() => setViewing(true)}>
-        <img src={displayUrl} alt={slotLabel} />
+      <div className={tileClass} onClick={() => setViewing(true)} style={{ overflow: 'hidden' }}>
+        <img
+          src={displayUrl}
+          alt={slotLabel}
+          style={{
+            transform: `rotate(${effectiveRotation}deg)`,
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            transition: 'transform 0.2s ease',
+          }}
+        />
 
         {!readOnly && (
           <QualityFlagButton
@@ -169,8 +194,10 @@ export function SlotPhotoCapture({
         <PhotoLightbox
           url={displayUrl}
           label={slotLabel}
+          rotation={effectiveRotation}
           onClose={() => setViewing(false)}
           onRetake={readOnly ? undefined : capture}
+          onRotate={handleRotate}
         />
       )}
       {pending && (
@@ -195,6 +222,7 @@ interface MultiCaptureProps {
   existingPhotos: InspectionPhoto[];
   onPhotoAdded: (photo: InspectionPhoto) => void;
   onPhotoQualityFlag: (photoId: string, flag?: QualityFlag) => void;
+  onRotatePhoto?: (photoId: string) => void;
   label: string;
   currentUser: string;
   /** View mode on a completed inspection — photos can be opened but not added. */
@@ -209,6 +237,7 @@ export function MultiPhotoCapture({
   existingPhotos,
   onPhotoAdded,
   onPhotoQualityFlag,
+  onRotatePhoto,
   label,
   currentUser,
   readOnly = false,
@@ -290,6 +319,7 @@ export function MultiPhotoCapture({
                 photo={p}
                 onView={() => setViewingPhoto(p)}
                 onQualityFlag={onPhotoQualityFlag}
+                onRotatePhoto={onRotatePhoto}
                 currentUser={currentUser}
                 readOnly={readOnly}
               />
@@ -305,7 +335,9 @@ export function MultiPhotoCapture({
         <PhotoLightbox
           url={viewingUrl}
           label={viewingPhoto.category.replace(/_/g, ' ')}
+          rotation={getPhotoRotation(viewingPhoto)}
           onClose={() => setViewingPhoto(null)}
+          onRotate={onRotatePhoto ? () => onRotatePhoto(viewingPhoto.id) : undefined}
         />
       )}
       {pending && (
@@ -324,16 +356,19 @@ function MultiPhotoTile({
   photo,
   onView,
   onQualityFlag,
+  onRotatePhoto,
   currentUser,
   readOnly = false,
 }: {
   photo: InspectionPhoto;
   onView: () => void;
   onQualityFlag: (photoId: string, flag?: QualityFlag) => void;
+  onRotatePhoto?: (photoId: string) => void;
   currentUser: string;
   readOnly?: boolean;
 }) {
   const url = usePhotoUrl(photo);
+  const rot = getPhotoRotation(photo);
   return (
     <div
       className={[
@@ -341,9 +376,19 @@ function MultiPhotoTile({
         photo.qualityFlag ? 'photo-tile--quality-flagged' : '',
       ].filter(Boolean).join(' ')}
       onClick={onView}
-      style={{ cursor: 'pointer' }}
+      style={{ cursor: 'pointer', overflow: 'hidden' }}
     >
-      <img src={url} alt={photo.category} />
+      <img
+        src={url}
+        alt={photo.category}
+        style={{
+          transform: `rotate(${rot}deg)`,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          transition: 'transform 0.2s ease',
+        }}
+      />
       {!readOnly && (
         <QualityFlagButton
           flag={photo.qualityFlag}
@@ -352,6 +397,35 @@ function MultiPhotoTile({
           onUnflag={() => onQualityFlag(photo.id, undefined)}
           currentUser={currentUser}
         />
+      )}
+      {onRotatePhoto && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onRotatePhoto(photo.id);
+          }}
+          title="Rotate photo"
+          style={{
+            position: 'absolute',
+            bottom: 4,
+            right: 4,
+            background: 'rgba(0,0,0,0.6)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '50%',
+            width: 24,
+            height: 24,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 12,
+            cursor: 'pointer',
+            zIndex: 2,
+          }}
+        >
+          ↻
+        </button>
       )}
     </div>
   );

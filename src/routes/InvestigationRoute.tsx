@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listActiveSites } from '../services/sites';
 import { getDeviceConfig } from '../lib/deviceConfig';
-import { dbListAllInspections, PhotoLightbox } from '../shared';
+import { dbListAllInspections, PhotoLightbox, getPhotoRotation } from '../shared';
 import { resolvePhotoUrl } from '../shared/services/resolvePhotoUrls';
 import type { InspectionPhoto } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
@@ -534,7 +534,7 @@ function PalletGlimpse({
   onOpenFull: () => void;
 }) {
   const t = useT();
-  const [lightbox, setLightbox] = useState<{ url?: string; label: string } | null>(null);
+  const [lightbox, setLightbox] = useState<{ url?: string; label: string; rotation?: number } | null>(null);
 
   const loadNum = item.picklistLoadNumber || item.bolLoadNumber || item.id.slice(0, 8);
   const delivery = item.deliveries?.find((d: any) => d.id === pallet.deliveryId);
@@ -661,13 +661,14 @@ function PalletGlimpse({
             {pallet.photos.map((ph: any) => {
               const photoSrc = photoUrls.get(ph.id) || ph.sharePointUrl || ph.localBlobUrl;
               const label = (ph.slotKey || ph.category || '').replace(/_/g, ' ');
+              const rot = getPhotoRotation(ph);
               return (
                 <div key={ph.id}>
                   {photoSrc ? (
                     <img
                       src={photoSrc}
                       alt={label}
-                      onClick={() => setLightbox({ url: photoSrc, label })}
+                      onClick={() => setLightbox({ url: photoSrc, label, rotation: rot })}
                       style={{
                         width: '100%',
                         aspectRatio: '1',
@@ -675,6 +676,7 @@ function PalletGlimpse({
                         borderRadius: '4px',
                         border: '1px solid var(--rule-soft)',
                         cursor: 'zoom-in',
+                        transform: `rotate(${rot}deg)`,
                       }}
                     />
                   ) : (
@@ -732,6 +734,7 @@ function PalletGlimpse({
         <PhotoLightbox
           url={lightbox.url}
           label={lightbox.label}
+          rotation={lightbox.rotation}
           onClose={() => setLightbox(null)}
         />
       )}

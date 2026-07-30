@@ -47,6 +47,7 @@ export const components: Record<string, string> = {
   'lightbox.photoAlt': 'Foto',
   'lightbox.unavailable': 'Foto no disponible en este dispositivo',
   'lightbox.retake': '📷 Volver a tomar foto',
+  'lightbox.rotate': '↻ Rotar foto',
   'lightbox.close': '✕ Cerrar',
 
   // ImageQualityModal

@@ -11,6 +11,7 @@ interface Props {
   photos: InspectionPhoto[];
   onCaptured: (slotKey: string, photo: InspectionPhoto) => void;
   onQualityFlag: (photoId: string, flag: QualityFlag | undefined) => void;
+  onRotatePhoto?: (photoId: string) => void;
   readOnly?: boolean;
   batchCount?: number;
 }
@@ -24,6 +25,7 @@ export function DynamicPhotoChecklist({
   photos,
   onCaptured,
   onQualityFlag,
+  onRotatePhoto,
   readOnly = false,
   batchCount
 }: Props) {
@@ -102,6 +104,7 @@ export function DynamicPhotoChecklist({
               currentUser={currentUser}
               onCaptured={(photo) => onCaptured(shotType, photo)}
               onQualityFlag={onQualityFlag}
+              onRotatePhoto={onRotatePhoto}
               readOnly={readOnly}
             />
           );
