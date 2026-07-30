@@ -19,6 +19,10 @@ the SKU label (Pallet4-60 = 60 bags). Layers are derived as bags / --bags-per-la
     # does sampling 3x and taking the median beat a single shot?
     python3 eval.py --src ~/vmimg --samples 3
 
+    # measure Claude head-to-head (reads $ANTHROPIC_API_KEY)
+    python3 eval.py --src ~/vmimg --provider anthropic
+    python3 eval.py --src ~/vmimg --provider anthropic --model claude-sonnet-5
+
 Stdlib only, so it runs on a bare VM.
 """
 
@@ -98,36 +102,67 @@ def bags_of(filename):
     return int(m.group(1)) if m else None
 
 
-def ask(base, model, token, jpeg, max_tokens, timeout):
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": [
-            {"type": "text", "text": PROMPT},
-            {"type": "image_url",
-             "image_url": {"url": "data:image/jpeg;base64," + base64.b64encode(jpeg).decode()}},
-        ]}],
-        "max_tokens": max_tokens,
-        "temperature": 0,
-    }
-    headers = {"Content-Type": "application/json"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(
-        f"{base.rstrip('/')}/chat/completions", data=json.dumps(payload).encode(), headers=headers
-    )
+def ask(base, model, token, jpeg, max_tokens, timeout, provider):
+    b64 = base64.b64encode(jpeg).decode()
+    if provider == "anthropic":
+        # Anthropic Messages API shape. No temperature — it is removed on Opus/
+        # Sonnet 5 and returns a 400. Auth is x-api-key, not a bearer token.
+        payload = {
+            "model": model,
+            "max_tokens": max_tokens,
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": PROMPT},
+                {"type": "image",
+                 "source": {"type": "base64", "media_type": "image/jpeg", "data": b64}},
+            ]}],
+        }
+        headers = {
+            "Content-Type": "application/json",
+            "anthropic-version": "2023-06-01",
+            "x-api-key": token,
+        }
+        url = f"{base.rstrip('/')}/messages"
+    else:
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": [
+                {"type": "text", "text": PROMPT},
+                {"type": "image_url",
+                 "image_url": {"url": "data:image/jpeg;base64," + b64}},
+            ]}],
+            "max_tokens": max_tokens,
+            "temperature": 0,
+        }
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        url = f"{base.rstrip('/')}/chat/completions"
+
+    req = urllib.request.Request(url, data=json.dumps(payload).encode(), headers=headers)
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as r:
         out = json.loads(r.read())
-    content = (out.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    if provider == "anthropic":
+        content = "".join(
+            b.get("text", "") for b in (out.get("content") or []) if b.get("type") == "text"
+        )
+    else:
+        content = (out.get("choices") or [{}])[0].get("message", {}).get("content", "")
     return extract_json(content), time.time() - t0, out.get("usage", {})
 
 
 def main():
     p = argparse.ArgumentParser(description="Pallet layer-count accuracy harness.")
     p.add_argument("--src", required=True, help="folder of pre-resized pallet JPEGs")
-    p.add_argument("--base", default="http://127.0.0.1:8000/v1")
-    p.add_argument("--model", default="nvidia/cosmos3-nano-reasoner")
-    p.add_argument("--token", default=os.environ.get("PROXY_TOKEN", ""))
+    p.add_argument("--provider", choices=["openai", "anthropic"], default="openai",
+                   help="openai = OpenAI-compatible /chat/completions (Cosmos NIM); "
+                        "anthropic = Claude Messages API")
+    p.add_argument("--base", default=None,
+                   help="API base (default: NIM localhost, or Anthropic for --provider anthropic)")
+    p.add_argument("--model", default=None,
+                   help="model id (default: cosmos3-nano-reasoner, or claude-opus-5 for anthropic)")
+    p.add_argument("--token", default=None,
+                   help="bearer / x-api-key (default: $PROXY_TOKEN, or $ANTHROPIC_API_KEY for anthropic)")
     p.add_argument("--max-tokens", type=int, default=1536)
     p.add_argument("--samples", type=int, default=1,
                    help="requests per image; >1 takes the median (the model is not deterministic)")
@@ -136,6 +171,16 @@ def main():
     p.add_argument("--timeout", type=int, default=300)
     p.add_argument("--out", default="eval-results.json")
     args = p.parse_args()
+
+    # Provider-aware defaults so `--provider anthropic` needs no other flags.
+    if args.provider == "anthropic":
+        args.base = args.base or "https://api.anthropic.com/v1"
+        args.model = args.model or "claude-opus-5"
+        args.token = args.token or os.environ.get("ANTHROPIC_API_KEY", "")
+    else:
+        args.base = args.base or "http://127.0.0.1:8000/v1"
+        args.model = args.model or "nvidia/cosmos3-nano-reasoner"
+        args.token = args.token or os.environ.get("PROXY_TOKEN", "")
 
     names = sorted(n for n in os.listdir(args.src) if n.lower().endswith((".jpg", ".jpeg", ".png")))
     if not names:
@@ -172,7 +217,7 @@ def main():
         for _ in range(args.samples):
             try:
                 parsed, elapsed, _usage = ask(
-                    args.base, args.model, args.token, jpeg, args.max_tokens, args.timeout
+                    args.base, args.model, args.token, jpeg, args.max_tokens, args.timeout, args.provider
                 )
             except urllib.error.HTTPError as e:
                 err = f"HTTP {e.code} {e.read().decode(errors='replace')[:120]}"

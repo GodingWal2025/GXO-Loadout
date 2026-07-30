@@ -122,8 +122,10 @@ az functionapp config appsettings set -g <rg> -n <func> --settings \
   DETECTOR_SERVICE_KEY="<optional shared secret, matches this service's env>"
 ```
 
-`DETECTOR_SERVICE_URL` takes precedence over the Cosmos NIM vars. Unset it to fall
-back to the NIM; unset both and the endpoint returns 501 (manual layer entry).
+`DETECTOR_SERVICE_URL` takes precedence over the Claude and Cosmos NIM vars. The full
+order is **detector → Claude (`ANTHROPIC_API_KEY`) → Cosmos NIM (`COSMOS_NIM_URL`)**;
+unset all three and the endpoint returns 501 (manual layer entry). See the root
+README's "Using Claude" section for the no-infrastructure path.
 
 ## Env vars
 
