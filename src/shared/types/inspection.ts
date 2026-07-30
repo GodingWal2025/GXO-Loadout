@@ -10,7 +10,7 @@
 //   - Suggestable<T> wrapper on ML-eligible fields tracks manual vs ml-accepted
 //   - Two flagging systems: QualityFlag (3 levels) and MLTrainingFlag (photo)
 
-export type InspectionType = 'outbound' | 'inbound' | 'returns' | 'retag';
+export type InspectionType = 'outbound' | 'inbound' | 'returns' | 'retag' | 'discard';
 
 export type PalletType =
   | 'Full Bag Pallet'
@@ -513,6 +513,7 @@ export const INSPECTION_TYPE_LABELS: Record<InspectionType, string> = {
   inbound: 'Inbound',
   returns: 'Returns',
   retag: 'Retag',
+  discard: 'Discard',
 };
 
 export const INSPECTION_TYPE_DESCRIPTIONS: Record<InspectionType, string> = {
@@ -520,4 +521,15 @@ export const INSPECTION_TYPE_DESCRIPTIONS: Record<InspectionType, string> = {
   inbound: 'Receive and verify incoming loads.',
   returns: 'Process returned product back into inventory.',
   retag: 'Re-label or correct existing inventory.',
+  discard: 'Remove damaged or expired product from inventory.',
 };
+
+/**
+ * Workflows that are not built yet. These render the "coming soon" spec-request
+ * screen instead of the capture flow, so the tiles stay visible and discoverable
+ * rather than leading somewhere half-finished.
+ *
+ * Remove a type from here as its workflow lands — that single edit is what turns
+ * the stub off.
+ */
+export const STUBBED_INSPECTION_TYPES: InspectionType[] = ['inbound', 'retag', 'discard'];

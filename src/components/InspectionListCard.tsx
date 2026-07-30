@@ -14,6 +14,7 @@ export function InspectionListCard({ inspection }: Props) {
     inbound: t('listCard.typeInbound', 'Inbound'),
     returns: t('listCard.typeReturns', 'Returns'),
     retag: t('listCard.typeRetag', 'Retag'),
+    discard: t('listCard.typeDiscard', 'Discard'),
   };
   const totalExpected = inspection.picklist.lineItems.reduce(
     (sum, li) => sum + (li.expectedQuantity.value || 0),

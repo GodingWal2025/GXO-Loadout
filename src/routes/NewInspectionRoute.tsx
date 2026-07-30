@@ -7,6 +7,7 @@ import { dbGetInspection, dbSaveInspection } from '../shared';
 import { listActiveStagingLocations, type StagingLocation } from '../services/stagingLocations';
 import { listInspectorsForSite } from '../shared';
 import type { Inspection, InspectionType } from '../shared';
+import { STUBBED_INSPECTION_TYPES } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
 function SearchableMultiSelect({
@@ -165,6 +166,7 @@ export function NewInspectionRoute() {
     inbound: t('newInspection.typeInbound', 'Inbound'),
     returns: t('newInspection.typeReturns', 'Returns'),
     retag: t('newInspection.typeRetag', 'Retag'),
+    discard: t('newInspection.typeDiscard', 'Discard'),
   };
   const typeDescriptions: Record<InspectionType, string> = {
     outbound: t(
@@ -174,6 +176,10 @@ export function NewInspectionRoute() {
     inbound: t('newInspection.descInbound', 'Receive and verify incoming loads.'),
     returns: t('newInspection.descReturns', 'Process returned product back into inventory.'),
     retag: t('newInspection.descRetag', 'Re-label or correct existing inventory.'),
+    discard: t(
+      'newInspection.descDiscard',
+      'Remove damaged or expired product from inventory.'
+    ),
   };
 
 
@@ -234,7 +240,9 @@ export function NewInspectionRoute() {
   const inspectionType = editing
     ? editing.type
     : (params.type as InspectionType) || 'outbound';
-  const validType = ['outbound', 'inbound', 'returns', 'retag'].includes(inspectionType);
+  const validType = ['outbound', 'inbound', 'returns', 'retag', 'discard'].includes(
+    inspectionType
+  );
 
   if (!validType) {
     return (
@@ -247,8 +255,10 @@ export function NewInspectionRoute() {
     );
   }
 
-  // Retag is stubbed for now
-  if (inspectionType === 'retag') {
+  // Inbound, Retag and Discard aren't built yet — see STUBBED_INSPECTION_TYPES.
+  // The tiles stay on the home screen so they're discoverable and so the spec
+  // questions below reach whoever clicks them, rather than hiding the gap.
+  if (STUBBED_INSPECTION_TYPES.includes(inspectionType)) {
     return (
       <main style={{ maxWidth: 560 }}>
         <div className="page-head">
