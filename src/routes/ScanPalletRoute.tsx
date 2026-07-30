@@ -6,7 +6,7 @@ import { SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import { useCameraCapture } from '../shared';
-import type { Inspection, BatchSection } from '../shared';
+import type { Inspection, BatchSection, PalletType } from '../shared';
 import { PALLET_TYPES } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import {
@@ -78,6 +78,46 @@ function usePalletTypeLabel(): (value: string) => string {
     Minibulk: t('pallet.typeMinibulk', 'Minibulk'),
   };
   return (value: string) => labels[value] ?? value;
+}
+
+function formatUomCount(
+  count: number,
+  uom: string | undefined,
+  palletType: PalletType,
+  t: ReturnType<typeof useT>
+): string {
+  const code = (
+    uom || (palletType === 'Seedpak' ? 'SP' : palletType === 'Minibulk' ? 'MB' : 'BG')
+  ).toUpperCase();
+
+  if (code === 'SP' || code === 'SEEDPAK') {
+    return count === 1
+      ? t('pallet.seedpakCountOne', '{count} SeedPak', { count })
+      : t('pallet.seedpaksCount', '{count} SeedPaks', { count });
+  }
+  if (code === 'MB' || code === 'MINIBULK') {
+    return count === 1
+      ? t('pallet.minibulkCountOne', '{count} Minibulk', { count })
+      : t('pallet.minibulksCount', '{count} Minibulks', { count });
+  }
+  if (code === 'PL') {
+    return count === 1
+      ? t('pallet.palletsCountOne', '{count} pallet', { count })
+      : t('pallet.palletsCount', '{count} pallets', { count });
+  }
+  if (code === 'C62') {
+    return count === 1
+      ? t('pallet.containersCountOne', '{count} container', { count })
+      : t('pallet.containersCount', '{count} containers', { count });
+  }
+  if (code === 'PCE') {
+    return count === 1
+      ? t('pallet.piecesCountOne', '{count} piece', { count })
+      : t('pallet.piecesCount', '{count} pieces', { count });
+  }
+  return count === 1
+    ? t('pallet.bagsCountOne', '{count} bag', { count })
+    : t('pallet.bagsCount', '{count} bags', { count });
 }
 
 export function ScanPalletRoute() {
@@ -291,6 +331,22 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
 
   const delivery = inspection.bol.deliveries.find((d) => d.id === pallet.deliveryId);
 
+  const palletUom = useMemo(() => {
+    for (const section of pallet.batchSections) {
+      if (section.batchCode?.value) {
+        const li = inspection.picklist.lineItems.find(
+          (item) => item.batchCode.value === section.batchCode.value
+        );
+        if (li?.uom) return li.uom;
+      }
+    }
+    if (pallet.palletType === 'Seedpak') return 'SP';
+    if (pallet.palletType === 'Minibulk') return 'MB';
+    return 'BG';
+  }, [pallet.batchSections, pallet.palletType, inspection.picklist.lineItems]);
+
+  const isBagPallet = pallet.palletType !== 'Seedpak' && pallet.palletType !== 'Minibulk';
+
   const totalActualOnPallet = pallet.batchSections.reduce(
     (sum, bs) => sum + (bs.actualBagCount.value || 0),
     0
@@ -491,7 +547,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         />
 
         {/* Layer prediction from the four faces, once they are all captured. */}
-        {!readOnly && allFacesCaptured && (
+        {!readOnly && isBagPallet && allFacesCaptured && (
           <div className="mt-8" style={{ borderTop: '1px dashed var(--rule-soft)', paddingTop: 8 }}>
             {facesBusy ? (
               <div className="xs soft">
@@ -607,6 +663,8 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             sectionNumber={sectionIdx + 1}
             isMultiple={pallet.batchSections.length > 1}
             isReturns={isReturns}
+            palletType={pallet.palletType}
+            picklistLineItems={inspection.picklist.lineItems}
             remainingAvailable={remainingForBatch(section.batchCode.value)}
             onUpdate={(patch) =>
               dispatch({
@@ -827,7 +885,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
               {t('pallet.totalOnPallet', 'Total on this pallet')}
             </div>
             <div className="fw-500" style={{ fontSize: 24 }}>
-              {t('pallet.bagsCount', '{count} bags', { count: totalActualOnPallet })}
+              {formatUomCount(totalActualOnPallet, palletUom, pallet.palletType, t)}
             </div>
           </div>
         </div>
@@ -893,6 +951,8 @@ function BatchSectionRow({
   sectionNumber,
   isMultiple,
   isReturns,
+  palletType,
+  picklistLineItems,
   remainingAvailable,
   onUpdate,
 }: {
@@ -900,6 +960,8 @@ function BatchSectionRow({
   sectionNumber: number;
   isMultiple: boolean;
   isReturns: boolean;
+  palletType: PalletType;
+  picklistLineItems: Inspection['picklist']['lineItems'];
   remainingAvailable: number | null;
   onUpdate: (patch: Partial<BatchSection>) => void;
 }) {
@@ -907,6 +969,18 @@ function BatchSectionRow({
   const actual = section.actualBagCount.value;
   const expected = section.expectedBagCount;
   const mismatch = expected > 0 && actual !== null && actual !== expected;
+
+  const sectionUom = useMemo(() => {
+    if (!section.batchCode.value) return undefined;
+    const li = picklistLineItems.find((item) => item.batchCode.value === section.batchCode.value);
+    return li?.uom;
+  }, [picklistLineItems, section.batchCode.value]);
+
+  const isBagProduct =
+    palletType !== 'Seedpak' &&
+    palletType !== 'Minibulk' &&
+    sectionUom !== 'SP' &&
+    sectionUom !== 'MB';
 
   return (
     <div className="card">
@@ -930,7 +1004,7 @@ function BatchSectionRow({
         />
         {!isReturns && (
           <div className="field">
-            <div className="field__label">{t('pallet.expectedBagCount', 'Expected bag count')}</div>
+            <div className="field__label">{t('pallet.expectedCount', 'Expected count')}</div>
             <input
               type="number"
               value={expected || ''}
@@ -949,7 +1023,7 @@ function BatchSectionRow({
           </div>
         )}
         <SuggestableField
-          label={t('pallet.actualBagCount', 'Actual bag count (confirm)')}
+          label={t('pallet.actualCount', 'Actual count')}
           field={section.actualBagCount}
           type="number"
           hideCamera={true}
@@ -958,7 +1032,7 @@ function BatchSectionRow({
         />
       </div>
 
-      <LayerCountHelper section={section} onUpdate={onUpdate} />
+      {isBagProduct && <LayerCountHelper section={section} onUpdate={onUpdate} />}
 
       {remainingAvailable !== null && remainingAvailable > 0 && (
         <div className="small soft mt-8">
