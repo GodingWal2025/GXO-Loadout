@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { listActiveSites } from '../services/sites';
 import { getDeviceConfig } from '../lib/deviceConfig';
-import { dbListAllInspections, PhotoLightbox, getPhotoRotation } from '../shared';
+import { dbListAllInspections, dbSaveInspection, PhotoLightbox, getPhotoRotation } from '../shared';
 import { resolvePhotoUrl } from '../shared/services/resolvePhotoUrls';
 import type { InspectionPhoto } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
@@ -421,7 +421,7 @@ export function InvestigationRoute() {
                                           <img
                                             src={photoSrc}
                                             alt={ph.category}
-                                            style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)' }}
+                                            style={{ width: '100%', aspectRatio: '1', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)', transform: `rotate(${getPhotoRotation(ph)}deg)` }}
                                           />
                                         </a>
                                       ) : (
@@ -487,7 +487,7 @@ export function InvestigationRoute() {
                                             <img
                                               src={photoSrc}
                                               alt={t('investigation.stagingLaneAlt', 'Staging lane')}
-                                              style={{ width: '100%', aspectRatio: '1.33', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)' }}
+                                              style={{ width: '100%', aspectRatio: '1.33', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)', transform: `rotate(${getPhotoRotation(ph)}deg)` }}
                                             />
                                           </a>
                                         ) : (
@@ -534,7 +534,38 @@ function PalletGlimpse({
   onOpenFull: () => void;
 }) {
   const t = useT();
-  const [lightbox, setLightbox] = useState<{ url?: string; label: string; rotation?: number } | null>(null);
+  const [lightbox, setLightbox] = useState<{ url?: string; label: string; rotation?: number; photoId?: string } | null>(null);
+
+  const handleRotatePhoto = async (photoId: string) => {
+    if (!item || !pallet) return;
+    const rotatePhotos = (photos: any[]) =>
+      (photos || []).map((p: any) => {
+        if (p.id !== photoId) return p;
+        const current = getPhotoRotation(p);
+        const nextRot = (current + 90) % 360;
+        return { ...p, rotation: nextRot };
+      });
+    const updatedPallets = item.pallets.map((p: any) =>
+      p.palletNumber === pallet.palletNumber ? { ...p, photos: rotatePhotos(p.photos) } : p
+    );
+    const updatedStaging = {
+      ...item.staging,
+      overviewPhotos: rotatePhotos(item.staging?.overviewPhotos),
+      coverSheetPhotos: rotatePhotos(item.staging?.coverSheetPhotos),
+      finalLanePhotos: rotatePhotos(item.staging?.finalLanePhotos),
+    };
+    const updatedItem = {
+      ...item,
+      pallets: updatedPallets,
+      staging: updatedStaging,
+      lastEditedAt: new Date().toISOString(),
+    };
+    await dbSaveInspection(updatedItem);
+    if (lightbox) {
+      const curRot = lightbox.rotation ?? 0;
+      setLightbox({ ...lightbox, rotation: (curRot + 90) % 360 });
+    }
+  };
 
   const loadNum = item.picklistLoadNumber || item.bolLoadNumber || item.id.slice(0, 8);
   const delivery = item.deliveries?.find((d: any) => d.id === pallet.deliveryId);
@@ -668,7 +699,7 @@ function PalletGlimpse({
                     <img
                       src={photoSrc}
                       alt={label}
-                      onClick={() => setLightbox({ url: photoSrc, label, rotation: rot })}
+                      onClick={() => setLightbox({ url: photoSrc, label, rotation: rot, photoId: ph.id })}
                       style={{
                         width: '100%',
                         aspectRatio: '1',
@@ -736,6 +767,7 @@ function PalletGlimpse({
           label={lightbox.label}
           rotation={lightbox.rotation}
           onClose={() => setLightbox(null)}
+          onRotate={lightbox.photoId ? () => handleRotatePhoto(lightbox.photoId!) : undefined}
         />
       )}
     </main>

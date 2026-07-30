@@ -98,22 +98,10 @@ export interface InspectionPhoto {
 
 /**
  * Get effective rotation angle in degrees (0, 90, 180, 270) for a photo.
- * Auto-corrects landscape pallet photos that were captured sideways.
  */
 export function getPhotoRotation(photo?: InspectionPhoto): number {
   if (!photo) return 0;
-  if (typeof photo.rotation === 'number') {
-    return photo.rotation;
-  }
-  if (
-    photo.metadata?.orientation === 'landscape' ||
-    (photo.metadata?.originalWidth &&
-      photo.metadata?.originalHeight &&
-      photo.metadata.originalWidth > photo.metadata.originalHeight)
-  ) {
-    return 90;
-  }
-  return 0;
+  return photo.rotation ?? 0;
 }
 
 export interface PhotoMetadata {

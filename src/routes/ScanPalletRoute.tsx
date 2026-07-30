@@ -521,6 +521,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           </select>
         </div>
       </section>
+      </fieldset>
 
       {/* Photo slots — handled by Semantic Photo Dictionary */}
       <section className="section">
@@ -641,6 +642,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       </section>
 
       {/* Batch sections - one per batch on this pallet */}
+      <fieldset className="readonly-fieldset" disabled={readOnly}>
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">

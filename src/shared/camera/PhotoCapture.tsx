@@ -188,6 +188,36 @@ export function SlotPhotoCapture({
           />
         )}
 
+        {onRotatePhoto && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRotate();
+            }}
+            title="Rotate photo"
+            style={{
+              position: 'absolute',
+              bottom: 4,
+              right: 4,
+              background: 'rgba(0,0,0,0.6)',
+              color: '#fff',
+              border: 'none',
+              borderRadius: '50%',
+              width: 24,
+              height: 24,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 12,
+              cursor: 'pointer',
+              zIndex: 2,
+            }}
+          >
+            ↻
+          </button>
+        )}
+
         <div className="photo-slot__label-overlay">{slotLabel}</div>
       </div>
       {viewing && (

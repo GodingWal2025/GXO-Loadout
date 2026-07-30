@@ -436,9 +436,18 @@ export async function analyzePalletCount(blob: Blob): Promise<PalletCountResult>
   return postForAnalysis(await prepareForVision(blob));
 }
 
-/** POST already-prepared bytes. Shared so multi-sampling resizes only once. */
 async function postForAnalysis(upload: Blob): Promise<PalletCountResult> {
-  const res = await fetch(`${apiBase}/api/analyze-pallet-count`, {
+  const customDetectorUrl = (
+    (typeof localStorage !== 'undefined' ? localStorage.getItem('loadout_detector_url') : null) ||
+    import.meta.env.VITE_DETECTOR_SERVICE_URL ||
+    ''
+  ).trim().replace(/\/+$/, '');
+
+  const endpoint = customDetectorUrl
+    ? (customDetectorUrl.endsWith('/analyze') ? customDetectorUrl : `${customDetectorUrl}/analyze`)
+    : `${apiBase}/api/analyze-pallet-count`;
+
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: upload,

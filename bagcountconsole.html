@@ -269,9 +269,9 @@
             <div class="hd"><span class="eyebrow">1 · Endpoint</span></div>
             <div class="bd stack">
               <div>
-                <label class="fld" for="baseUrl">Base URL</label>
-                <input type="text" id="baseUrl" class="mono" placeholder="(blank = same origin)" />
-                <p class="hint" style="margin:6px 0 0">Blank uses this page's origin — correct when served from the deployed app, so <code class="inline">/api/*</code> resolves to the Claude backend. For a local Function use <code class="inline">http://localhost:7071</code>.</p>
+                <label class="fld" for="baseUrl">Base URL / Detector Endpoint</label>
+                <input type="text" id="baseUrl" class="mono" placeholder="https://8080_9d8ht9nkd.apps.run.brev.nvidia.com (or blank = same origin)" />
+                <p class="hint" style="margin:6px 0 0">Enter your Brev GPU endpoint (<code class="inline">https://8080_9d8ht9nkd.apps.run.brev.nvidia.com</code>) or leave blank for deployed app API (<code class="inline">/api/*</code>).</p>
               </div>
               <div>
                 <span class="eyebrow">Mode</span>
@@ -537,8 +537,15 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
       card.innerHTML = `<div class="hd"><span class="eyebrow">${it.name}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
       results.appendChild(card);
       try {
-        const resp = await fetch(apiBase() + "/api/analyze-pallet-count?debug=1", {
+        const base = apiBase();
+        let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-count?debug=1") : "/api/analyze-pallet-count?debug=1";
+        let resp = await fetch(target, {
           method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob });
+        if (resp.status === 404 && base && !base.endsWith("/analyze")) {
+          target = base + "/analyze";
+          resp = await fetch(target, {
+            method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob });
+        }
         const j = await resp.json().catch(() => ({}));
         if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); continue; }
         if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable count.</div>` + raw(j); continue; }
