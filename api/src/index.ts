@@ -761,6 +761,277 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
     }
 }
 
+// ---------------------------------------------------------------------------
+// Pallet bag-count assist (RF-DETR / OWLv2 detector-service)
+//
+// DETECTOR_SERVICE_URL points at the Apache-2.0 detector-service (see
+// detector-service/): RF-DETR in production once fine-tuned, OWLv2 as the
+// train-free zero-shot bootstrap. Its URL and (optional) key live in Function
+// App settings, so they never reach the browser. The service detects bags on the
+// visible pallet face and returns the JSON contract the client consumes; the
+// client multiplies layers by the known bags-per-layer and the verifier confirms.
+// ---------------------------------------------------------------------------
+
+// RF-DETR / OWLv2 detection backend (detector-service/). When DETECTOR_SERVICE_URL
+// is set, the service runs object detection on the pallet face and returns the
+// JSON contract, so the Function just forwards the image bytes.
+const detectorServiceUrl = (process.env.DETECTOR_SERVICE_URL || "").trim().replace(/\/+$/, "");
+const detectorServiceKey = (process.env.DETECTOR_SERVICE_KEY || "").trim();
+
+
+
+
+
+// Pull the answer object out of a model response.
+//
+// Reasoning VLMs (Cosmos, and anything prompted into <think>...</think>) narrate
+// before answering, and that narration routinely contains braces — JSON sketches,
+// set notation, coordinates. So: drop any think block, then take the LAST balanced
+// top-level object that parses, not the first. For a well-behaved model returning
+// a single object the two are identical, so this costs nothing and stops a
+// chain-of-thought model from being misread as a parse failure.
+export function extractJsonObject(text: string): any | null {
+    if (!text) return null;
+
+    const body = text.replace(/<think>[\s\S]*?<\/think>/gi, " ");
+
+    let last: any = null;
+    let start = -1;
+    let depth = 0;
+    for (let i = 0; i < body.length; i++) {
+        const ch = body[i];
+        if (ch === "{") {
+            if (depth === 0) start = i;
+            depth++;
+        } else if (ch === "}" && depth > 0) {
+            depth--;
+            if (depth === 0 && start >= 0) {
+                try {
+                    const candidate = JSON.parse(body.slice(start, i + 1));
+                    // Ignore stray objects that aren't the answer shape.
+                    if (candidate && typeof candidate === "object" && "layers" in candidate) {
+                        last = candidate;
+                    } else if (last === null) {
+                        last = candidate;
+                    }
+                } catch {
+                    // keep scanning — a malformed block shouldn't abort the search
+                }
+                start = -1;
+            }
+        }
+    }
+    return last;
+}
+
+// Forward the raw pallet-face bytes to the RF-DETR/OWLv2 detection service,
+// which already returns the pallet-count JSON contract.
+async function analyzeWithDetector(request: HttpRequest, context: InvocationContext, customUrl?: string): Promise<HttpResponseInit> {
+    const buffer = Buffer.from(await request.arrayBuffer());
+    if (!buffer.length) {
+        return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+    }
+
+    let rawUrl = (customUrl || detectorServiceUrl).trim().replace(/\/+$/, "");
+    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
+        rawUrl = "http://" + rawUrl;
+    }
+    const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
+
+    const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+    const key = request.headers.get("x-detector-key") || detectorServiceKey;
+    if (key) headers["Authorization"] = `Bearer ${key}`;
+
+    context.log(`Proxying pallet count to detector: ${endpoint}`);
+
+    try {
+        const resp = await fetch(endpoint, {
+            method: "POST",
+            headers,
+            body: buffer,
+        });
+
+        if (!resp.ok) {
+            const detail = await resp.text().catch(() => "");
+            context.log(`Detector service error ${resp.status}: ${detail.slice(0, 500)}`);
+            return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status, detail: detail.slice(0, 500), endpoint } };
+        }
+
+        const text = await resp.text();
+        if (text.trim().startsWith("<")) {
+            return {
+                status: 502,
+                jsonBody: {
+                    error: "Detector endpoint returned HTML (Brev login redirect) instead of API JSON",
+                    detail: "The Brev domain requires web login. Change DETECTOR_SERVICE_URL in Azure to direct IP: http://216.81.200.12:19408",
+                    endpoint,
+                },
+            };
+        }
+
+        return { status: 200, jsonBody: JSON.parse(text) };
+    } catch (err: any) {
+        context.log(`Failed to fetch detector at ${endpoint}:`, err);
+        return {
+            status: 502,
+            jsonBody: {
+                error: "Could not reach detector service",
+                detail: String(err?.message || err),
+                endpoint,
+            },
+        };
+    }
+}
+
+async function analyzeFacesWithDetector(
+    images: any[],
+    targetUrl: string,
+    context: InvocationContext
+): Promise<HttpResponseInit> {
+    let rawUrl = targetUrl.trim().replace(/\/+$/, "");
+    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
+        rawUrl = "http://" + rawUrl;
+    }
+    const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
+
+    const faces: any[] = [];
+    let visibleBagTotal = 0;
+    let anyGaps = false;
+    let anyDamage = false;
+    let modelVer = "rf-detr";
+
+    for (let i = 0; i < images.length; i++) {
+        const img = images[i];
+        const url = typeof img?.dataUrl === "string" ? img.dataUrl : "";
+        const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(url);
+        if (!match) continue;
+
+        const buffer = Buffer.from(match[2], "base64");
+        try {
+            const resp = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/octet-stream" },
+                body: buffer,
+            });
+            if (resp.ok) {
+                const j = (await resp.json()) as any;
+                const bags = typeof j.estimatedBags === "number" ? j.estimatedBags : 0;
+                visibleBagTotal += bags;
+                if (j.gaps) anyGaps = true;
+                if (j.damage) anyDamage = true;
+                if (j.modelVersion) modelVer = j.modelVersion;
+
+                faces.push({
+                    index: i,
+                    slotKey: img?.slotKey ?? `face_${i}`,
+                    bagFlaps: bags,
+                    layers: j.layers ?? null,
+                    isPalletFace: true,
+                    flapBoxes: [],
+                    boxCount: bags,
+                    countMatchesBoxes: true,
+                });
+            }
+        } catch (e) {
+            context.log(`Error calling detector for face ${i}:`, e);
+        }
+    }
+
+    return {
+        status: 200,
+        jsonBody: {
+            success: true,
+            faces,
+            visibleBagTotal,
+            visibleBagTotalFromBoxes: visibleBagTotal,
+            estimatedPalletTotal: visibleBagTotal,
+            gaps: anyGaps,
+            damage: anyDamage,
+            topLayerFull: true,
+            confidence: 0.9,
+            modelVersion: modelVer,
+            imageCount: images.length,
+        },
+    };
+}
+
+
+
+export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const customDetector = (request.headers.get("x-detector-url") || request.query.get("detectorUrl") || detectorServiceUrl).trim();
+    if (!customDetector) {
+        return {
+            status: 501,
+            jsonBody: {
+                error: "Pallet vision not configured",
+                detail: "Set DETECTOR_SERVICE_URL in the Function App settings to the RF-DETR/OWLv2 detector-service.",
+            },
+        };
+    }
+
+    try {
+        return await analyzeWithDetector(request, context, customDetector);
+    } catch (error: any) {
+        context.log("Error calling detector service:", error);
+        return {
+            status: 500,
+            jsonBody: {
+                error: "Error analyzing pallet count",
+                detail: String(error?.message || error),
+                targetDetectorUrl: customDetector,
+            },
+        };
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Multi-face pallet assessment (detector-service).
+//
+// A separate endpoint from analyze-pallet-count: it runs the RF-DETR/OWLv2
+// detector over each captured face in turn and sums the per-face visible-bag
+// counts into one assessment body. A detector sees only the outer faces, so the
+// total is a visible-face cross-check, not the pallet total; the client still
+// multiplies layers by bags-per-layer for the real number.
+// ---------------------------------------------------------------------------
+
+// The client sends the four required pallet faces; cap a little above that so a
+// stray extra photo is rejected rather than silently fanned out to the detector.
+const MAX_ASSESS_IMAGES = 5;
+
+
+
+export async function analyzePalletFaces(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    try {
+        const body = (await request.json().catch(() => null)) as any;
+        const images: any[] = Array.isArray(body?.images) ? body.images : [];
+        if (images.length === 0) {
+            return { status: 400, jsonBody: { error: "Expected { images: [{ slotKey, dataUrl }] }" } };
+        }
+        if (images.length > MAX_ASSESS_IMAGES) {
+            return {
+                status: 400,
+                jsonBody: { error: `At most ${MAX_ASSESS_IMAGES} images per request`, got: images.length },
+            };
+        }
+
+        const customDetector = (request.headers.get("x-detector-url") || request.query.get("detectorUrl") || detectorServiceUrl).trim();
+        if (!customDetector) {
+            return {
+                status: 501,
+                jsonBody: {
+                    error: "Pallet vision not configured",
+                    detail: "Set DETECTOR_SERVICE_URL in the environment variables to the RF-DETR/OWLv2 detector-service.",
+                },
+            };
+        }
+
+        return await analyzeFacesWithDetector(images, customDetector, context);
+    } catch (error) {
+        context.log("Error assessing pallet faces:", error);
+        return { status: 500, jsonBody: { error: "Error assessing pallet faces" } };
+    }
+}
+
 export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
     context.log(`Syncing inspection. URL: "${request.url}"`);
     try {
@@ -1064,6 +1335,18 @@ app.http('analyze-bol', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: analyzeBol
+});
+
+app.http('analyze-pallet-count', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: analyzePalletCount
+});
+
+app.http('analyze-pallet-faces', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    handler: analyzePalletFaces
 });
 
 app.http('sync-site', {

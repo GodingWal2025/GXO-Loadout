@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bag-Count Console · GXO Loadout</title>
+<style>
+  /* ---- tokens: graphite instrument, signal-teal accent ---------------- */
+  :root {
+    --bg: #eef0f3;        /* cool graphite ground */
+    --surface: #ffffff;
+    --surface-2: #f6f7f9;
+    --ink: #14181f;       /* blue-cool near-black */
+    --muted: #59636f;
+    --faint: #8a93a0;
+    --border: #d6dae1;
+    --border-strong: #c2c8d2;
+    --accent: #0f9d94;    /* signal teal */
+    --accent-ink: #0b6f68;
+    --accent-soft: #d9f2ef;
+    --ok: #1a7f37;
+    --ok-soft: #d7ede0;
+    --warn: #9a6a00;
+    --warn-soft: #f6e9c8;
+    --crit: #c23b32;
+    --crit-soft: #f5dcd9;
+    --shadow: 0 1px 2px rgba(20,24,31,.06), 0 6px 20px rgba(20,24,31,.05);
+    --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1015; --surface: #161b22; --surface-2: #1b212b;
+      --ink: #e7ebf1; --muted: #97a1af; --faint: #6b7684;
+      --border: #242c38; --border-strong: #313b4a;
+      --accent: #2dd4c4; --accent-ink: #8ff0e7; --accent-soft: #123330;
+      --ok: #46c163; --ok-soft: #12321d; --warn: #e0aa2e; --warn-soft: #33280c;
+      --crit: #f0685e; --crit-soft: #391a17;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #eef0f3; --surface: #ffffff; --surface-2: #f6f7f9;
+    --ink: #14181f; --muted: #59636f; --faint: #8a93a0;
+    --border: #d6dae1; --border-strong: #c2c8d2;
+    --accent: #0f9d94; --accent-ink: #0b6f68; --accent-soft: #d9f2ef;
+    --ok: #1a7f37; --ok-soft: #d7ede0; --warn: #9a6a00; --warn-soft: #f6e9c8;
+    --crit: #c23b32; --crit-soft: #f5dcd9;
+    --shadow: 0 1px 2px rgba(20,24,31,.06), 0 6px 20px rgba(20,24,31,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d1015; --surface: #161b22; --surface-2: #1b212b;
+    --ink: #e7ebf1; --muted: #97a1af; --faint: #6b7684;
+    --border: #242c38; --border-strong: #313b4a;
+    --accent: #2dd4c4; --accent-ink: #8ff0e7; --accent-soft: #123330;
+    --ok: #46c163; --ok-soft: #12321d; --warn: #e0aa2e; --warn-soft: #33280c;
+    --crit: #f0685e; --crit-soft: #391a17;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--ink); font-family: var(--sans);
+    font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { text-wrap: balance; margin: 0; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .eyebrow {
+    font-family: var(--mono); font-size: 11px; letter-spacing: .11em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  a { color: var(--accent-ink); }
+  button { font-family: var(--sans); cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  /* ---- shell ---------------------------------------------------------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 20; display: flex; align-items: center;
+    gap: 16px; padding: 12px 20px; background: color-mix(in srgb, var(--surface) 90%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+  }
+  .wordmark { display: flex; align-items: baseline; gap: 8px; }
+  .wordmark b { font-weight: 700; letter-spacing: -.01em; }
+  .wordmark .tag { font-family: var(--mono); font-size: 11px; color: var(--faint); letter-spacing: .04em; }
+  .scan-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-soft); }
+  .grow { flex: 1; }
+  .iconbtn {
+    background: var(--surface); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .iconbtn:hover { border-color: var(--border-strong); color: var(--ink); }
+
+  .tabs { display: flex; gap: 4px; padding: 8px 16px 0; border-bottom: 1px solid var(--border);
+    background: var(--surface); position: sticky; top: 53px; z-index: 15; overflow-x: auto; }
+  .tab {
+    background: none; border: none; border-bottom: 2px solid transparent; color: var(--muted);
+    padding: 10px 14px 12px; font-size: 13.5px; font-weight: 600; white-space: nowrap;
+  }
+  .tab .k { font-family: var(--mono); font-size: 10px; color: var(--faint); margin-left: 6px; }
+  .tab[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+  .tab:hover { color: var(--ink); }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 22px 20px 80px; }
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  /* ---- primitives ----------------------------------------------------- */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    box-shadow: var(--shadow); }
+  .card > .hd { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }
+  .card > .hd h3 { font-size: 14px; }
+  .card > .bd { padding: 16px; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .split { display: grid; grid-template-columns: 360px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 820px) { .split { grid-template-columns: 1fr; } }
+
+  label.fld { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+  input[type=text], textarea, select {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 9px 11px; font-size: 13px; font-family: var(--sans);
+  }
+  input[type=text].mono, textarea { font-family: var(--mono); }
+  textarea { resize: vertical; line-height: 1.45; }
+  .btn {
+    background: var(--accent); color: #fff; border: 1px solid transparent; border-radius: 9px;
+    padding: 10px 16px; font-weight: 650; font-size: 13.5px;
+  }
+  .btn:hover { filter: brightness(1.06); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn.ghost { background: var(--surface); color: var(--ink); border-color: var(--border-strong); }
+  .btn.ghost:hover { background: var(--surface-2); filter: none; }
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 9px; padding: 3px; gap: 3px; }
+  .seg button { background: none; border: none; border-radius: 6px; padding: 7px 12px; font-size: 12.5px;
+    font-weight: 600; color: var(--muted); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+
+  .drop {
+    border: 1.5px dashed var(--border-strong); border-radius: 12px; padding: 22px 16px; text-align: center;
+    color: var(--muted); background: var(--surface-2); transition: border-color .15s, background .15s;
+  }
+  .drop.hot { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+  .drop b { color: var(--ink); }
+  .hint { color: var(--faint); font-size: 12px; }
+
+  .thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .thumb { position: relative; width: 74px; height: 74px; border-radius: 8px; overflow: hidden;
+    border: 1px solid var(--border); background: var(--surface-2); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb .x { position: absolute; top: 2px; right: 2px; width: 18px; height: 18px; border-radius: 5px;
+    background: rgba(0,0,0,.55); color: #fff; border: none; font-size: 12px; line-height: 1; }
+  .thumb .slot { position: absolute; left: 0; bottom: 0; right: 0; font-family: var(--mono); font-size: 9px;
+    background: rgba(0,0,0,.6); color: #fff; padding: 1px 4px; letter-spacing: .03em; }
+
+  /* chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 999px;
+    border: 1px solid var(--border); background: var(--surface-2); color: var(--muted); letter-spacing: .02em; }
+  .chip.ok { color: var(--ok); background: var(--ok-soft); border-color: transparent; }
+  .chip.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+  .chip.crit { color: var(--crit); background: var(--crit-soft); border-color: transparent; }
+  .chip.acc { color: var(--accent-ink); background: var(--accent-soft); border-color: transparent; }
+
+  /* stat tiles */
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .tile { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .tile .v { font-family: var(--mono); font-size: 26px; font-weight: 600; letter-spacing: -.01em;
+    font-variant-numeric: tabular-nums; }
+  .tile .v small { font-size: 14px; color: var(--faint); }
+  .tile .l { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .tile.good { border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+
+  /* result face card */
+  .facegrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+  .face { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); }
+  .face .cv { position: relative; background: #0a0d12; }
+  .face canvas { width: 100%; display: block; }
+  .face .meta { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .kv { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+  .kv .n { font-family: var(--mono); font-size: 20px; font-weight: 600; }
+  .kv .n small { font-size: 12px; color: var(--faint); }
+
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+  th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; }
+  td.num, th.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .tblwrap { overflow-x: auto; }
+  tr.miss td { color: var(--crit); }
+  tr.hit td:first-child::before { content: "●"; color: var(--ok); margin-right: 7px; font-size: 9px; vertical-align: middle; }
+  tr.miss td:first-child::before { content: "●"; color: var(--crit); margin-right: 7px; font-size: 9px; vertical-align: middle; }
+
+  details.raw { margin-top: 12px; }
+  details.raw summary { cursor: pointer; color: var(--muted); font-size: 12px; font-family: var(--mono); }
+  pre.json { font-family: var(--mono); font-size: 11.5px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; overflow: auto; max-height: 320px; margin: 8px 0 0; }
+
+  .status { font-family: var(--mono); font-size: 11px; padding: 3px 8px; border-radius: 6px;
+    background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+  .banner { border: 1px solid var(--border); border-left: 3px solid var(--warn); background: var(--warn-soft);
+    color: var(--ink); border-radius: 8px; padding: 10px 12px; font-size: 12.5px; }
+  .banner.err { border-left-color: var(--crit); background: var(--crit-soft); }
+
+  /* label tab */
+  .labgrid { display: grid; grid-template-columns: 1fr 272px; gap: 18px; align-items: start; }
+  @media (max-width: 860px) { .labgrid { grid-template-columns: 1fr; } }
+  .stage { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 22px 22px; }
+  .stage canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
+  .stage .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
+  .classpick { display: flex; gap: 6px; }
+  .classpick button { flex: 1; border: 1px solid var(--border); background: var(--surface-2); color: var(--ink);
+    border-radius: 8px; padding: 8px 6px; font-size: 12.5px; font-weight: 600; display: flex; flex-direction: column;
+    align-items: center; gap: 4px; }
+  .classpick button[aria-pressed="true"] { border-color: currentColor; }
+  .swatch { width: 22px; height: 6px; border-radius: 3px; }
+  .boxlist { display: flex; flex-direction: column; gap: 4px; max-height: 220px; overflow: auto; }
+  .boxrow { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 11.5px;
+    padding: 5px 7px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2); }
+  .boxrow .dot { width: 9px; height: 9px; border-radius: 3px; flex: none; }
+  .boxrow .co { color: var(--faint); }
+  .boxrow button { margin-left: auto; background: none; border: none; color: var(--faint); font-size: 13px; }
+  .boxrow button:hover { color: var(--crit); }
+  .navbtns { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .navbtns .pos { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+  .kbd { font-family: var(--mono); font-size: 10.5px; background: var(--surface-2); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 5px; padding: 1px 5px; color: var(--muted); }
+
+  .lead { color: var(--muted); max-width: 62ch; }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+  .sub { font-size: 12.5px; color: var(--muted); }
+  code.inline { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--border);
+    padding: 1px 5px; border-radius: 5px; }
+  .cmd { position: relative; }
+  .cmd pre { font-family: var(--mono); font-size: 12px; background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 11px 12px; overflow-x: auto; margin: 0; }
+  .cmd button { position: absolute; top: 7px; right: 7px; font-size: 11px; padding: 3px 8px; border-radius: 6px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
+  ol.steps { margin: 0; padding-left: 20px; }
+  ol.steps li { margin: 6px 0; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <span class="scan-dot" aria-hidden="true"></span>
+    <div class="wordmark">
+      <b>Bag-Count Console</b>
+      <span class="tag">GXO · pallet vision</span>
+    </div>
+    <div class="grow"></div>
+    <span class="status" id="epStatus">endpoint: same origin</span>
+    <button class="iconbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" aria-selected="true" data-tab="count">Count <span class="k">test</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="eval">Eval <span class="k">score</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="label">Label <span class="k">train</span></button>
+  </div>
+
+  <main>
+    <!-- ================= COUNT ================= -->
+    <section class="panel active" id="panel-count" role="tabpanel">
+      <div class="split">
+        <div class="stack">
+          <div class="card">
+            <div class="hd"><span class="eyebrow">1 · Endpoint</span></div>
+            <div class="bd stack">
+              <div>
+                <label class="fld" for="baseUrl">Base URL / Detector Endpoint</label>
+                <input type="text" id="baseUrl" class="mono" placeholder="http://<host>:<port> detector-service (or blank = same origin)" />
+                <p class="hint" style="margin:6px 0 0">Enter your <code class="inline">detector-service</code> endpoint (RF-DETR / OWLv2), or leave blank to use the deployed app API (<code class="inline">/api/*</code>), which proxies to whatever <code class="inline">DETECTOR_SERVICE_URL</code> is configured.</p>
+              </div>
+              <div>
+                <span class="eyebrow">Mode</span>
+                <div class="seg" id="countMode" style="margin-top:6px">
+                  <button data-mode="single" aria-pressed="true">Single face</button>
+                  <button data-mode="faces" aria-pressed="false">Four-face assess</button>
+                </div>
+                <p class="hint" id="modeHint" style="margin:6px 0 0"></p>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd"><span class="eyebrow">2 · Photos</span></div>
+            <div class="bd">
+              <div class="drop" id="drop">
+                <div><b>Drop pallet photos</b> or <label style="color:var(--accent-ink);text-decoration:underline;cursor:pointer">browse<input type="file" id="fileIn" accept="image/*" multiple hidden></label></div>
+                <p class="hint" style="margin:6px 0 0">Downscaled to 1024px / ≤128 KB before upload, mirroring the app.</p>
+              </div>
+              <div class="thumbs" id="thumbs"></div>
+              <div class="row" style="margin-top:14px">
+                <button class="btn" id="runBtn" disabled>Analyze</button>
+                <button class="btn ghost" id="clearBtn">Clear</button>
+                <span class="status" id="runState"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack" id="countResults">
+          <div class="card"><div class="bd"><p class="lead">Results appear here. Each pallet is analyzed by the <code class="inline">detector-service</code> (RF-DETR when fine-tuned, or OWLv2 zero-shot) set via <code class="inline">DETECTOR_SERVICE_URL</code>. The layer count is a suggestion — the real total is <b>layers × bags-per-layer</b>, which the verifier confirms.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= EVAL ================= -->
+    <section class="panel" id="panel-eval" role="tabpanel">
+      <div class="stack">
+        <div>
+          <span class="eyebrow">Accuracy from eval.py</span>
+          <h2 style="font-size:19px;margin-top:4px">Score a run against ground truth</h2>
+          <p class="lead" style="margin-top:6px">Score the <code class="inline">detector-service</code> against ground-truth pallet photos, then paste the resulting <code class="inline">eval-results.json</code> to visualize per-face and per-pallet accuracy. This is how you decide whether the OWLv2 zero-shot bootstrap is good enough, or whether it is time to fine-tune RF-DETR on labeled data.</p>
+        </div>
+        <div class="card"><div class="bd">
+          <label class="fld" for="evalJson">eval-results.json</label>
+          <textarea id="evalJson" rows="7" placeholder='{ "model": "...", "results": [ ... ], "perPallet": { ... } }'></textarea>
+          <div class="row" style="margin-top:12px">
+            <button class="btn" id="evalBtn">Visualize</button>
+            <button class="btn ghost" id="evalSample">Load sample</button>
+            <span class="status" id="evalMeta"></span>
+          </div>
+        </div></div>
+        <div id="evalOut"></div>
+      </div>
+    </section>
+
+    <!-- ================= LABEL ================= -->
+    <section class="panel" id="panel-label" role="tabpanel">
+      <div class="labgrid">
+        <div class="stack">
+          <div class="stage" id="stage">
+            <div class="empty" id="stageEmpty">
+              <p style="margin:0 0 6px"><b>Load photos to label.</b></p>
+              <p class="hint" style="margin:0">Drag a box over each visible bag <b>flap</b> (the sewn end). Export COCO when done, then train RF-DETR on it.</p>
+              <p style="margin:14px 0 0"><label class="btn ghost" style="display:inline-block">Add images<input type="file" id="labFileIn" accept="image/*" multiple hidden></label></p>
+            </div>
+            <canvas id="labCanvas" hidden></canvas>
+          </div>
+          <div class="navbtns">
+            <button class="btn ghost" id="prevImg">‹ Prev</button>
+            <span class="pos" id="imgPos">—</span>
+            <button class="btn ghost" id="nextImg">Next ›</button>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card"><div class="bd stack">
+            <div>
+              <span class="eyebrow">Class <span class="hint" style="text-transform:none;letter-spacing:0">keys 1–3</span></span>
+              <div class="classpick" id="classPick" style="margin-top:6px"></div>
+            </div>
+            <div>
+              <div class="row" style="justify-content:space-between">
+                <span class="eyebrow">Boxes · this image</span>
+                <span class="mono sub" id="boxCount">0</span>
+              </div>
+              <div class="boxlist" id="boxList" style="margin-top:6px"></div>
+            </div>
+            <div class="row">
+              <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
+              <button class="btn" id="exportBtn" style="flex:1">Export COCO</button>
+            </div>
+            <p class="hint" style="margin:0"><span class="kbd">1</span>–<span class="kbd">3</span> class · <span class="kbd">Del</span> remove selected · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
+          </div></div>
+
+          <div class="card"><div class="bd stack">
+            <span class="eyebrow">Progress</span>
+            <div class="tiles" style="grid-template-columns:1fr 1fr">
+              <div class="tile"><div class="v mono" id="pLabeled">0<small>/0</small></div><div class="l">images labeled</div></div>
+              <div class="tile"><div class="v mono" id="pBoxes">0</div><div class="l">boxes total</div></div>
+            </div>
+            <p class="hint" style="margin:0">Aim for 200–500 labeled faces across bag types, lighting, and stack heights. Variety matters more than raw count.</p>
+          </div></div>
+
+          <div class="card"><div class="bd stack">
+            <span class="eyebrow">Then train</span>
+            <ol class="steps sub">
+              <li>Drop the exported <code class="inline">_annotations.coco.json</code> + images into <code class="inline">detector-service/dataset/{train,valid}/</code>.</li>
+              <li>Class order = category order below → pass as <code class="inline">RFDETR_CLASS_NAMES</code>.</li>
+            </ol>
+            <div class="cmd"><pre id="trainCmd">cd detector-service
+pip install -r requirements.txt
+python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
+# -> output/checkpoint_best.pth
+# then set RFDETR_WEIGHTS + RFDETR_CLASS_NAMES=bag,gap,damage</pre><button data-copy="trainCmd">Copy</button></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+<script>
+(function () {
+  "use strict";
+  const $ = (s, r=document) => r.querySelector(s);
+  const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+  const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
+                  set: (k,v) => { try { localStorage.setItem(k,v); } catch {} } };
+
+  /* ---- theme ---- */
+  const root = document.documentElement;
+  const savedTheme = store.get("bcc-theme");
+  if (savedTheme) root.setAttribute("data-theme", savedTheme);
+  $("#themeBtn").addEventListener("click", () => {
+    const cur = root.getAttribute("data-theme")
+      || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const next = cur === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next); store.set("bcc-theme", next);
+  });
+
+  /* ---- tabs ---- */
+  $$(".tab").forEach(t => t.addEventListener("click", () => {
+    $$(".tab").forEach(x => x.setAttribute("aria-selected", String(x === t)));
+    $$(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + t.dataset.tab));
+  }));
+
+  /* ---- endpoint ---- */
+  const baseUrl = $("#baseUrl");
+  baseUrl.value = store.get("bcc-base") || "";
+  const updEp = () => {
+    store.set("bcc-base", baseUrl.value.trim());
+    $("#epStatus").textContent = "endpoint: " + (baseUrl.value.trim() || "same origin");
+  };
+  const apiBase = () => {
+    let v = baseUrl.value.trim().replace(/\/+$/, "");
+    if (v && !/^https?:\/\//i.test(v)) {
+      v = "https://" + v;
+    }
+    return v;
+  };
+
+  /* ---- image prep (mirror prepareForVision) ---- */
+  const blobToDataUrl = b => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
+  async function prepImage(file, maxEdge=1024, maxBytes=128*1024) {
+    const bmp = await createImageBitmap(file);
+    let scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
+    let w = Math.max(1, Math.round(bmp.width*scale)), h = Math.max(1, Math.round(bmp.height*scale));
+    const cv = document.createElement("canvas"); const ctx = cv.getContext("2d");
+    let q = 0.82, blob = null;
+    for (let i=0; i<8; i++) {
+      cv.width = w; cv.height = h; ctx.drawImage(bmp, 0, 0, w, h);
+      blob = await new Promise(r => cv.toBlob(r, "image/jpeg", q));
+      if (blob && blob.size <= maxBytes) break;
+      if (q > 0.5) q -= 0.12; else { w = Math.round(w*0.8); h = Math.round(h*0.8); q = 0.82; }
+    }
+    const dataUrl = await blobToDataUrl(blob);
+    if (bmp.close) bmp.close();
+    return { blob, dataUrl, width: w, height: h };
+  }
+
+  /* ================= COUNT ================= */
+  const SLOTS = ["FRONT_VIEW", "SIDE_VIEW_1", "BACK_VIEW", "SIDE_VIEW_2"];
+  let mode = "single";
+  let items = []; // {name, blob, dataUrl, w, h}
+  const thumbs = $("#thumbs"), runBtn = $("#runBtn");
+
+  const modeHint = () => $("#modeHint").textContent = mode === "single"
+    ? "One photo → /api/analyze-pallet-count. Layers + visible bags per face."
+    : "Up to 4 photos of one pallet → /api/analyze-pallet-faces. Visible-bag counts summed across faces.";
+  $$("#countMode button").forEach(b => b.addEventListener("click", () => {
+    mode = b.dataset.mode;
+    $$("#countMode button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    modeHint(); renderThumbs();
+  }));
+  modeHint();
+
+  function renderThumbs() {
+    thumbs.innerHTML = "";
+    items.forEach((it, i) => {
+      const d = document.createElement("div"); d.className = "thumb";
+      const slot = (mode === "faces" && i < 4) ? `<span class="slot">${SLOTS[i].replace("_VIEW","")}</span>` : "";
+      d.innerHTML = `<img src="${it.dataUrl}" alt=""><button class="x" title="remove">×</button>${slot}`;
+      d.querySelector(".x").addEventListener("click", () => { items.splice(i,1); renderThumbs(); });
+      thumbs.appendChild(d);
+    });
+    runBtn.disabled = items.length === 0;
+    $("#runState").textContent = items.length ? items.length + " image" + (items.length>1?"s":"") : "";
+  }
+
+  async function addFiles(files) {
+    for (const f of files) {
+      if (!f.type.startsWith("image/")) continue;
+      const p = await prepImage(f);
+      items.push({ name: f.name, blob: p.blob, dataUrl: p.dataUrl, w: p.width, h: p.height });
+    }
+    renderThumbs();
+  }
+  $("#fileIn").addEventListener("change", e => addFiles(e.target.files));
+  $("#clearBtn").addEventListener("click", () => { items = []; renderThumbs(); });
+
+  const drop = $("#drop");
+  ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
+  ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
+  drop.addEventListener("drop", e => { if (e.dataTransfer?.files) addFiles(e.dataTransfer.files); });
+
+  const results = $("#countResults");
+  const chip = (label, kind) => `<span class="chip ${kind||''}">${label}</span>`;
+  function condChips(r) {
+    const c = [];
+    if (r.topLayerFull === false) c.push(chip("top course short", "warn"));
+    else if (r.topLayerFull === true) c.push(chip("top full", "ok"));
+    if (r.gaps) c.push(chip("gaps", "crit"));
+    if (r.damage) c.push(chip("damage", "crit"));
+    if (r.leaning) c.push(chip("leaning", "warn"));
+    if (r.overhang) c.push(chip("overhang", "warn"));
+    if (r.wrapIntact === false) c.push(chip("wrap damaged", "warn"));
+    if (r.loadStable === false) c.push(chip("load unstable", "crit"));
+    if (!c.length) c.push(chip("no anomalies", "ok"));
+    return c.join("");
+  }
+
+  function drawFace(canvas, dataUrl, boxes) {
+    const img = new Image();
+    img.onload = () => {
+      const W = 480, H = Math.round(W * img.height / img.width);
+      canvas.width = W; canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, W, H);
+      (boxes || []).forEach((b, i) => {
+        const x = b[0]*W, y = b[1]*H, w = (b[2]-b[0])*W, h = (b[3]-b[1])*H;
+        ctx.strokeStyle = "#2dd4c4"; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
+        ctx.fillStyle = "rgba(45,212,196,.16)"; ctx.fillRect(x, y, w, h);
+        ctx.fillStyle = "#2dd4c4"; ctx.font = "10px ui-monospace, monospace";
+        ctx.fillText(String(i+1), x+2, y+11);
+      });
+    };
+    img.src = dataUrl;
+  }
+
+  function errBanner(msg, extra) {
+    return `<div class="card"><div class="bd"><div class="banner err"><b>Backend error.</b> ${msg}${extra?`<br><span class="mono" style="font-size:11px">${extra}</span>`:""}</div></div></div>`;
+  }
+
+  async function runSingle() {
+    results.innerHTML = "";
+    for (const it of items) {
+      const card = document.createElement("div"); card.className = "card";
+      card.innerHTML = `<div class="hd"><span class="eyebrow">${it.name}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
+      results.appendChild(card);
+      try {
+        const base = apiBase();
+        const headers = { "Content-Type": "application/octet-stream" };
+        if (base) headers["X-Detector-Url"] = base;
+
+        // Try direct /analyze if base ends in /analyze, or try /api/analyze-pallet-count first
+        let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-count?debug=1") : "/api/analyze-pallet-count?debug=1";
+        let resp = await fetch(target, { method: "POST", headers, body: it.blob }).catch(() => null);
+
+        // Fallback: If SWA proxy 404s or fails, attempt direct fetch to base + /analyze
+        if ((!resp || resp.status === 404) && base && !base.endsWith("/analyze")) {
+          const directTarget = base + "/analyze";
+          resp = await fetch(directTarget, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob }).catch(() => null);
+        }
+
+        if (!resp) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to detector endpoint")); continue; }
+
+        const j = await resp.json().catch(() => ({}));
+        if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); continue; }
+        if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable count.</div>` + raw(j); continue; }
+        card.querySelector(".bd").innerHTML = `
+          <div class="facegrid"><div class="face">
+            <div class="cv"><canvas></canvas></div>
+            <div class="meta">
+              <div class="kv"><span class="sub">layers</span><span class="n">${fmt(j.layers)}<small> × bags/layer</small></span></div>
+              <div class="kv"><span class="sub">est. bags (face)</span><span class="n">${fmt(j.estimatedBags)}</span></div>
+              <div class="chips">${condChips(j)}</div>
+              ${j.confidence!=null?`<div class="sub">confidence <span class="mono">${(+j.confidence).toFixed(2)}</span> · <span class="mono">${j.modelVersion||""}</span></div>`:""}
+              ${j.rationale?`<div class="sub">“${escapeHtml(j.rationale)}”</div>`:""}
+            </div>
+          </div></div>` + raw(j);
+        drawFace(card.querySelector("canvas"), it.dataUrl, null);
+      } catch (e) { card.querySelector(".bd").innerHTML = errBanner(networkMsg(e)); }
+    }
+  }
+
+  async function runFaces() {
+    results.innerHTML = "";
+    const imgs = items.slice(0, 4).map((it, i) => ({ slotKey: SLOTS[i] || ("VIEW_"+i), dataUrl: it.dataUrl }));
+    const card = document.createElement("div"); card.className = "card";
+    card.innerHTML = `<div class="hd"><span class="eyebrow">Pallet · ${imgs.length} face${imgs.length>1?"s":""}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
+    results.appendChild(card);
+    try {
+      const base = apiBase();
+      const headers = { "Content-Type": "application/json" };
+      if (base) headers["X-Detector-Url"] = base;
+
+      let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-faces?debug=1") : "/api/analyze-pallet-faces?debug=1";
+      let resp = await fetch(target, {
+        method: "POST", headers,
+        body: JSON.stringify({ images: imgs, wantBoxes: true, wantInterior: true, wantCondition: true })
+      }).catch(() => null);
+
+      let j = resp && resp.ok ? await resp.json().catch(() => ({})) : null;
+
+      // Fallback: If SWA proxy fails or 404s, call detector service /analyze for each face directly
+      if (!j && base) {
+        const directTarget = base.endsWith("/analyze") ? base : base + "/analyze";
+        const faceResults = [];
+        let totalBags = 0;
+        let modelVer = "rf-detr (direct)";
+        for (let i = 0; i < items.length && i < 4; i++) {
+          const r = await fetch(directTarget, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: items[i].blob }).then(x=>x.json()).catch(()=>({}));
+          const b = r.estimatedBags || 0;
+          totalBags += b;
+          if (r.modelVersion) modelVer = r.modelVersion;
+          faceResults.push({ index: i, slotKey: SLOTS[i] || ("VIEW_"+i), bagFlaps: b, layers: r.layers, isPalletFace: true, boxCount: b, countMatchesBoxes: true });
+        }
+        j = { success: true, faces: faceResults, visibleBagTotal: totalBags, visibleBagTotalFromBoxes: totalBags, estimatedPalletTotal: totalBags, modelVersion: modelVer };
+        resp = { ok: true, status: 200 };
+      }
+
+      if (!resp || !j) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to backend")); return; }
+      if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); return; }
+      if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable assessment.</div>` + raw(j); return; }
+      const faces = j.faces || [];
+      const total = j.visibleBagTotalFromBoxes ?? j.visibleBagTotal;
+      card.querySelector(".bd").innerHTML = `
+        <div class="tiles" style="margin-bottom:14px">
+          <div class="tile"><div class="v">${fmt(total)}</div><div class="l">visible bags (summed faces)</div></div>
+          <div class="tile"><div class="v">${fmt(j.estimatedPalletTotal)}</div><div class="l">est. pallet total (incl. interior)</div></div>
+          <div class="tile"><div class="v">${fmt(j.interiorBags)}</div><div class="l">occluded interior</div></div>
+        </div>
+        <div class="chips" style="margin-bottom:14px">${condChips(j)}${j.confidence!=null?chip("conf "+(+j.confidence).toFixed(2),"acc"):""}${j.modelVersion?chip(j.modelVersion,""):""}</div>
+        <div class="facegrid" id="fg"></div>` + (j.rationale?`<p class="sub" style="margin-top:12px">“${escapeHtml(j.rationale)}”</p>`:"") + raw(j);
+      const fg = card.querySelector("#fg");
+      faces.forEach((f, i) => {
+        const src = imgs[f.index] ? imgs[f.index].dataUrl : (imgs[i]?imgs[i].dataUrl:"");
+        const el = document.createElement("div"); el.className = "face";
+        const gate = f.isPalletFace === false ? chip("not a pallet face · excluded","warn") : "";
+        const mism = (f.countMatchesBoxes === false) ? chip("tally≠boxes","warn") : "";
+        el.innerHTML = `<div class="cv"><canvas></canvas></div><div class="meta">
+          <div class="kv"><span class="sub">${(f.slotKey||("face "+f.index)).replace(/_/g," ").toLowerCase()}</span><span class="n">${fmt(f.bagFlaps)}<small> flaps</small></span></div>
+          <div class="kv"><span class="sub">layers</span><span class="mono">${fmt(f.layers)}</span> <span class="sub">boxes</span><span class="mono">${f.boxCount!=null?f.boxCount:"—"}</span></div>
+          <div class="chips">${gate}${mism||chip("ok","ok")}</div></div>`;
+        fg.appendChild(el);
+        drawFace(el.querySelector("canvas"), src, f.flapBoxes);
+      });
+    } catch (e) { card.querySelector(".bd").innerHTML = errBanner(networkMsg(e)); }
+  }
+
+  function banner501(status, j) {
+    if (status === 501) return `<div class="banner"><b>Vision backend not configured.</b> ${escapeHtml(j.detail||"Set DETECTOR_SERVICE_URL in the app's environment variables.")}</div>` + raw(j);
+    return `<div class="banner err"><b>HTTP ${status}.</b> ${escapeHtml((j.error||"") + (j.detail ? ": " + j.detail : ""))}</div>` + raw(j);
+  }
+  function networkMsg(e) {
+    return `Request failed (${escapeHtml(String(e.message||e))}). If you set DETECTOR_SERVICE_URL in Azure (Option B), <b>leave the Base URL field BLANK</b> so requests pass through your Azure Function (/api/*), which proxies to the detector service server-to-server with no browser CORS or SSL issues.`;
+  }
+  const fmt = v => (v===null||v===undefined||v==="") ? "—" : v;
+  const raw = j => `<details class="raw"><summary>raw JSON</summary><pre class="json">${escapeHtml(JSON.stringify(j,null,2))}</pre></details>`;
+  const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+  runBtn.addEventListener("click", () => { runBtn.disabled = true; (mode==="single"?runSingle():runFaces()).finally(()=>runBtn.disabled=false); });
+  renderThumbs();
+
+  /* ================= EVAL ================= */
+  const median = a => { const s=[...a].sort((x,y)=>x-y); const m=Math.floor(s.length/2); return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2); };
+  function renderEval() {
+    let data; try { data = JSON.parse($("#evalJson").value); } catch (e) { $("#evalMeta").textContent = "invalid JSON"; return; }
+    const rows = data.results || [];
+    const scored = rows.filter(r => r.expected != null && r.layers != null && r.isPalletFace !== false);
+    const hits = scored.filter(r => r.layers === r.expected).length;
+    const within = scored.filter(r => Math.abs(r.layers - r.expected) <= 1).length;
+    const per = data.perPallet || {};
+    let pOk = 0, pScored = 0;
+    const expByPallet = {}; rows.forEach(r => { if (r.expected != null) expByPallet[r.pallet] = r.expected; });
+    const palletRows = Object.keys(per).sort().map(pid => {
+      const vals = per[pid]; const vote = median(vals); const exp = expByPallet[pid];
+      const tied = new Set(vals).size > 1 && vals.filter(v=>v===vote).length*2 <= vals.length;
+      let note = "—", cls = "";
+      if (exp != null) { pScored++; if (vote===exp && !tied) { pOk++; note="ok"; cls="hit"; } else { note = tied?"tie":("miss "+(vote-exp>0?"+":"")+(vote-exp)); cls="miss"; } }
+      return { pid, vals, vote, exp, note, cls };
+    });
+    const pct = (n,d) => d ? Math.round(100*n/d) : 0;
+    $("#evalMeta").textContent = `${data.model||"model"} · samples ${data.samples||1} · ${scored.length} scored faces`;
+    $("#evalOut").innerHTML = `
+      <div class="tiles" style="margin-bottom:16px">
+        <div class="tile ${pct(hits,scored.length)>=60?'good':''}"><div class="v">${pct(hits,scored.length)}<small>%</small></div><div class="l">per-face exact (${hits}/${scored.length})</div></div>
+        <div class="tile"><div class="v">${pct(within,scored.length)}<small>%</small></div><div class="l">within ±1 layer</div></div>
+        <div class="tile ${pOk===pScored&&pScored?'good':''}"><div class="v">${pOk}<small>/${pScored}</small></div><div class="l">pallets correct (voting)</div></div>
+        <div class="tile"><div class="v">${rows.length}</div><div class="l">photos analyzed</div></div>
+      </div>
+      <div class="card"><div class="hd"><span class="eyebrow">Per pallet · voted across faces</span></div><div class="bd tblwrap">
+        <table><thead><tr><th>Pallet</th><th>Faces</th><th class="num">Vote</th><th class="num">Expected</th><th>Result</th></tr></thead>
+        <tbody>${palletRows.map(p=>`<tr class="${p.cls}"><td class="mono">${p.pid}</td><td class="mono co" style="color:var(--faint)">[${p.vals.join(", ")}]</td><td class="num">${p.vote}</td><td class="num">${p.exp??"—"}</td><td class="mono">${p.note}</td></tr>`).join("")}</tbody></table>
+      </div></div>`;
+  }
+  $("#evalBtn").addEventListener("click", renderEval);
+  $("#evalSample").addEventListener("click", () => {
+    $("#evalJson").value = JSON.stringify({
+      model: "rf-detr:pallet-bags", samples: 3, bagsPerLayer: 6,
+      results: [
+        {file:"Pallet2.1.jpg",pallet:"2",layers:10,votes:[10,10,10],expected:10,isPalletFace:true},
+        {file:"Pallet3.1.jpg",pallet:"3",layers:10,votes:[10,8,10],expected:10,isPalletFace:true},
+        {file:"Pallet4.1.jpg",pallet:"4",layers:8,votes:[8,8,10],expected:10,isPalletFace:true},
+        {file:"Pallet5.1.jpg",pallet:"5",layers:10,votes:[10,10,12],expected:10,isPalletFace:true},
+        {file:"Pallet6-60.jpg",pallet:"6",layers:3,votes:[3],expected:10,isPalletFace:false}
+      ],
+      perPallet: { "2":[10,10,10,8], "3":[10,8,10,10], "4":[8,10,10,10], "5":[10,10,9,12] }
+    }, null, 2);
+    renderEval();
+  });
+
+  /* ================= LABEL ================= */
+  const CLASSES = [ {id:1,name:"bag",color:"#1a7f37"}, {id:2,name:"gap",color:"#d29922"}, {id:3,name:"damage",color:"#e5534b"} ];
+  let curClass = 0;
+  let labImgs = []; // {name, img, w, h, boxes:[{x,y,w,h,cls}]}
+  let curImg = -1, selBox = -1;
+  const canvas = $("#labCanvas"), ctx = canvas.getContext("2d");
+  let dispScale = 1, dragging = null;
+
+  const pick = $("#classPick");
+  CLASSES.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.style.color = c.color;
+    b.setAttribute("aria-pressed", String(i===curClass));
+    b.innerHTML = `<span class="swatch" style="background:${c.color}"></span>${c.name}`;
+    b.addEventListener("click", () => { curClass = i; syncClass(); });
+    pick.appendChild(b);
+  });
+  const syncClass = () => $$("#classPick button").forEach((b,i)=>b.setAttribute("aria-pressed",String(i===curClass)));
+
+  async function addLabFiles(files) {
+    for (const f of files) {
+      if (!f.type.startsWith("image/")) continue;
+      const url = URL.createObjectURL(f);
+      const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
+      labImgs.push({ name: f.name, img, w: img.naturalWidth, h: img.naturalHeight, boxes: [] });
+    }
+    if (curImg < 0 && labImgs.length) curImg = 0;
+    drawLab(); updateProgress();
+  }
+  $("#labFileIn").addEventListener("change", e => addLabFiles(e.target.files));
+  $("#labFileIn2").addEventListener("change", e => addLabFiles(e.target.files));
+
+  function drawLab() {
+    const empty = $("#stageEmpty");
+    if (curImg < 0 || !labImgs[curImg]) { empty.hidden = false; canvas.hidden = true; $("#imgPos").textContent = "—"; $("#boxList").innerHTML=""; $("#boxCount").textContent="0"; return; }
+    empty.hidden = true; canvas.hidden = false;
+    const im = labImgs[curImg];
+    const maxW = Math.min(760, $("#stage").clientWidth || 760);
+    dispScale = Math.min(1, maxW / im.w);
+    canvas.width = Math.round(im.w * dispScale); canvas.height = Math.round(im.h * dispScale);
+    ctx.drawImage(im.img, 0, 0, canvas.width, canvas.height);
+    im.boxes.forEach((b, i) => {
+      const c = CLASSES[b.cls].color;
+      ctx.lineWidth = i === selBox ? 3 : 2; ctx.strokeStyle = c;
+      ctx.strokeRect(b.x*dispScale, b.y*dispScale, b.w*dispScale, b.h*dispScale);
+      ctx.fillStyle = c + "22"; ctx.fillRect(b.x*dispScale, b.y*dispScale, b.w*dispScale, b.h*dispScale);
+      ctx.fillStyle = c; ctx.font = "11px ui-monospace, monospace";
+      ctx.fillText(CLASSES[b.cls].name, b.x*dispScale+3, b.y*dispScale+12);
+    });
+    $("#imgPos").textContent = `${curImg+1} / ${labImgs.length} · ${im.name}`;
+    renderBoxList();
+  }
+  function renderBoxList() {
+    const im = labImgs[curImg]; const list = $("#boxList"); list.innerHTML = "";
+    $("#boxCount").textContent = im.boxes.length;
+    im.boxes.forEach((b, i) => {
+      const c = CLASSES[b.cls];
+      const row = document.createElement("div"); row.className = "boxrow";
+      row.innerHTML = `<span class="dot" style="background:${c.color}"></span>${c.name}<span class="co">${Math.round(b.w)}×${Math.round(b.h)}</span><button title="delete">×</button>`;
+      row.addEventListener("click", () => { selBox = i; drawLab(); });
+      row.querySelector("button").addEventListener("click", (e)=>{ e.stopPropagation(); im.boxes.splice(i,1); selBox=-1; drawLab(); updateProgress(); });
+      list.appendChild(row);
+    });
+  }
+  function updateProgress() {
+    const labeled = labImgs.filter(i => i.boxes.length).length;
+    const total = labImgs.reduce((s,i)=>s+i.boxes.length,0);
+    $("#pLabeled").innerHTML = `${labeled}<small>/${labImgs.length}</small>`;
+    $("#pBoxes").textContent = total;
+  }
+
+  const evtPos = e => { const r = canvas.getBoundingClientRect(); const p = e.touches?e.touches[0]:e; return { x:(p.clientX-r.left)/dispScale, y:(p.clientY-r.top)/dispScale }; };
+  function startDraw(e){ if (curImg<0) return; e.preventDefault(); const p = evtPos(e); dragging = { x0:p.x, y0:p.y, x1:p.x, y1:p.y }; }
+  function moveDraw(e){ if (!dragging) return; const p = evtPos(e); dragging.x1=p.x; dragging.y1=p.y; drawLab();
+    ctx.strokeStyle = CLASSES[curClass].color; ctx.lineWidth = 2; ctx.setLineDash([5,4]);
+    const x=Math.min(dragging.x0,dragging.x1)*dispScale, y=Math.min(dragging.y0,dragging.y1)*dispScale;
+    ctx.strokeRect(x,y,Math.abs(dragging.x1-dragging.x0)*dispScale,Math.abs(dragging.y1-dragging.y0)*dispScale); ctx.setLineDash([]); }
+  function endDraw(){ if (!dragging) return; const im = labImgs[curImg];
+    const x=Math.min(dragging.x0,dragging.x1), y=Math.min(dragging.y0,dragging.y1);
+    const w=Math.abs(dragging.x1-dragging.x0), h=Math.abs(dragging.y1-dragging.y0);
+    dragging = null;
+    if (w>4 && h>4) { im.boxes.push({ x:Math.round(x), y:Math.round(y), w:Math.round(w), h:Math.round(h), cls:curClass }); selBox = im.boxes.length-1; updateProgress(); }
+    drawLab(); }
+  canvas.addEventListener("mousedown", startDraw); window.addEventListener("mousemove", moveDraw); window.addEventListener("mouseup", endDraw);
+  canvas.addEventListener("touchstart", startDraw, {passive:false}); canvas.addEventListener("touchmove", moveDraw, {passive:false}); canvas.addEventListener("touchend", endDraw);
+
+  $("#prevImg").addEventListener("click", ()=>{ if (curImg>0){curImg--;selBox=-1;drawLab();} });
+  $("#nextImg").addEventListener("click", ()=>{ if (curImg<labImgs.length-1){curImg++;selBox=-1;drawLab();} });
+  window.addEventListener("keydown", e => {
+    if (!$("#panel-label").classList.contains("active")) return;
+    if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
+    if (e.key>="1" && e.key<="3") { curClass = +e.key-1; syncClass(); }
+    else if (e.key === "Delete" || e.key === "Backspace") { if (selBox>=0 && labImgs[curImg]) { labImgs[curImg].boxes.splice(selBox,1); selBox=-1; drawLab(); updateProgress(); e.preventDefault(); } }
+    else if (e.key === "[") $("#prevImg").click();
+    else if (e.key === "]") $("#nextImg").click();
+  });
+
+  $("#exportBtn").addEventListener("click", () => {
+    if (!labImgs.length) return;
+    const coco = { info:{description:"GXO pallet bag flaps", date_created:new Date().toISOString()},
+      images: [], annotations: [], categories: CLASSES.map(c=>({id:c.id,name:c.name,supercategory:"pallet"})) };
+    let annId = 1;
+    labImgs.forEach((im, idx) => {
+      const imageId = idx + 1;
+      coco.images.push({ id: imageId, file_name: im.name, width: im.w, height: im.h });
+      im.boxes.forEach(b => coco.annotations.push({
+        id: annId++, image_id: imageId, category_id: CLASSES[b.cls].id,
+        bbox: [b.x, b.y, b.w, b.h], area: b.w*b.h, iscrowd: 0, segmentation: [] }));
+    });
+    const blob = new Blob([JSON.stringify(coco, null, 2)], { type: "application/json" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = "_annotations.coco.json"; a.click();
+  });
+
+  window.addEventListener("resize", () => { if (!$("#panel-label").classList.contains("active")) return; drawLab(); });
+
+  /* copy buttons */
+  $$("[data-copy]").forEach(btn => btn.addEventListener("click", () => {
+    const t = $("#" + btn.dataset.copy).textContent;
+    navigator.clipboard?.writeText(t).then(()=>{ const o=btn.textContent; btn.textContent="Copied"; setTimeout(()=>btn.textContent=o,1200); });
+  }));
+})();
+</script>
+</body>
+</html>

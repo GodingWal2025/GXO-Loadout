@@ -51,6 +51,36 @@ export const pallet: Record<string, string> = {
   'pallet.layerApplied': '✓ Aplicado',
   'pallet.layerApply': 'Usar como cantidad real',
 
+  // ---- Vision assist (bag-count estimate from the pallet photo) ----
+  'pallet.aiEstimate': '✨ Estimar capas desde la foto',
+  'pallet.aiEstimateAgain': '✨ Estimar otra cara',
+  'pallet.aiEstimating': '✨ Estimando…',
+  'pallet.aiLayers': 'La IA vio {n} capas',
+  'pallet.aiAgreement': '{votes} de {total} caras coinciden',
+  'pallet.aiOneFaceHint':
+    'Una sola foto acierta unas dos de cada tres veces: fotografíe otra cara para confirmar.',
+  'pallet.aiTied': 'Las caras no coinciden ({samples}): cuente las capas usted mismo.',
+  'pallet.facesEstimating': '✨ Leyendo la estiba con las 4 fotos…',
+  'pallet.facesEstimate': '✨ Estimar capas con las 4 fotos',
+  'pallet.facesAgain': '✨ Leer de nuevo',
+  'pallet.facesRead': 'La IA leyó {list} en las 4 fotos',
+  'pallet.facesNoBlobs': 'Las fotos no están disponibles sin conexión: ingrese las capas manualmente.',
+  'pallet.facesUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
+  'pallet.facesUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
+  'pallet.facesMixed':
+    'La IA leyó {n} capas en las 4 fotos: aplíquelo usted mismo al lote correspondiente.',
+  'pallet.flapTotal': 'Solapas de bolsas: {perFace} = {total} visibles',
+  'pallet.flapTally': 'contadas por el modelo, no localizadas',
+  'pallet.flapInterior': '+{n} ocultas en el interior → {est} en total',
+  'pallet.flapMismatch': 'su propio conteo no coincide con lo que localizó',
+  'pallet.physicalIssues': 'La IA marcó la carga, revísela: {issues}.',
+  'pallet.aiUnreadable': 'No se pudo leer la estiba: ingrese las capas manualmente.',
+  'pallet.aiUnavailable': 'Estimación de IA no disponible: ingrese las capas manualmente.',
+  'pallet.aiAnomaly': 'La IA detectó un posible problema, revise la estiba:',
+  'pallet.aiShortTop': 'la capa superior parece incompleta',
+  'pallet.aiGaps': 'huecos o bolsas faltantes',
+  'pallet.aiDamage': 'posible daño',
+
   // ---- Inspection result ----
   'pallet.damageTitle': 'Daño',
   'pallet.orderVerificationTitle': 'Verificación del pedido',

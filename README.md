@@ -23,12 +23,62 @@ A React-based single-page application built with Vite and TypeScript for capturi
 2. Run `npm run dev` to start the local development server.
 3. Open `http://localhost:5173` in your browser.
 
-## Pallet bag counting
+## Pallet bag-count vision assist
 
-Bag counts are entered by the verifier. The layer-geometry helper on the pallet
-screen computes `bags-per-layer × full-layers + partial` — more reliable than
-eyeballing sagging, occluded bags — and the verifier applies the product as the
-actual count. There is no vision/ML model in this path.
+`POST /api/analyze-pallet-count` estimates the **layer count** of a single pallet
+face from a photo, and `POST /api/analyze-pallet-faces` runs the same detector over
+the four captured faces and sums the visible-bag counts. Layers × bags-per-layer is
+the primary count and the verifier confirms it — the model is an assist, not the
+source of truth, because sagging bags occlude each other badly enough that exact
+visual counting is unreliable even for people.
+
+Both endpoints proxy to **one** backend, the self-hosted detector in
+[`detector-service/`](detector-service/), and return **501** if it is not
+configured so the app degrades cleanly to manual layer entry:
+
+```
+DETECTOR_SERVICE_URL = http://<host>:<port>   # the detector-service /analyze endpoint
+DETECTOR_SERVICE_KEY = <optional bearer key>  # only if the service sets DETECTOR_SERVICE_KEY
+```
+
+### The detector (Apache-2.0, no copyleft)
+
+The service runs one of two interchangeable, Apache-2.0-licensed detection backends
+(`DETECTOR_BACKEND`) — both safe to call from this closed-source app:
+
+- **RF-DETR** (`rfdetr`, production) — accurate and fine-tunable, but the COCO base
+  has no *bag* class, so it needs a checkpoint **fine-tuned on labeled pallet
+  photos** before it counts anything. See [`detector-service/README.md`](detector-service/README.md).
+- **OWLv2** (`owlv2`, zero-shot bootstrap) — open-vocabulary, so it detects from
+  text prompts with **no training data at all**. This is what runs today: with no
+  fine-tuned weights or dataset yet, OWLv2 is the only backend that produces a
+  result out of the box. Less accurate on tight stacks; treat it as a starting
+  point, and use its detections as pre-labels toward an RF-DETR training set.
+
+> AGPL-licensed detectors such as Ultralytics YOLO were deliberately **not** used:
+> serving them over HTTP would trip AGPL's network clause and obligate open-sourcing
+> the service. RF-DETR and OWLv2 are Apache-2.0 and carry no such requirement.
+
+### Honest limits
+
+A detector sees only the **front + top faces**; interior bags are occluded, so the
+per-face `estimatedBags` is a **visible-face** count, not the pallet total — the
+client still does `layers × bags-per-layer` for the real number and the verifier
+confirms it. `gaps` / `damage` are only meaningful if the fine-tuned model has those
+classes; otherwise they default to `false`.
+
+### Client-side image prep
+
+[`palletVision.ts`](src/shared/services/palletVision.ts) downscales each
+straight-from-camera photo (~2.5MB) before upload via `prepareForVision()`, which
+also applies EXIF orientation — phone photos carry a rotation tag, and a sideways
+frame makes the vertical layer count meaningless. This also keeps the round trip
+inside the **45-second** Static Web Apps managed-function gateway timeout.
+
+Never put `DETECTOR_SERVICE_URL`/`DETECTOR_SERVICE_KEY` in a `VITE_*` variable or
+`.env` — anything Vite-prefixed is compiled into the browser bundle. The Function
+proxies the detector so its URL/key stay server-side.
+
 
 ## Deployment
 This app is designed to be deployed as a static web application. It handles routing on the client side, so ensure that the hosting environment (e.g., Azure Static Web Apps, Vercel, Netlify) is configured to rewrite all navigation requests to `index.html`.
