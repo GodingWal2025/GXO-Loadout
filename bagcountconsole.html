@@ -647,7 +647,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     return `<div class="banner err"><b>HTTP ${status}.</b> ${escapeHtml((j.error||"")+" "+(j.detail||""))}${j.detail?"":""}</div>` + (j.raw?raw(j):"");
   }
   function networkMsg(e) {
-    return `Request failed (${escapeHtml(String(e.message||e))}). If this page is opened as a preview or from another origin, the browser blocks cross-origin calls — open <span class="mono">/bag-count-console.html</span> from the deployed app so <span class="mono">/api</span> is same-origin.`;
+    return `Request failed (${escapeHtml(String(e.message||e))}). If you set DETECTOR_SERVICE_URL in Azure (Option B), <b>leave the Base URL field BLANK</b> so requests pass through your Azure Function (/api/*), which proxies to Brev server-to-server with no browser CORS or SSL issues.`;
   }
   const fmt = v => (v===null||v===undefined||v==="") ? "—" : v;
   const raw = j => `<details class="raw"><summary>raw JSON</summary><pre class="json">${escapeHtml(JSON.stringify(j,null,2))}</pre></details>`;

@@ -954,7 +954,10 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
         return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
     }
 
-    const rawUrl = (customUrl || detectorServiceUrl).trim().replace(/\/+$/, "");
+    let rawUrl = (customUrl || detectorServiceUrl).trim().replace(/\/+$/, "");
+    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
+        rawUrl = "http://" + rawUrl;
+    }
     const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
 
     const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
@@ -982,7 +985,10 @@ async function analyzeFacesWithDetector(
     targetUrl: string,
     context: InvocationContext
 ): Promise<HttpResponseInit> {
-    const rawUrl = targetUrl.trim().replace(/\/+$/, "");
+    let rawUrl = targetUrl.trim().replace(/\/+$/, "");
+    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
+        rawUrl = "http://" + rawUrl;
+    }
     const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
 
     const faces: any[] = [];
