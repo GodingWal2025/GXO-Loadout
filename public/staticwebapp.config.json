@@ -4,7 +4,7 @@
     "exclude": [
       "/api/*",
       "/assets/*",
-      "/*.{js,css,map,ico,png,jpg,jpeg,gif,svg,webp,woff,woff2,ttf,webmanifest}"
+      "/*.{html,js,css,map,ico,png,jpg,jpeg,gif,svg,webp,woff,woff2,ttf,webmanifest}"
     ]
   }
 }
