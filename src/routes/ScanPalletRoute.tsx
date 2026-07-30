@@ -91,24 +91,16 @@ function formatUomCount(
   ).toUpperCase();
 
   if (code === 'SP' || code === 'SEEDPAK') {
-    return count === 1
-      ? t('pallet.seedpakCountOne', '{count} SeedPak', { count })
-      : t('pallet.seedpaksCount', '{count} SeedPaks', { count });
+    return `${count} SP`;
   }
   if (code === 'MB' || code === 'MINIBULK') {
-    return count === 1
-      ? t('pallet.minibulkCountOne', '{count} Minibulk', { count })
-      : t('pallet.minibulksCount', '{count} Minibulks', { count });
+    return `${count} MB`;
   }
   if (code === 'PL') {
-    return count === 1
-      ? t('pallet.palletsCountOne', '{count} pallet', { count })
-      : t('pallet.palletsCount', '{count} pallets', { count });
+    return `${count} PL`;
   }
   if (code === 'C62') {
-    return count === 1
-      ? t('pallet.containersCountOne', '{count} container', { count })
-      : t('pallet.containersCount', '{count} containers', { count });
+    return `${count} C62`;
   }
   if (code === 'PCE') {
     return count === 1

@@ -470,6 +470,9 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
               deliveries={stops[stopKey]}
               palletsByDelivery={palletsByDelivery}
               inspectionId={inspection.id}
+              readOnly={readOnly}
+              dispatch={dispatch}
+              lineItems={inspection.picklist.lineItems}
             />
           ))
         )}
@@ -499,13 +502,16 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
             marginTop: 24,
           }}
         >
-          <Link to="/" className="btn btn--ghost">
-            {readOnly ? t('workspace.back', '← Back') : t('workspace.saveExit', 'Save & exit')}
-          </Link>
+          <button className="btn" onClick={() => navigate('/')}>
+            {t('workspace.saveAndExit', 'Save & exit')}
+          </button>
           <button
             className="btn btn--accent btn--lg"
-            disabled={!readOnly && !allFulfilled}
-            onClick={() => navigate(`/inspection/${inspection.id}/review`)}
+            onClick={() =>
+              readOnly || inspection.type === 'returns' || allFulfilled
+                ? navigate(`/inspection/${inspection.id}/complete`)
+                : setShowProgressModal(true)
+            }
           >
             {readOnly
               ? t('workspace.viewSummary', 'View summary →')
@@ -526,11 +532,17 @@ function StopSection({
   deliveries,
   palletsByDelivery,
   inspectionId,
+  readOnly,
+  dispatch,
+  lineItems,
 }: {
   stopKey: string;
   deliveries: Delivery[];
   palletsByDelivery: Record<string, PalletInspection[]>;
   inspectionId: string;
+  readOnly?: boolean;
+  dispatch?: any;
+  lineItems?: any[];
 }) {
   const t = useT();
   const allPallets = deliveries.flatMap((d) => palletsByDelivery[d.id] || []);
@@ -557,6 +569,9 @@ function StopSection({
           delivery={delivery}
           pallets={palletsByDelivery[delivery.id] || []}
           inspectionId={inspectionId}
+          readOnly={readOnly}
+          dispatch={dispatch}
+          lineItems={lineItems}
         />
       ))}
     </section>
@@ -567,10 +582,16 @@ function DeliveryGroup({
   delivery,
   pallets,
   inspectionId,
+  readOnly,
+  dispatch,
+  lineItems,
 }: {
   delivery: Delivery;
   pallets: PalletInspection[];
   inspectionId: string;
+  readOnly?: boolean;
+  dispatch?: any;
+  lineItems?: any[];
 }) {
   const t = useT();
   const palletTypeLabel = usePalletTypeLabel();
@@ -612,6 +633,7 @@ function DeliveryGroup({
                 color: 'inherit',
                 margin: 0,
                 borderLeft: p.qualityFlag ? '3px solid var(--danger)' : undefined,
+                position: 'relative',
               }}
             >
               <div className="row-between">
@@ -621,25 +643,91 @@ function DeliveryGroup({
                 >
                   {t('workspace.palletLabel', 'Pallet {number}', { number: p.palletNumber })}
                 </div>
-                {p.scannedBy && (
-                  <div
-                    className="xs soft"
-                    title={t('workspace.scannedBy', 'Scanned by {name}', { name: p.scannedBy })}
-                    style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                  >
-                    {p.scannedBy.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {p.scannedBy && (
+                    <div
+                      className="xs soft"
+                      title={t('workspace.scannedBy', 'Scanned by {name}', { name: p.scannedBy })}
+                      style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                    >
+                      {p.scannedBy.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                    </div>
+                  )}
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      title={t('workspace.deletePallet', 'Delete pallet')}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (
+                          window.confirm(
+                            t(
+                              'workspace.confirmDeletePallet',
+                              'Are you sure you want to delete Pallet #{number}?',
+                              { number: p.palletNumber }
+                            )
+                          )
+                        ) {
+                          dispatch({ type: 'REMOVE_PALLET', index: p.palletNumber - 1 });
+                        }
+                      }}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--ink-soft)',
+                        cursor: 'pointer',
+                        padding: '2px 4px',
+                        fontSize: 14,
+                        lineHeight: 1,
+                      }}
+                    >
+                      🗑
+                    </button>
+                  )}
+                </div>
               </div>
-              <div className="fw-500" style={{ fontSize: 20, marginTop: 4 }}>
-                {p.batchSections.reduce(
+              {(() => {
+                const total = p.batchSections.reduce(
                   (sum: number, bs) => sum + (bs.actualBagCount.value || 0),
                   0
-                ) || '—'}
-                <span className="xs soft fw-500" style={{ marginLeft: 4 }}>
-                  {t('workspace.bagsUnit', 'bags')}
-                </span>
-              </div>
+                );
+                let uomCode = 'BG';
+                if (p.palletType === 'Seedpak') uomCode = 'SP';
+                else if (p.palletType === 'Minibulk') uomCode = 'MB';
+                else {
+                  for (const bs of p.batchSections) {
+                    if (bs.batchCode.value) {
+                      const li = lineItems?.find(
+                        (item: any) => item.batchCode.value === bs.batchCode.value
+                      );
+                      if (li?.uom) {
+                        uomCode = li.uom;
+                        break;
+                      }
+                    }
+                  }
+                }
+                const formattedUnit =
+                  uomCode === 'SP' || uomCode === 'SEEDPAK'
+                    ? 'SP'
+                    : uomCode === 'MB' || uomCode === 'MINIBULK'
+                    ? 'MB'
+                    : uomCode === 'PL'
+                    ? 'PL'
+                    : uomCode === 'C62'
+                    ? 'C62'
+                    : t('workspace.bagsUnit', 'bags');
+
+                return (
+                  <div className="fw-500" style={{ fontSize: 20, marginTop: 4 }}>
+                    {total || '—'}
+                    <span className="xs soft fw-500" style={{ marginLeft: 4 }}>
+                      {formattedUnit}
+                    </span>
+                  </div>
+                );
+              })()}
               {p.batchSections.map((bs) => (
                 <div key={bs.id} className="xs mono faint" style={{ marginTop: 2, textTransform: 'uppercase' }}>
                   {bs.batchCode.value || '—'}
