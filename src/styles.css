@@ -257,6 +257,7 @@ h4, h5, h6 {
 }
 .topbar__status-dot--offline { background: var(--danger); }
 .topbar__status-dot--syncing { background: var(--warn); }
+.topbar__status a { color: inherit; text-decoration: underline; }
 
 /* Manual "sync now" button + its result popover */
 .sync-refresh {

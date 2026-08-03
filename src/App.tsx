@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { getDeviceConfig } from './lib/deviceConfig';
 import { isAdminAuthenticated } from './services/adminAuth';
@@ -26,6 +26,7 @@ const InventoryRoute = lazy(() => import('./routes/InventoryRoute').then((m) => 
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
 import { SyncRefreshButton } from './components/SyncRefreshButton';
+import { getSyncState, type SyncState } from './shared/services/sync';
 
 export default function App() {
   return (
@@ -82,8 +83,16 @@ function Shell({ children }: { children: ReactNode }) {
   const config = getDeviceConfig();
   const location = useLocation();
   const t = useT();
+  const [syncState, setSyncState] = useState<SyncState>(() => getSyncState());
+
+  useEffect(() => {
+    const update = (event: Event) => setSyncState((event as CustomEvent<SyncState>).detail);
+    window.addEventListener('loadout-sync-status', update);
+    return () => window.removeEventListener('loadout-sync-status', update);
+  }, []);
 
   const isAdminArea = location.pathname.startsWith('/admin');
+  const needsSignIn = syncState.error?.includes('(401)') ?? false;
 
   return (
     <div className="app-shell">
@@ -116,9 +125,17 @@ function Shell({ children }: { children: ReactNode }) {
                 <span className="topbar__site-name">{config.siteName}</span>
               </div>
             )}
-            <div className="topbar__status">
-              <span className="topbar__status-dot" />
-              {t('shell.savedLocally', 'Saved locally')}
+            <div className="topbar__status" title={syncState.error || undefined}>
+              <span className={`topbar__status-dot ${syncState.syncing ? 'topbar__status-dot--syncing' : syncState.error ? 'topbar__status-dot--offline' : ''}`} />
+              {needsSignIn
+                ? <a href="/.auth/login/aad?post_login_redirect_uri=/">{t('shell.signIn', 'Sign in')}</a>
+                : syncState.syncing
+                ? t('shell.syncing', 'Syncing…')
+                : syncState.pending
+                  ? t('shell.pendingSync', '{count} pending', { count: syncState.pending })
+                  : syncState.error
+                    ? t('shell.offline', 'Offline')
+                    : t('shell.savedToServer', 'Saved to server')}
             </div>
             <SyncRefreshButton />
             <LanguageToggle />

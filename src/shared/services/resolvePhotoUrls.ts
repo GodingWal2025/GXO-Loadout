@@ -8,7 +8,7 @@
  * This module provides helpers that:
  *   1. Re-create object URLs from the IndexedDB photoBlobs store (same device)
  *   2. Fall back to a legacy external `sharePointUrl`, when present
- *   3. Return a display-ready URL string, or undefined if no source is available
+ *   3. Fall back to the shared server photo endpoint on another device
  */
 
 import { dbGetPhotoBlob } from './db';
@@ -29,6 +29,7 @@ export function normalizeCloudPhotoUrl(url: string, _photoId: string): string {
  *   1. IndexedDB blob (device that captured it — works offline, always fresh)
  *   2. sharePointUrl  (legacy external source)
  *   3. localBlobUrl   (only valid in the same page session that captured it)
+ *   4. shared server endpoint (other devices)
  */
 export async function resolvePhotoUrl(photo: InspectionPhoto): Promise<string | undefined> {
   // Same-device: pull the blob from IndexedDB. This works offline and avoids a
@@ -48,7 +49,7 @@ export async function resolvePhotoUrl(photo: InspectionPhoto): Promise<string | 
   // Last resort: the object URL from this page session (fresh capture)
   if (photo.localBlobUrl) return photo.localBlobUrl;
 
-  return undefined;
+  return `/api/photos/${encodeURIComponent(photo.id)}`;
 }
 
 /**

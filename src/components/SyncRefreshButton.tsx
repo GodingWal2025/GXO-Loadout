@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useT } from '../shared/i18n/LanguageContext';
+import { syncNow } from '../shared/services/sync';
 
 type State = 'idle' | 'checking' | 'done';
 const RESULT_TIMEOUT_MS = 5000;
@@ -16,7 +17,7 @@ async function checkForAppUpdate(): Promise<boolean> {
   }
 }
 
-/** Refreshes local views and checks the PWA for a newer deployed build. */
+/** Pushes pending work, pulls shared records, and checks for an app update. */
 export function SyncRefreshButton() {
   const t = useT();
   const [state, setState] = useState<State>('idle');
@@ -29,6 +30,7 @@ export function SyncRefreshButton() {
     if (state === 'checking') return;
     window.clearTimeout(timerRef.current);
     setState('checking');
+    await syncNow();
     const ready = await checkForAppUpdate();
     setUpdateReady(ready);
     window.dispatchEvent(new CustomEvent('loadout-data-updated'));
@@ -45,8 +47,8 @@ export function SyncRefreshButton() {
         className={`sync-refresh__btn ${state === 'checking' ? 'is-spinning' : ''}`}
         onClick={handleClick}
         disabled={state === 'checking'}
-        aria-label={t('shell.refresh', 'Refresh local data')}
-        title={t('shell.refresh', 'Refresh local data')}
+        aria-label={t('shell.refresh', 'Sync shared data')}
+        title={t('shell.refresh', 'Sync shared data')}
       >
         <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
           <path
@@ -64,10 +66,10 @@ export function SyncRefreshButton() {
           <strong>
             {updateReady
               ? t('shell.updateReady', 'A newer version is ready')
-              : t('shell.localRefreshed', 'Local data refreshed')}
+              : t('shell.localRefreshed', 'Shared data synchronized')}
           </strong>
           <span className="sync-refresh__detail">
-            {t('shell.localOnlyHint', 'Inspections and photos are saved on this device.')}
+            {t('shell.localOnlyHint', 'Inspections and photos are shared with every device.')}
           </span>
           <button
             type="button"

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import { runResetIfNeeded } from './services/appReset';
+import { startSharedStorageSync } from './shared/services/sync';
 
 // Wipe stale data from prior versions before app loads. Once this resolves,
 // IndexedDB and localStorage are guaranteed to be at the current schema.
@@ -12,5 +13,5 @@ runResetIfNeeded().then(() => {
       <App />
     </React.StrictMode>
   );
-
+  startSharedStorageSync();
 });
