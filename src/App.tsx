@@ -92,7 +92,6 @@ function Shell({ children }: { children: ReactNode }) {
   }, []);
 
   const isAdminArea = location.pathname.startsWith('/admin');
-  const needsSignIn = syncState.error?.includes('(401)') ?? false;
 
   return (
     <div className="app-shell">
@@ -127,9 +126,7 @@ function Shell({ children }: { children: ReactNode }) {
             )}
             <div className="topbar__status" title={syncState.error || undefined}>
               <span className={`topbar__status-dot ${syncState.syncing ? 'topbar__status-dot--syncing' : syncState.error ? 'topbar__status-dot--offline' : ''}`} />
-              {needsSignIn
-                ? <a href="/.auth/login/aad?post_login_redirect_uri=/">{t('shell.signIn', 'Sign in')}</a>
-                : syncState.syncing
+              {syncState.syncing
                 ? t('shell.syncing', 'Syncing…')
                 : syncState.pending
                   ? t('shell.pendingSync', '{count} pending', { count: syncState.pending })
