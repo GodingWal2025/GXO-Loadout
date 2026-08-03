@@ -10,8 +10,7 @@ import type { Inspection, InspectionPhoto } from '../shared';
 import { normalizeCloudPhotoUrl } from '../shared/services/resolvePhotoUrls';
 import { useT } from '../shared/i18n/LanguageContext';
 
-// Prefer the in-session object URL (fresh capture), then the cloud URL
-// (normalized to /api/photo so it works on any device).
+// Prefer the in-session object URL, then a legacy external URL if present.
 function photoSrc(p: InspectionPhoto): string | undefined {
   if (p.localBlobUrl) return p.localBlobUrl;
   if (p.sharePointUrl) return normalizeCloudPhotoUrl(p.sharePointUrl, p.id);

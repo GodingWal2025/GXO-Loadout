@@ -1,59 +1,5 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
-import { CosmosClient } from "@azure/cosmos";
-import { BlobServiceClient, generateBlobSASQueryParameters, ContainerSASPermissions, StorageSharedKeyCredential } from "@azure/storage-blob";
 import { DocumentAnalysisClient, AzureKeyCredential } from "@azure/ai-form-recognizer";
-
-// Initialize Cosmos DB Client
-const cosmosClient = new CosmosClient(process.env.COSMOS_DB_CONNECTION_STRING || "AccountEndpoint=https://localhost:8081/;AccountKey=C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==");
-const database = cosmosClient.database("loadout-db");
-const container = database.container("inspections");
-
-// Shared reference data (sites, inspectors, staging locations) is synced
-// across devices so a freshly-set-up device sees the same lists instead of
-// starting empty. Containers are created on first use so no manual portal
-// step is required.
-const refContainerPromises = new Map<string, Promise<import("@azure/cosmos").Container>>();
-function getRefContainer(name: string) {
-    let promise = refContainerPromises.get(name);
-    if (!promise) {
-        promise = database.containers
-            .createIfNotExists({ id: name, partitionKey: { paths: ["/id"] } })
-            .then((res) => res.container);
-        refContainerPromises.set(name, promise);
-    }
-    return promise;
-}
-const getSitesContainer = () => getRefContainer("sites");
-
-// Initialize Blob Storage Client
-// Storage account names are ALWAYS lowercase. The app setting in the portal
-// was entered uppercase ("GXOLOADOUTB"), which made every SAS signature invalid
-// (signed canonical resource /blob/GXOLOADOUTB/... vs the service's
-// /blob/gxoloadoutb/...) — photo uploads failed with OutOfRangeInput/403.
-const storageAccountName = (process.env.STORAGE_ACCOUNT_NAME || "devstoreaccount1").trim().toLowerCase();
-const storageAccountKey = process.env.STORAGE_ACCOUNT_KEY || "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==";
-const sharedKeyCredential = new StorageSharedKeyCredential(storageAccountName, storageAccountKey);
-// Note: In production, the blob endpoint might differ depending on region/suffix. This is standard Azure Blob URL.
-const blobServiceClient = new BlobServiceClient(`https://${storageAccountName}.blob.core.windows.net`, sharedKeyCredential);
-const photoContainerName = "photos";
-
-// The container is created on first use — it never existed in the storage
-// account, so every SAS upload 404'd with ContainerNotFound.
-let photoContainerPromise: Promise<void> | null = null;
-function ensurePhotoContainer(): Promise<void> {
-    if (!photoContainerPromise) {
-        photoContainerPromise = blobServiceClient
-            .getContainerClient(photoContainerName)
-            .createIfNotExists()
-            .then(() => undefined)
-            .catch((err) => {
-                // Reset so the next request retries instead of caching the failure.
-                photoContainerPromise = null;
-                throw err;
-            });
-    }
-    return photoContainerPromise;
-}
 
 // Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
 // App settings (never shipped to the client) so picklist/BOL images are read
@@ -777,6 +723,25 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
 // JSON contract, so the Function just forwards the image bytes.
 const detectorServiceUrl = (process.env.DETECTOR_SERVICE_URL || "").trim().replace(/\/+$/, "");
 const detectorServiceKey = (process.env.DETECTOR_SERVICE_KEY || "").trim();
+const MAX_DETECTOR_IMAGE_BYTES = 2 * 1024 * 1024;
+
+type DetectorConfig = { ok: true; url: string } | { ok: false; error: string };
+
+function validateDetectorUrl(raw: string): DetectorConfig {
+    if (!raw) return { ok: false, error: "DETECTOR_SERVICE_URL is not configured" };
+    if (raw.includes("=") || /\s/.test(raw)) {
+        return { ok: false, error: "DETECTOR_SERVICE_URL must be a URL, not an environment assignment" };
+    }
+    try {
+        const url = new URL(raw);
+        if (url.protocol !== "https:" && url.protocol !== "http:") {
+            return { ok: false, error: "DETECTOR_SERVICE_URL must use HTTP or HTTPS" };
+        }
+        return { ok: true, url: url.toString().replace(/\/+$/, "") };
+    } catch {
+        return { ok: false, error: "DETECTOR_SERVICE_URL is not a valid absolute URL" };
+    }
+}
 
 
 
@@ -784,7 +749,7 @@ const detectorServiceKey = (process.env.DETECTOR_SERVICE_KEY || "").trim();
 
 // Pull the answer object out of a model response.
 //
-// Reasoning VLMs (Cosmos, and anything prompted into <think>...</think>) narrate
+// Reasoning VLMs may narrate inside <think> blocks before answering.
 // before answering, and that narration routinely contains braces — JSON sketches,
 // set notation, coordinates. So: drop any think block, then take the LAST balanced
 // top-level object that parses, not the first. For a well-behaved model returning
@@ -826,21 +791,19 @@ export function extractJsonObject(text: string): any | null {
 
 // Forward the raw pallet-face bytes to the RF-DETR/OWLv2 detection service,
 // which already returns the pallet-count JSON contract.
-async function analyzeWithDetector(request: HttpRequest, context: InvocationContext, customUrl?: string): Promise<HttpResponseInit> {
+async function analyzeWithDetector(request: HttpRequest, context: InvocationContext, targetUrl: string): Promise<HttpResponseInit> {
     const buffer = Buffer.from(await request.arrayBuffer());
     if (!buffer.length) {
         return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
     }
-
-    let rawUrl = (customUrl || detectorServiceUrl).trim().replace(/\/+$/, "");
-    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
-        rawUrl = "http://" + rawUrl;
+    if (buffer.length > MAX_DETECTOR_IMAGE_BYTES) {
+        return { status: 413, jsonBody: { error: "Image is too large", maxBytes: MAX_DETECTOR_IMAGE_BYTES } };
     }
-    const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
+
+    const endpoint = targetUrl.endsWith("/analyze") ? targetUrl : `${targetUrl}/analyze`;
 
     const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
-    const key = request.headers.get("x-detector-key") || detectorServiceKey;
-    if (key) headers["Authorization"] = `Bearer ${key}`;
+    if (detectorServiceKey) headers["Authorization"] = `Bearer ${detectorServiceKey}`;
 
     context.log(`Proxying pallet count to detector: ${endpoint}`);
 
@@ -849,12 +812,13 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
             method: "POST",
             headers,
             body: buffer,
+            signal: AbortSignal.timeout(40_000),
         });
 
         if (!resp.ok) {
             const detail = await resp.text().catch(() => "");
             context.log(`Detector service error ${resp.status}: ${detail.slice(0, 500)}`);
-            return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status, detail: detail.slice(0, 500), endpoint } };
+            return { status: 502, jsonBody: { error: "Pallet vision backend error", status: resp.status } };
         }
 
         const text = await resp.text();
@@ -862,9 +826,7 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
             return {
                 status: 502,
                 jsonBody: {
-                    error: "Detector endpoint returned HTML (Brev login redirect) instead of API JSON",
-                    detail: "The Brev domain requires web login. Change DETECTOR_SERVICE_URL in Azure to direct IP: http://216.81.200.12:19408",
-                    endpoint,
+                    error: "Detector returned HTML instead of API JSON",
                 },
             };
         }
@@ -876,8 +838,7 @@ async function analyzeWithDetector(request: HttpRequest, context: InvocationCont
             status: 502,
             jsonBody: {
                 error: "Could not reach detector service",
-                detail: String(err?.message || err),
-                endpoint,
+                detail: err?.name === "TimeoutError" ? "Detector request timed out" : "Detector is unavailable",
             },
         };
     }
@@ -888,69 +849,74 @@ async function analyzeFacesWithDetector(
     targetUrl: string,
     context: InvocationContext
 ): Promise<HttpResponseInit> {
-    let rawUrl = targetUrl.trim().replace(/\/+$/, "");
-    if (rawUrl && !/^https?:\/\//i.test(rawUrl)) {
-        rawUrl = "http://" + rawUrl;
-    }
-    const endpoint = rawUrl.endsWith("/analyze") ? rawUrl : `${rawUrl}/analyze`;
+    const endpoint = targetUrl.endsWith("/analyze") ? targetUrl : `${targetUrl}/analyze`;
+    const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
+    if (detectorServiceKey) headers["Authorization"] = `Bearer ${detectorServiceKey}`;
 
-    const faces: any[] = [];
-    let visibleBagTotal = 0;
-    let anyGaps = false;
-    let anyDamage = false;
-    let modelVer = "rf-detr";
-
-    for (let i = 0; i < images.length; i++) {
-        const img = images[i];
+    const outcomes = await Promise.all(images.map(async (img, i) => {
         const url = typeof img?.dataUrl === "string" ? img.dataUrl : "";
         const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(url);
-        if (!match) continue;
+        if (!match) return { ok: false as const, index: i, slotKey: img?.slotKey, error: "invalid image" };
 
         const buffer = Buffer.from(match[2], "base64");
+        if (buffer.length > MAX_DETECTOR_IMAGE_BYTES) {
+            return { ok: false as const, index: i, slotKey: img?.slotKey, error: "image too large" };
+        }
         try {
             const resp = await fetch(endpoint, {
                 method: "POST",
-                headers: { "Content-Type": "application/octet-stream" },
+                headers,
                 body: buffer,
+                signal: AbortSignal.timeout(40_000),
             });
-            if (resp.ok) {
-                const j = (await resp.json()) as any;
-                const bags = typeof j.estimatedBags === "number" ? j.estimatedBags : 0;
-                visibleBagTotal += bags;
-                if (j.gaps) anyGaps = true;
-                if (j.damage) anyDamage = true;
-                if (j.modelVersion) modelVer = j.modelVersion;
-
-                faces.push({
-                    index: i,
-                    slotKey: img?.slotKey ?? `face_${i}`,
-                    bagFlaps: bags,
-                    layers: j.layers ?? null,
-                    isPalletFace: true,
-                    flapBoxes: [],
-                    boxCount: bags,
-                    countMatchesBoxes: true,
-                });
-            }
+            if (!resp.ok) return { ok: false as const, index: i, slotKey: img?.slotKey, error: `HTTP ${resp.status}` };
+            return { ok: true as const, index: i, slotKey: img?.slotKey, result: await resp.json() as any };
         } catch (e) {
             context.log(`Error calling detector for face ${i}:`, e);
+            return { ok: false as const, index: i, slotKey: img?.slotKey, error: "detector unavailable" };
         }
-    }
+    }));
+
+    const successful = outcomes.filter((outcome) => outcome.ok);
+    const faces = outcomes.map((outcome) => {
+        if (!outcome.ok) {
+            return { index: outcome.index, slotKey: outcome.slotKey ?? `face_${outcome.index}`, bagFlaps: null, layers: null, error: outcome.error };
+        }
+        const bags = typeof outcome.result.estimatedBags === "number" ? outcome.result.estimatedBags : null;
+        return {
+            index: outcome.index,
+            slotKey: outcome.slotKey ?? `face_${outcome.index}`,
+            bagFlaps: bags,
+            layers: outcome.result.layers ?? null,
+            isPalletFace: true,
+            flapBoxes: outcome.result.boxes ?? [],
+            boxCount: bags,
+            countMatchesBoxes: true,
+        };
+    });
+    const visibleBagTotal = successful.reduce(
+        (sum, outcome) => sum + (typeof outcome.result.estimatedBags === "number" ? outcome.result.estimatedBags : 0),
+        0
+    );
+    const confidences = successful
+        .map((outcome) => outcome.result.confidence)
+        .filter((value): value is number => typeof value === "number");
 
     return {
         status: 200,
         jsonBody: {
-            success: true,
+            success: successful.length > 0,
             faces,
-            visibleBagTotal,
-            visibleBagTotalFromBoxes: visibleBagTotal,
-            estimatedPalletTotal: visibleBagTotal,
-            gaps: anyGaps,
-            damage: anyDamage,
-            topLayerFull: true,
-            confidence: 0.9,
-            modelVersion: modelVer,
+            visibleBagTotal: successful.length ? visibleBagTotal : null,
+            visibleBagTotalFromBoxes: successful.length ? visibleBagTotal : null,
+            estimatedPalletTotal: null,
+            gaps: successful.some((outcome) => outcome.result.gaps === true),
+            damage: successful.some((outcome) => outcome.result.damage === true),
+            topLayerFull: successful.length > 0 && successful.every((outcome) => outcome.result.topLayerFull !== false),
+            confidence: confidences.length ? confidences.reduce((a, b) => a + b, 0) / confidences.length : null,
+            modelVersion: successful[0]?.result.modelVersion ?? null,
             imageCount: images.length,
+            failedFaces: outcomes.length - successful.length,
         },
     };
 }
@@ -958,27 +924,25 @@ async function analyzeFacesWithDetector(
 
 
 export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const customDetector = (request.headers.get("x-detector-url") || request.query.get("detectorUrl") || detectorServiceUrl).trim();
-    if (!customDetector) {
+    const detector = validateDetectorUrl(detectorServiceUrl);
+    if (!detector.ok) {
         return {
             status: 501,
             jsonBody: {
                 error: "Pallet vision not configured",
-                detail: "Set DETECTOR_SERVICE_URL in the Function App settings to the RF-DETR/OWLv2 detector-service.",
+                detail: detector.error,
             },
         };
     }
 
     try {
-        return await analyzeWithDetector(request, context, customDetector);
-    } catch (error: any) {
+        return await analyzeWithDetector(request, context, detector.url);
+    } catch (error) {
         context.log("Error calling detector service:", error);
         return {
             status: 500,
             jsonBody: {
                 error: "Error analyzing pallet count",
-                detail: String(error?.message || error),
-                targetDetectorUrl: customDetector,
             },
         };
     }
@@ -1014,329 +978,44 @@ export async function analyzePalletFaces(request: HttpRequest, context: Invocati
             };
         }
 
-        const customDetector = (request.headers.get("x-detector-url") || request.query.get("detectorUrl") || detectorServiceUrl).trim();
-        if (!customDetector) {
+        const detector = validateDetectorUrl(detectorServiceUrl);
+        if (!detector.ok) {
             return {
                 status: 501,
                 jsonBody: {
                     error: "Pallet vision not configured",
-                    detail: "Set DETECTOR_SERVICE_URL in the environment variables to the RF-DETR/OWLv2 detector-service.",
+                    detail: detector.error,
                 },
             };
         }
 
-        return await analyzeFacesWithDetector(images, customDetector, context);
+        return await analyzeFacesWithDetector(images, detector.url, context);
     } catch (error) {
         context.log("Error assessing pallet faces:", error);
         return { status: 500, jsonBody: { error: "Error assessing pallet faces" } };
     }
 }
 
-export async function syncInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`Syncing inspection. URL: "${request.url}"`);
-    try {
-        const inspection = await request.json() as any;
-
-        // A device that was offline when an admin deleted this inspection still
-        // has its own copy and will happily push it back. Refuse the push if the
-        // server already holds a tombstone, otherwise the delete gets undone.
-        if (inspection?.id) {
-            try {
-                const { resource: existing } = await container.item(inspection.id, inspection.id).read();
-                if (existing?.deleted) {
-                    context.log(`Ignoring push for deleted inspection ${inspection.id}`);
-                    return { status: 200, jsonBody: { success: true, deleted: true, resource: existing } };
-                }
-            } catch {
-                // Not found (or unreadable) — treat as a normal upsert.
-            }
-        }
-
-        // Upsert the inspection into Cosmos DB
-        const { resource } = await container.items.upsert(inspection);
-
-        return {
-            status: 200,
-            jsonBody: { success: true, resource }
-        };
-    } catch (error) {
-        context.log("Error syncing inspection:", error);
-        return { 
-            status: 500, 
-            jsonBody: { error: "Error syncing inspection" } 
-        };
-    }
-}
-
-export async function photoUploadToken(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const photoId = request.query.get("photoId");
-    if (!photoId) {
-        return { 
-            status: 400, 
-            jsonBody: { error: "Missing photoId parameter" } 
-        };
-    }
-
-    try {
-        await ensurePhotoContainer();
-        const startsOn = new Date();
-        const expiresOn = new Date(new Date().valueOf() + 3600 * 1000); // Token valid for 1 hour
-
-        const sasOptions = {
-            containerName: photoContainerName,
-            blobName: photoId,
-            permissions: ContainerSASPermissions.parse("cw"), // create, write
-            startsOn,
-            expiresOn
-        };
-
-        const sasToken = generateBlobSASQueryParameters(sasOptions, sharedKeyCredential).toString();
-        const blobUrl = `https://${storageAccountName}.blob.core.windows.net/${photoContainerName}/${photoId}`;
-        const sasUrl = `${blobUrl}?${sasToken}`;
-        
-        return { 
-            status: 200, 
-            jsonBody: { sasUrl, sasToken, blobUrl } 
-        };
-    } catch (error) {
-         context.log("Error generating SAS:", error);
-         return { 
-             status: 500, 
-             jsonBody: { error: "Error generating SAS token" } 
-         };
-    }
-}
-
-// Serves a photo blob through the API. The "photos" blob container is private,
-// so the raw blob.core.windows.net URL written onto InspectionPhoto records is
-// not viewable from other devices. This endpoint proxies the read using the
-// storage account key so any device (same origin) can display any photo.
-export async function getPhoto(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const photoId = request.query.get("photoId");
-    if (!photoId || !/^[A-Za-z0-9_-]+$/.test(photoId)) {
-        return { status: 400, jsonBody: { error: "Missing or invalid photoId parameter" } };
-    }
-
-    try {
-        const containerClient = blobServiceClient.getContainerClient(photoContainerName);
-        const blobClient = containerClient.getBlobClient(photoId);
-        const download = await blobClient.download();
-        const body = await streamToBuffer(download.readableStreamBody);
-
-        return {
-            status: 200,
-            headers: {
-                "Content-Type": download.contentType || "image/jpeg",
-                // Photo IDs are immutable — cache aggressively so repeat views are free.
-                "Cache-Control": "public, max-age=31536000, immutable",
-            },
-            body,
-        };
-    } catch (error: any) {
-        if (error?.statusCode === 404) {
-            return { status: 404, jsonBody: { error: "Photo not found" } };
-        }
-        context.log("Error fetching photo:", error);
-        return { status: 500, jsonBody: { error: "Error fetching photo" } };
-    }
-}
-
-async function streamToBuffer(stream: NodeJS.ReadableStream | undefined): Promise<Buffer> {
-    if (!stream) return Buffer.alloc(0);
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) {
-        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    }
-    return Buffer.concat(chunks);
-}
-
-export async function getInspections(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`Fetching inspections. URL: "${request.url}"`);
-    try {
-        // Query all items from Cosmos DB (In production, you'd likely filter by date or status)
-        const { resources } = await container.items.query("SELECT * from c").fetchAll();
-        
-        return { 
-            status: 200, 
-            jsonBody: { success: true, resources } 
-        };
-    } catch (error: any) {
-        context.log("Error fetching inspections:", error);
-        // The bare 500 hides why Cosmos rejected the query (missing db/container,
-        // bad key, throttling). Echo the Cosmos error code/message behind ?debug=1
-        // so it is diagnosable without Application Insights access. No secrets are
-        // in a Cosmos error body — the connection string is never part of it.
-        const debug = request.query.get("debug") === "1";
-        return {
-            status: 500,
-            jsonBody: {
-                error: "Error fetching inspections",
-                ...(debug
-                    ? {
-                          detail: String(error?.message || error),
-                          code: error?.code ?? error?.statusCode ?? null,
-                          name: error?.name ?? null,
-                      }
-                    : {}),
-            },
-        };
-    }
-}
-
-/**
- * Admin delete. Writes a tombstone rather than removing the document, because
- * every device keeps its own IndexedDB copy and re-pulls from here on load — a
- * hard delete here would simply be resurrected by the next device that syncs.
- * Clients drop tombstoned records locally; `syncInspection` refuses to overwrite
- * one. Same pattern as staging locations.
- */
-export async function deleteInspection(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    const id = request.params.id;
-    context.log(`Deleting inspection ${id}`);
-
-    if (!id) {
-        return { status: 400, jsonBody: { error: "Missing inspection id" } };
-    }
-
-    try {
-        const { resource: existing } = await container.item(id, id).read();
-        if (!existing) {
-            return { status: 404, jsonBody: { error: "Inspection not found" } };
-        }
-
-        const tombstone = {
-            ...existing,
-            deleted: true,
-            deletedAt: new Date().toISOString(),
-            // Bump lastEditedAt so the client pull-side conflict check
-            // (existing.lastEditedAt >= incoming.lastEditedAt) accepts this.
-            lastEditedAt: new Date().toISOString(),
-        };
-
-        const { resource } = await container.items.upsert(tombstone);
-        return { status: 200, jsonBody: { success: true, resource } };
-    } catch (error: any) {
-        if (error?.code === 404) {
-            return { status: 404, jsonBody: { error: "Inspection not found" } };
-        }
-        context.log("Error deleting inspection:", error);
-        return { status: 500, jsonBody: { error: "Error deleting inspection" } };
-    }
-}
-
-export async function syncSite(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`Syncing site. URL: "${request.url}"`);
-    try {
-        const site = await request.json();
-        const sites = await getSitesContainer();
-        const { resource } = await sites.items.upsert(site);
-        return { status: 200, jsonBody: { success: true, resource } };
-    } catch (error) {
-        context.log("Error syncing site:", error);
-        return { status: 500, jsonBody: { error: "Error syncing site" } };
-    }
-}
-
-export async function getSites(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    context.log(`Fetching sites. URL: "${request.url}"`);
-    try {
-        const sites = await getSitesContainer();
-        const { resources } = await sites.items.query("SELECT * from c").fetchAll();
-        return { status: 200, jsonBody: { success: true, resources } };
-    } catch (error) {
-        context.log("Error fetching sites:", error);
-        return { status: 500, jsonBody: { error: "Error fetching sites" } };
-    }
-}
-
-// Generic upsert/list handlers for reference-data containers
-// (inspectors, staging locations — same shape as sites).
-function makeRefUpsertHandler(containerName: string, label: string) {
-    return async (request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
-        try {
-            const record = await request.json() as any;
-            if (!record || typeof record.id !== "string") {
-                return { status: 400, jsonBody: { error: `Invalid ${label}: missing id` } };
-            }
-            const container = await getRefContainer(containerName);
-            const { resource } = await container.items.upsert(record);
-            return { status: 200, jsonBody: { success: true, resource } };
-        } catch (error) {
-            context.log(`Error syncing ${label}:`, error);
-            return { status: 500, jsonBody: { error: `Error syncing ${label}` } };
-        }
+export async function health(_request: HttpRequest, _context: InvocationContext): Promise<HttpResponseInit> {
+    const detector = validateDetectorUrl(detectorServiceUrl);
+    return {
+        status: 200,
+        jsonBody: {
+            ok: true,
+            storage: "device-local",
+            documentIntelligence: Boolean(docIntelEndpoint && docIntelKey),
+            detector: detector.ok
+                ? { configured: true }
+                : { configured: false, error: detector.error },
+        },
     };
 }
 
-function makeRefListHandler(containerName: string, label: string) {
-    return async (_request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> => {
-        try {
-            const container = await getRefContainer(containerName);
-            const { resources } = await container.items.query("SELECT * from c").fetchAll();
-            return { status: 200, jsonBody: { success: true, resources } };
-        } catch (error) {
-            context.log(`Error fetching ${label}:`, error);
-            return { status: 500, jsonBody: { error: `Error fetching ${label}` } };
-        }
-    };
-}
-
-// Bulk upsert for the inventory list. Inventory can be ~1-2k rows, so it's
-// pushed as a single { items: [...] } batch rather than one request per row
-// (unlike the small inspector/staging lists). Stored in its own ref container.
-export async function syncInventory(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
-    try {
-        const body = await request.json() as any;
-        const items = Array.isArray(body) ? body : body?.items;
-        if (!Array.isArray(items)) {
-            return { status: 400, jsonBody: { error: "Invalid inventory: expected an items array" } };
-        }
-        const container = await getRefContainer("inventory");
-        const valid = items.filter((it: any) => it && typeof it.id === "string");
-        let count = 0;
-        const chunkSize = 50;
-        for (let i = 0; i < valid.length; i += chunkSize) {
-            const chunk = valid.slice(i, i + chunkSize);
-            await Promise.all(chunk.map((it: any) => container.items.upsert(it)));
-            count += chunk.length;
-        }
-        return { status: 200, jsonBody: { success: true, count } };
-    } catch (error) {
-        context.log("Error syncing inventory:", error);
-        return { status: 500, jsonBody: { error: "Error syncing inventory" } };
-    }
-}
-
-// Register the Azure Functions endpoints (v4 Model)
-app.http('sync-inspection', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: syncInspection
-});
-
-app.http('photo-upload-token', {
+// Register the remaining stateless Azure Functions endpoints.
+app.http('health', {
     methods: ['GET'],
     authLevel: 'anonymous',
-    handler: photoUploadToken
-});
-
-app.http('photo', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: getPhoto
-});
-
-app.http('delete-inspection', {
-    methods: ['DELETE'],
-    authLevel: 'anonymous',
-    route: 'inspections/{id}',
-    handler: deleteInspection
-});
-
-app.http('inspections', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: getInspections
+    handler: health
 });
 
 app.http('analyze-picklist', {
@@ -1361,52 +1040,4 @@ app.http('analyze-pallet-faces', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: analyzePalletFaces
-});
-
-app.http('sync-site', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: syncSite
-});
-
-app.http('sites', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: getSites
-});
-
-app.http('sync-inspector', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: makeRefUpsertHandler("inspectors", "inspector")
-});
-
-app.http('inspectors', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: makeRefListHandler("inspectors", "inspectors")
-});
-
-app.http('sync-staging-location', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: makeRefUpsertHandler("stagingLocations", "staging location")
-});
-
-app.http('staging-locations', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: makeRefListHandler("stagingLocations", "staging locations")
-});
-
-app.http('sync-inventory', {
-    methods: ['POST'],
-    authLevel: 'anonymous',
-    handler: syncInventory
-});
-
-app.http('inventory', {
-    methods: ['GET'],
-    authLevel: 'anonymous',
-    handler: makeRefListHandler("inventory", "inventory")
 });

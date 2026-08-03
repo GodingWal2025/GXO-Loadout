@@ -4,8 +4,7 @@ import { resolvePhotoUrl } from '../services/resolvePhotoUrls';
 
 /**
  * Resolve a display URL for a photo, handling all three sources:
- * IndexedDB blob (same device), cloud /api/photo URL (any device), and the
- * in-session object URL. Returns undefined while resolving / if unavailable.
+ * IndexedDB blob, a legacy external URL, or the in-session object URL.
  */
 export function usePhotoUrl(photo: InspectionPhoto | undefined): string | undefined {
   const [url, setUrl] = useState<string | undefined>(undefined);

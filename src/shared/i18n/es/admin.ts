@@ -140,9 +140,6 @@ export const admin: Record<string, string> = {
   'admin.noInspectionsFound': 'No se encontraron inspecciones.',
   'admin.confirmDeleteInspection':
     '¿Eliminar esta inspección de forma permanente? No se puede deshacer.',
-  'admin.deleteRefused': 'El servidor rechazó la eliminación ({status}). No se eliminó nada; intente de nuevo.',
-  'admin.deleteOffline':
-    'No se pudo contactar el servidor. Eliminar requiere conexión, así que no se eliminó nada.',
   'admin.previous': '← Anterior',
   'admin.next': 'Siguiente →',
   'admin.pageOf': 'Página {page} de {total}',

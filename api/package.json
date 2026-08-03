@@ -16,9 +16,7 @@
   "type": "commonjs",
   "dependencies": {
     "@azure/ai-form-recognizer": "^5.1.0",
-    "@azure/cosmos": "^4.9.3",
-    "@azure/functions": "^4.16.2",
-    "@azure/storage-blob": "12.26.0"
+    "@azure/functions": "^4.16.2"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

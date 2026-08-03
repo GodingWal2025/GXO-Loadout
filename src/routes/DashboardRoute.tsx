@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
 import { useT } from '../shared/i18n/LanguageContext';
+import { dbListAllInspections } from '../shared/services/db';
+import { listAllSites } from '../services/sites';
+import { buildDashboardStats } from '../shared/services/dashboardStats';
 
 const COLORS = ['#1e5635', '#b8860b', '#8b1f1f', '#5a5a5a', '#999'];
 
@@ -23,7 +26,7 @@ export function DashboardRoute() {
   const [presetRange, setPresetRange] = useState<'7' | '14' | '30' | '90' | 'custom'>('14');
   const [selectedSite, setSelectedSite] = useState<string>('all');
   
-  // Real stats loaded from the SQLite backend
+  // Statistics are computed from this device's local inspection records.
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,24 +40,25 @@ export function DashboardRoute() {
     setEndDate(toISODate(end));
   };
 
-  // Fetch stats from backend whenever filters change
+  // Recompute local stats whenever filters change.
   useEffect(() => {
     let active = true;
     const fetchStats = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/dashboard/stats?startDate=${startDate}&endDate=${endDate}&siteId=${selectedSite}`);
-        if (!res.ok) {
-          throw new Error(`Server returned ${res.status}: ${await res.text()}`);
-        }
-        const data = await res.json();
+        const data = buildDashboardStats(
+          await dbListAllInspections(),
+          listAllSites(),
+          startDate,
+          endDate,
+          selectedSite,
+        );
         if (active) {
           setStats(data);
           setError(null);
         }
       } catch (err) {
         if (active) {
-          console.error('[DashboardRoute] Failed to fetch stats:', err);
           setError(err instanceof Error ? err.message : String(err));
         }
       } finally {
@@ -211,7 +215,7 @@ export function DashboardRoute() {
               {t('dashboard.title', 'Operations')} <em>{t('dashboard.titleEm', 'dashboard')}</em>
             </h1>
             <div className="page-head__sub">
-              {t('dashboard.sub', 'Cross-site edge diagnostics · live database stats')}
+              {t('dashboard.sub', 'Device-local inspection performance')}
             </div>
           </div>
           <Link to="/" className="btn btn--ghost no-print">{t('dashboard.home', '← Home')}</Link>
@@ -285,19 +289,9 @@ export function DashboardRoute() {
             onChange={(e) => setSelectedSite(e.target.value)}
           >
             <option value="all">{t('dashboard.allSites', 'All sites')}</option>
-            {stats && stats.siteRows && stats.siteRows.filter((s: any) => s.name !== "No Data" && s.name !== "No data").map((s: any) => (
-              <option key={s.name} value={s.name.toLowerCase().replace(/ /g, '-')}>{s.name}</option>
+            {listAllSites().map((s) => (
+              <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-            {/* Fallbacks if stats not loaded yet */}
-            {(!stats || !stats.siteRows) && (
-              <>
-                <option value="oak-ridge">Oak Ridge</option>
-                <option value="riverside">Riverside</option>
-                <option value="pine-creek">Pine Creek</option>
-                <option value="westfield">Westfield</option>
-                <option value="lakemont">Lakemont</option>
-              </>
-            )}
           </select>
         </div>
         <div style={{ flex: 1 }} />
@@ -309,7 +303,7 @@ export function DashboardRoute() {
         <div className="banner banner--danger" style={{ marginBottom: 24 }}>
           <span className="banner__icon">✕</span>
           <div className="banner__body">
-            {t('dashboard.loadFailed', 'Failed to load live metrics:')} {error}
+            {t('dashboard.loadFailed', 'Failed to load local metrics:')} {error}
           </div>
         </div>
       )}
@@ -318,7 +312,7 @@ export function DashboardRoute() {
         <div className="empty">
           <div className="empty__title">{t('dashboard.loading', 'Loading statistics...')}</div>
           <div className="empty__sub">
-            {t('dashboard.loadingSub', 'Reading from edge SQLite database.')}
+            {t('dashboard.loadingSub', 'Reading inspections stored on this device.')}
           </div>
         </div>
       )}
@@ -328,7 +322,7 @@ export function DashboardRoute() {
           <div className="banner banner--info mb-24 no-print">
             <span className="banner__icon">i</span>
             <div className="banner__body">
-              {t('dashboard.rangeBannerFrom', 'Displaying live aggregated edge data from')}{' '}
+              {t('dashboard.rangeBannerFrom', 'Displaying device-local data from')}{' '}
               <strong>{startDate}</strong> {t('dashboard.rangeBannerTo', 'to')}{' '}
               <strong>{endDate}</strong> {t('dashboard.rangeBannerFor', 'for')}{' '}
               <strong>

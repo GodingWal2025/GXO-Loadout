@@ -393,9 +393,7 @@ export interface Inspection {
   qualityFlag?: QualityFlag;
   flaggedItemsCount: number;
   archived?: boolean;
-  /** Admin tombstone. Set server-side by DELETE /api/inspections/{id}; clients
-   *  drop the local record instead of storing it. Never hard-delete on the
-   *  server — other devices would resurrect it on their next push. */
+  /** Legacy cloud-sync tombstone retained only for old local records. */
   deleted?: boolean;
   deletedAt?: string;
 }
