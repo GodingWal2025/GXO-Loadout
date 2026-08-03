@@ -23,27 +23,7 @@ export {
   dbArchiveInspection,
   dbSavePhotoBlob,
   dbGetPhotoBlob,
-  dbMarkPhotoUploaded,
-  dbEnqueueSync,
-  dbGetPendingSync,
-  dbRequeueStalledSync,
-  dbResetFailedSync,
-  dbReenqueueOrphanedPhotos,
-  dbUpdateSyncEntry,
-  dbGetPendingSyncCount,
-  dbGetUnuploadedPhotoCount,
-  MAX_SYNC_ATTEMPTS,
 } from './services/db';
-export type { SyncQueueEntry } from './services/db';
-
-export {
-  startBackgroundSync,
-  processSyncQueue,
-  pullInspectionsFromServer,
-  forceFullSync,
-  setApiUrl,
-} from './services/sync';
-export type { ForceSyncResult } from './services/sync';
 
 export { analyzePicklistPhoto, analyzeBolPhoto } from './services/ocr';
 export type {
@@ -73,8 +53,6 @@ export {
   addInspector,
   updateInspector,
   deactivateInspector,
-  startInspectorsSync,
-  syncInspectorsNow,
 } from './services/inspectors';
 
 export {
@@ -139,6 +117,3 @@ export { DashboardTabs } from './components/DashboardTabs';
 export type { DashboardTab } from './components/DashboardTabs';
 export { KanbanBoard } from './components/KanbanBoard';
 export type { KanbanColumnDef, KanbanCardDef, KanbanBoardProps } from './components/KanbanBoard';
-
-// Ontology client (kept for potential future backend integration)
-export { ontologyClient, setOntologyApiBase } from './client';

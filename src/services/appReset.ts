@@ -1,28 +1,18 @@
 // App reset mechanism.
 //
-// Two modes:
-//   1. Automatic: when DATA_VERSION is bumped, the next launch wipes all
-//      localStorage and IndexedDB to ensure no stale data from older app
-//      versions persists. Useful when the schema changes or for a clean reset
-//      after major changes.
-//   2. Manual: admin can trigger a reset from the Security tab.
-//
-// Bump DATA_VERSION whenever the data schema changes incompatibly or when you
-// want all existing installs to start fresh.
+// Manual device reset plus a data-version marker. IndexedDB schema upgrades
+// migrate in place; an app release must never silently erase warehouse data.
 
 const DATA_VERSION = '2';
 const VERSION_KEY = 'loadout.data.version';
 
 /**
- * Check if we need to wipe data, and do so if needed.
+ * Record the current data version without deleting existing data.
  * Call this at the very top of main.tsx, before any other localStorage/IDB access.
  */
 export async function runResetIfNeeded(): Promise<void> {
   const stored = localStorage.getItem(VERSION_KEY);
   if (stored === DATA_VERSION) return;
-
-  console.log(`[loadout] Data version mismatch (stored=${stored}, current=${DATA_VERSION}). Wiping data.`);
-  await wipeAllData();
   localStorage.setItem(VERSION_KEY, DATA_VERSION);
 }
 

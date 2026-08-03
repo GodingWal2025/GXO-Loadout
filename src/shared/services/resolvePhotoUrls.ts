@@ -7,7 +7,7 @@
  *
  * This module provides helpers that:
  *   1. Re-create object URLs from the IndexedDB photoBlobs store (same device)
- *   2. Fall back to `sharePointUrl` (the Azure Blob Storage URL set after upload)
+ *   2. Fall back to a legacy external `sharePointUrl`, when present
  *   3. Return a display-ready URL string, or undefined if no source is available
  */
 
@@ -15,15 +15,10 @@ import { dbGetPhotoBlob } from './db';
 import type { InspectionPhoto } from '../types/inspection';
 
 /**
- * Photos uploaded before the /api/photo proxy existed have a raw
- * `https://<account>.blob.core.windows.net/photos/<photoId>` URL stored. The
- * photos container is PRIVATE, so those URLs 403/404 on other devices. Since
- * the blob name is always the photo id, rewrite them to the proxy endpoint.
+ * Older records may contain an external photo URL. Keep it displayable without
+ * rewriting it through a server-side storage proxy.
  */
-export function normalizeCloudPhotoUrl(url: string, photoId: string): string {
-  if (/^https:\/\/[^/]+\.blob\.core\.windows\.net\//i.test(url)) {
-    return `/api/photo?photoId=${photoId}`;
-  }
+export function normalizeCloudPhotoUrl(url: string, _photoId: string): string {
   return url;
 }
 
@@ -32,7 +27,7 @@ export function normalizeCloudPhotoUrl(url: string, photoId: string): string {
  *
  * Priority:
  *   1. IndexedDB blob (device that captured it — works offline, always fresh)
- *   2. sharePointUrl  (cloud — works on any device, normalized to /api/photo)
+ *   2. sharePointUrl  (legacy external source)
  *   3. localBlobUrl   (only valid in the same page session that captured it)
  */
 export async function resolvePhotoUrl(photo: InspectionPhoto): Promise<string | undefined> {

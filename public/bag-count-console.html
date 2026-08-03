@@ -266,12 +266,14 @@
       <div class="split">
         <div class="stack">
           <div class="card">
-            <div class="hd"><span class="eyebrow">1 · Endpoint</span></div>
+            <div class="hd"><span class="eyebrow">1 · Connection</span></div>
             <div class="bd stack">
-              <div>
-                <label class="fld" for="baseUrl">Base URL / Detector Endpoint</label>
-                <input type="text" id="baseUrl" class="mono" placeholder="http://<host>:<port> detector-service (or blank = same origin)" />
-                <p class="hint" style="margin:6px 0 0">Enter your <code class="inline">detector-service</code> endpoint (RF-DETR / OWLv2), or leave blank to use the deployed app API (<code class="inline">/api/*</code>), which proxies to whatever <code class="inline">DETECTOR_SERVICE_URL</code> is configured.</p>
+              <div class="row" style="justify-content:space-between">
+                <div>
+                  <div style="font-weight:700">Deployed detector service</div>
+                  <p class="hint" id="healthDetail" style="margin:6px 0 0">Checking <code class="inline">/api/health</code>…</p>
+                </div>
+                <button class="btn ghost" id="healthBtn">Check</button>
               </div>
               <div>
                 <span class="eyebrow">Mode</span>
@@ -302,7 +304,7 @@
         </div>
 
         <div class="stack" id="countResults">
-          <div class="card"><div class="bd"><p class="lead">Results appear here. Each pallet is analyzed by the <code class="inline">detector-service</code> (RF-DETR when fine-tuned, or OWLv2 zero-shot) set via <code class="inline">DETECTOR_SERVICE_URL</code>. The layer count is a suggestion — the real total is <b>layers × bags-per-layer</b>, which the verifier confirms.</p></div></div>
+          <div class="card"><div class="bd"><p class="lead">Results appear here. Requests stay on this site and the Azure Function calls the configured detector server-to-server. The layer count is a suggestion—the verified total remains <b>layers × bags-per-layer</b>.</p></div></div>
         </div>
       </div>
     </section>
@@ -320,6 +322,7 @@
           <textarea id="evalJson" rows="7" placeholder='{ "model": "...", "results": [ ... ], "perPallet": { ... } }'></textarea>
           <div class="row" style="margin-top:12px">
             <button class="btn" id="evalBtn">Visualize</button>
+            <label class="btn ghost">Open results<input type="file" id="evalFile" accept="application/json,.json" hidden></label>
             <button class="btn ghost" id="evalSample">Load sample</button>
             <span class="status" id="evalMeta"></span>
           </div>
@@ -350,7 +353,7 @@
         <div class="stack">
           <div class="card"><div class="bd stack">
             <div>
-              <span class="eyebrow">Class <span class="hint" style="text-transform:none;letter-spacing:0">keys 1–3</span></span>
+              <span class="eyebrow">Class <span class="hint" style="text-transform:none;letter-spacing:0">key 1</span></span>
               <div class="classpick" id="classPick" style="margin-top:6px"></div>
             </div>
             <div>
@@ -364,7 +367,7 @@
               <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
               <button class="btn" id="exportBtn" style="flex:1">Export COCO</button>
             </div>
-            <p class="hint" style="margin:0"><span class="kbd">1</span>–<span class="kbd">3</span> class · <span class="kbd">Del</span> remove selected · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
+            <p class="hint" style="margin:0"><span class="kbd">1</span> bag flap · <span class="kbd">Del</span> remove selected · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
           </div></div>
 
           <div class="card"><div class="bd stack">
@@ -377,16 +380,24 @@
           </div></div>
 
           <div class="card"><div class="bd stack">
-            <span class="eyebrow">Then train</span>
+            <span class="eyebrow">Training configuration</span>
+            <div class="row">
+              <label style="flex:1"><span class="fld">Model size</span><select id="modelSize"><option value="small" selected>RF-DETR Small</option><option value="nano">RF-DETR Nano</option><option value="medium">RF-DETR Medium</option><option value="base">RF-DETR Base</option></select></label>
+              <label style="flex:1"><span class="fld">Epochs</span><input id="epochs" type="number" min="1" max="300" value="100"></label>
+              <label style="flex:1"><span class="fld">Batch</span><input id="batchSize" type="number" min="1" max="32" value="4"></label>
+            </div>
+            <div class="banner" id="datasetCheck"><b>Dataset not ready.</b> Add images and label every visible sewn flap.</div>
             <ol class="steps sub">
-              <li>Drop the exported <code class="inline">_annotations.coco.json</code> + images into <code class="inline">detector-service/dataset/{train,valid}/</code>.</li>
-              <li>Class order = category order below → pass as <code class="inline">RFDETR_CLASS_NAMES</code>.</li>
+              <li>Export COCO and place the JSON plus images in <code class="inline">detector-service/dataset/{train,valid,test}/</code>. Split by pallet, not by photo.</li>
+              <li>Push the dataset branch, then run the <b>Train RF-DETR</b> GitHub Action. It uploads the best checkpoint and evaluation JSON as artifacts.</li>
+              <li>Use a GPU-backed runner for a production run. The action requires 20+ images per split and enforces the held-out accuracy gate.</li>
             </ol>
             <div class="cmd"><pre id="trainCmd">cd detector-service
-pip install -r requirements.txt
-python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
+pip install -r requirements.txt -r requirements-rfdetr.txt
+python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-size 4
 # -> output/checkpoint_best.pth
-# then set RFDETR_WEIGHTS + RFDETR_CLASS_NAMES=bag,gap,damage</pre><button data-copy="trainCmd">Copy</button></div>
+# set RFDETR_MODEL_SIZE=small, RFDETR_WEIGHTS and RFDETR_CLASS_NAMES=bag_flap</pre><button data-copy="trainCmd">Copy</button></div>
+            <a class="btn" href="https://github.com/GodingWal2025/GXO-Loadout/actions/workflows/train-rfdetr.yml" target="_blank" rel="noreferrer">Open training workflow</a>
           </div></div>
         </div>
       </div>
@@ -418,20 +429,24 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     $$(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + t.dataset.tab));
   }));
 
-  /* ---- endpoint ---- */
-  const baseUrl = $("#baseUrl");
-  baseUrl.value = store.get("bcc-base") || "";
-  const updEp = () => {
-    store.set("bcc-base", baseUrl.value.trim());
-    $("#epStatus").textContent = "endpoint: " + (baseUrl.value.trim() || "same origin");
-  };
-  const apiBase = () => {
-    let v = baseUrl.value.trim().replace(/\/+$/, "");
-    if (v && !/^https?:\/\//i.test(v)) {
-      v = "https://" + v;
+  /* ---- same-origin service health ---- */
+  async function checkHealth() {
+    const detail = $("#healthDetail");
+    detail.textContent = "Checking /api/health…";
+    try {
+      const res = await fetch("/api/health", { cache: "no-store" });
+      const health = await res.json();
+      const detector = health.detector || {};
+      $("#epStatus").textContent = detector.configured ? "detector: ready" : "detector: setup needed";
+      detail.innerHTML = detector.configured
+        ? `<span class="chip ok">ready</span> RF-DETR endpoint configured · storage ${escapeHtml(health.storage || "device-local")}`
+        : `<span class="chip warn">not configured</span> ${escapeHtml(detector.error || "Set DETECTOR_SERVICE_URL to the deployed detector URL.")}`;
+    } catch {
+      $("#epStatus").textContent = "API unavailable";
+      detail.textContent = "The site API did not answer. Check the latest GitHub Actions deployment.";
     }
-    return v;
-  };
+  }
+  $("#healthBtn").addEventListener("click", checkHealth);
 
   /* ---- image prep (mirror prepareForVision) ---- */
   const blobToDataUrl = b => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
@@ -498,7 +513,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
   drop.addEventListener("drop", e => { if (e.dataTransfer?.files) addFiles(e.dataTransfer.files); });
 
   const results = $("#countResults");
-  const chip = (label, kind) => `<span class="chip ${kind||''}">${label}</span>`;
+  const chip = (label, kind) => `<span class="chip ${kind||''}">${escapeHtml(label)}</span>`;
   function condChips(r) {
     const c = [];
     if (r.topLayerFull === false) c.push(chip("top course short", "warn"));
@@ -539,22 +554,11 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     results.innerHTML = "";
     for (const it of items) {
       const card = document.createElement("div"); card.className = "card";
-      card.innerHTML = `<div class="hd"><span class="eyebrow">${it.name}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
+      card.innerHTML = `<div class="hd"><span class="eyebrow">${escapeHtml(it.name)}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
       results.appendChild(card);
       try {
-        const base = apiBase();
         const headers = { "Content-Type": "application/octet-stream" };
-        if (base) headers["X-Detector-Url"] = base;
-
-        // Try direct /analyze if base ends in /analyze, or try /api/analyze-pallet-count first
-        let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-count?debug=1") : "/api/analyze-pallet-count?debug=1";
-        let resp = await fetch(target, { method: "POST", headers, body: it.blob }).catch(() => null);
-
-        // Fallback: If SWA proxy 404s or fails, attempt direct fetch to base + /analyze
-        if ((!resp || resp.status === 404) && base && !base.endsWith("/analyze")) {
-          const directTarget = base + "/analyze";
-          resp = await fetch(directTarget, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: it.blob }).catch(() => null);
-        }
+        const resp = await fetch("/api/analyze-pallet-count", { method: "POST", headers, body: it.blob }).catch(() => null);
 
         if (!resp) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to detector endpoint")); continue; }
 
@@ -572,7 +576,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
               ${j.rationale?`<div class="sub">“${escapeHtml(j.rationale)}”</div>`:""}
             </div>
           </div></div>` + raw(j);
-        drawFace(card.querySelector("canvas"), it.dataUrl, null);
+        drawFace(card.querySelector("canvas"), it.dataUrl, j.boxes || []);
       } catch (e) { card.querySelector(".bd").innerHTML = errBanner(networkMsg(e)); }
     }
   }
@@ -584,34 +588,13 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     card.innerHTML = `<div class="hd"><span class="eyebrow">Pallet · ${imgs.length} face${imgs.length>1?"s":""}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
     results.appendChild(card);
     try {
-      const base = apiBase();
       const headers = { "Content-Type": "application/json" };
-      if (base) headers["X-Detector-Url"] = base;
-
-      let target = base ? (base.endsWith("/analyze") ? base : base + "/api/analyze-pallet-faces?debug=1") : "/api/analyze-pallet-faces?debug=1";
-      let resp = await fetch(target, {
+      const resp = await fetch("/api/analyze-pallet-faces", {
         method: "POST", headers,
-        body: JSON.stringify({ images: imgs, wantBoxes: true, wantInterior: true, wantCondition: true })
+        body: JSON.stringify({ images: imgs })
       }).catch(() => null);
 
-      let j = resp && resp.ok ? await resp.json().catch(() => ({})) : null;
-
-      // Fallback: If SWA proxy fails or 404s, call detector service /analyze for each face directly
-      if (!j && base) {
-        const directTarget = base.endsWith("/analyze") ? base : base + "/analyze";
-        const faceResults = [];
-        let totalBags = 0;
-        let modelVer = "rf-detr (direct)";
-        for (let i = 0; i < items.length && i < 4; i++) {
-          const r = await fetch(directTarget, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: items[i].blob }).then(x=>x.json()).catch(()=>({}));
-          const b = r.estimatedBags || 0;
-          totalBags += b;
-          if (r.modelVersion) modelVer = r.modelVersion;
-          faceResults.push({ index: i, slotKey: SLOTS[i] || ("VIEW_"+i), bagFlaps: b, layers: r.layers, isPalletFace: true, boxCount: b, countMatchesBoxes: true });
-        }
-        j = { success: true, faces: faceResults, visibleBagTotal: totalBags, visibleBagTotalFromBoxes: totalBags, estimatedPalletTotal: totalBags, modelVersion: modelVer };
-        resp = { ok: true, status: 200 };
-      }
+      const j = resp ? await resp.json().catch(() => ({})) : null;
 
       if (!resp || !j) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to backend")); return; }
       if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); return; }
@@ -633,7 +616,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
         const gate = f.isPalletFace === false ? chip("not a pallet face · excluded","warn") : "";
         const mism = (f.countMatchesBoxes === false) ? chip("tally≠boxes","warn") : "";
         el.innerHTML = `<div class="cv"><canvas></canvas></div><div class="meta">
-          <div class="kv"><span class="sub">${(f.slotKey||("face "+f.index)).replace(/_/g," ").toLowerCase()}</span><span class="n">${fmt(f.bagFlaps)}<small> flaps</small></span></div>
+          <div class="kv"><span class="sub">${escapeHtml((f.slotKey||("face "+f.index)).replace(/_/g," ").toLowerCase())}</span><span class="n">${fmt(f.bagFlaps)}<small> flaps</small></span></div>
           <div class="kv"><span class="sub">layers</span><span class="mono">${fmt(f.layers)}</span> <span class="sub">boxes</span><span class="mono">${f.boxCount!=null?f.boxCount:"—"}</span></div>
           <div class="chips">${gate}${mism||chip("ok","ok")}</div></div>`;
         fg.appendChild(el);
@@ -647,7 +630,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     return `<div class="banner err"><b>HTTP ${status}.</b> ${escapeHtml((j.error||"") + (j.detail ? ": " + j.detail : ""))}</div>` + raw(j);
   }
   function networkMsg(e) {
-    return `Request failed (${escapeHtml(String(e.message||e))}). If you set DETECTOR_SERVICE_URL in Azure (Option B), <b>leave the Base URL field BLANK</b> so requests pass through your Azure Function (/api/*), which proxies to the detector service server-to-server with no browser CORS or SSL issues.`;
+    return `Request failed (${escapeHtml(String(e?.message||e))}). Use the Connection check above, then verify the detector deployment and DETECTOR_SERVICE_URL setting.`;
   }
   const fmt = v => (v===null||v===undefined||v==="") ? "—" : v;
   const raw = j => `<details class="raw"><summary>raw JSON</summary><pre class="json">${escapeHtml(JSON.stringify(j,null,2))}</pre></details>`;
@@ -655,6 +638,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
 
   runBtn.addEventListener("click", () => { runBtn.disabled = true; (mode==="single"?runSingle():runFaces()).finally(()=>runBtn.disabled=false); });
   renderThumbs();
+  checkHealth();
 
   /* ================= EVAL ================= */
   const median = a => { const s=[...a].sort((x,y)=>x-y); const m=Math.floor(s.length/2); return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2); };
@@ -668,12 +652,14 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     let pOk = 0, pScored = 0;
     const expByPallet = {}; rows.forEach(r => { if (r.expected != null) expByPallet[r.pallet] = r.expected; });
     const palletRows = Object.keys(per).sort().map(pid => {
-      const vals = per[pid]; const vote = median(vals); const exp = expByPallet[pid];
+      const vals = Array.isArray(per[pid]) ? per[pid].map(Number).filter(Number.isFinite) : [];
+      if (!vals.length) return null;
+      const vote = median(vals); const exp = expByPallet[pid];
       const tied = new Set(vals).size > 1 && vals.filter(v=>v===vote).length*2 <= vals.length;
       let note = "—", cls = "";
       if (exp != null) { pScored++; if (vote===exp && !tied) { pOk++; note="ok"; cls="hit"; } else { note = tied?"tie":("miss "+(vote-exp>0?"+":"")+(vote-exp)); cls="miss"; } }
       return { pid, vals, vote, exp, note, cls };
-    });
+    }).filter(Boolean);
     const pct = (n,d) => d ? Math.round(100*n/d) : 0;
     $("#evalMeta").textContent = `${data.model||"model"} · samples ${data.samples||1} · ${scored.length} scored faces`;
     $("#evalOut").innerHTML = `
@@ -685,10 +671,16 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
       </div>
       <div class="card"><div class="hd"><span class="eyebrow">Per pallet · voted across faces</span></div><div class="bd tblwrap">
         <table><thead><tr><th>Pallet</th><th>Faces</th><th class="num">Vote</th><th class="num">Expected</th><th>Result</th></tr></thead>
-        <tbody>${palletRows.map(p=>`<tr class="${p.cls}"><td class="mono">${p.pid}</td><td class="mono co" style="color:var(--faint)">[${p.vals.join(", ")}]</td><td class="num">${p.vote}</td><td class="num">${p.exp??"—"}</td><td class="mono">${p.note}</td></tr>`).join("")}</tbody></table>
+        <tbody>${palletRows.map(p=>`<tr class="${p.cls}"><td class="mono">${escapeHtml(p.pid)}</td><td class="mono co" style="color:var(--faint)">[${p.vals.join(", ")}]</td><td class="num">${p.vote}</td><td class="num">${p.exp??"—"}</td><td class="mono">${p.note}</td></tr>`).join("")}</tbody></table>
       </div></div>`;
   }
   $("#evalBtn").addEventListener("click", renderEval);
+  $("#evalFile").addEventListener("change", async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    $("#evalJson").value = await file.text();
+    renderEval();
+  });
   $("#evalSample").addEventListener("click", () => {
     $("#evalJson").value = JSON.stringify({
       model: "rf-detr:pallet-bags", samples: 3, bagsPerLayer: 6,
@@ -705,7 +697,7 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
   });
 
   /* ================= LABEL ================= */
-  const CLASSES = [ {id:1,name:"bag",color:"#1a7f37"}, {id:2,name:"gap",color:"#d29922"}, {id:3,name:"damage",color:"#e5534b"} ];
+  const CLASSES = [ {id:1,name:"bag_flap",color:"#1a7f37"} ];
   let curClass = 0;
   let labImgs = []; // {name, img, w, h, boxes:[{x,y,w,h,cls}]}
   let curImg = -1, selBox = -1;
@@ -773,6 +765,12 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     const total = labImgs.reduce((s,i)=>s+i.boxes.length,0);
     $("#pLabeled").innerHTML = `${labeled}<small>/${labImgs.length}</small>`;
     $("#pBoxes").textContent = total;
+    const ready = labImgs.length > 0 && labeled === labImgs.length;
+    $("#exportBtn").disabled = !ready;
+    $("#datasetCheck").className = ready ? "banner ok" : "banner";
+    $("#datasetCheck").innerHTML = ready
+      ? `<b>Annotations complete.</b> ${labImgs.length} images · ${total} bag flaps. Export COCO, then split by pallet into train/valid/test.`
+      : `<b>Dataset not ready.</b> ${labImgs.length - labeled} image(s) still need at least one bag-flap box.`;
   }
 
   const evtPos = e => { const r = canvas.getBoundingClientRect(); const p = e.touches?e.touches[0]:e; return { x:(p.clientX-r.left)/dispScale, y:(p.clientY-r.top)/dispScale }; };
@@ -795,14 +793,14 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
   window.addEventListener("keydown", e => {
     if (!$("#panel-label").classList.contains("active")) return;
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
-    if (e.key>="1" && e.key<="3") { curClass = +e.key-1; syncClass(); }
+    if (e.key === "1") { curClass = 0; syncClass(); }
     else if (e.key === "Delete" || e.key === "Backspace") { if (selBox>=0 && labImgs[curImg]) { labImgs[curImg].boxes.splice(selBox,1); selBox=-1; drawLab(); updateProgress(); e.preventDefault(); } }
     else if (e.key === "[") $("#prevImg").click();
     else if (e.key === "]") $("#nextImg").click();
   });
 
   $("#exportBtn").addEventListener("click", () => {
-    if (!labImgs.length) return;
+    if (!labImgs.length || labImgs.some(image => !image.boxes.length)) return;
     const coco = { info:{description:"GXO pallet bag flaps", date_created:new Date().toISOString()},
       images: [], annotations: [], categories: CLASSES.map(c=>({id:c.id,name:c.name,supercategory:"pallet"})) };
     let annId = 1;
@@ -817,6 +815,22 @@ python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = "_annotations.coco.json"; a.click();
   });
+
+  function updateTrainCommand() {
+    const size = $("#modelSize").value;
+    const epochs = Math.max(1, Math.min(300, Number($("#epochs").value) || 100));
+    const batch = Math.max(1, Math.min(32, Number($("#batchSize").value) || 4));
+    $("#trainCmd").textContent = `cd detector-service
+pip install -r requirements.txt -r requirements-rfdetr.txt
+python train.py --dataset-dir ./dataset --model-size ${size} --epochs ${epochs} --batch-size ${batch}
+# -> output/checkpoint_best.pth
+# set RFDETR_MODEL_SIZE=${size}, RFDETR_WEIGHTS and RFDETR_CLASS_NAMES=bag_flap`;
+  }
+  ["#modelSize", "#epochs", "#batchSize"].forEach(selector =>
+    $(selector).addEventListener("change", updateTrainCommand)
+  );
+  updateTrainCommand();
+  updateProgress();
 
   window.addEventListener("resize", () => { if (!$("#panel-label").classList.contains("active")) return; drawLab(); });
 

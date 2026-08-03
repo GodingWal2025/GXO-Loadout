@@ -1,50 +1,38 @@
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense } from 'react';
+import type { ReactNode } from 'react';
 import { getDeviceConfig } from './lib/deviceConfig';
-import { dbGetPendingSyncCount, dbGetUnuploadedPhotoCount } from './shared';
 import { isAdminAuthenticated } from './services/adminAuth';
 
 
-import { HomeRoute } from './routes/HomeRoute';
-import { NewInspectionRoute } from './routes/NewInspectionRoute';
-import { CapturePicklistRoute } from './routes/CapturePicklistRoute';
-import { CaptureBOLRoute } from './routes/CaptureBOLRoute';
-import { VerifyRoute } from './routes/VerifyRoute';
-import { InspectionWorkspaceRoute } from './routes/InspectionWorkspaceRoute';
-import { ScanPalletRoute } from './routes/ScanPalletRoute';
-import { ReviewAndCompleteRoute } from './routes/ReviewAndCompleteRoute';
-import { CaptureReturnsBOLRoute } from './routes/CaptureReturnsBOLRoute';
-import { VerifyReturnsRoute } from './routes/VerifyReturnsRoute';
-import { DashboardRoute } from './routes/DashboardRoute';
-import { AdminRoute } from './routes/AdminRoute';
-import { AdminGateRoute } from './routes/AdminGateRoute';
-import { SetupRoute } from './routes/SetupRoute';
-import { InvestigationRoute } from './routes/InvestigationRoute';
-import { CaptureReturnsStagingRoute } from './routes/CaptureReturnsStagingRoute';
-import { InventoryRoute } from './routes/InventoryRoute';
+const HomeRoute = lazy(() => import('./routes/HomeRoute').then((m) => ({ default: m.HomeRoute })));
+const NewInspectionRoute = lazy(() => import('./routes/NewInspectionRoute').then((m) => ({ default: m.NewInspectionRoute })));
+const CapturePicklistRoute = lazy(() => import('./routes/CapturePicklistRoute').then((m) => ({ default: m.CapturePicklistRoute })));
+const CaptureBOLRoute = lazy(() => import('./routes/CaptureBOLRoute').then((m) => ({ default: m.CaptureBOLRoute })));
+const VerifyRoute = lazy(() => import('./routes/VerifyRoute').then((m) => ({ default: m.VerifyRoute })));
+const InspectionWorkspaceRoute = lazy(() => import('./routes/InspectionWorkspaceRoute').then((m) => ({ default: m.InspectionWorkspaceRoute })));
+const ScanPalletRoute = lazy(() => import('./routes/ScanPalletRoute').then((m) => ({ default: m.ScanPalletRoute })));
+const ReviewAndCompleteRoute = lazy(() => import('./routes/ReviewAndCompleteRoute').then((m) => ({ default: m.ReviewAndCompleteRoute })));
+const CaptureReturnsBOLRoute = lazy(() => import('./routes/CaptureReturnsBOLRoute').then((m) => ({ default: m.CaptureReturnsBOLRoute })));
+const VerifyReturnsRoute = lazy(() => import('./routes/VerifyReturnsRoute').then((m) => ({ default: m.VerifyReturnsRoute })));
+const DashboardRoute = lazy(() => import('./routes/DashboardRoute').then((m) => ({ default: m.DashboardRoute })));
+const AdminRoute = lazy(() => import('./routes/AdminRoute').then((m) => ({ default: m.AdminRoute })));
+const AdminGateRoute = lazy(() => import('./routes/AdminGateRoute').then((m) => ({ default: m.AdminGateRoute })));
+const SetupRoute = lazy(() => import('./routes/SetupRoute').then((m) => ({ default: m.SetupRoute })));
+const InvestigationRoute = lazy(() => import('./routes/InvestigationRoute').then((m) => ({ default: m.InvestigationRoute })));
+const CaptureReturnsStagingRoute = lazy(() => import('./routes/CaptureReturnsStagingRoute').then((m) => ({ default: m.CaptureReturnsStagingRoute })));
+const InventoryRoute = lazy(() => import('./routes/InventoryRoute').then((m) => ({ default: m.InventoryRoute })));
 
-import { startBackgroundSync } from './shared';
-import { startSitesSync } from './services/sites';
-import { startInspectorsSync } from './shared/services/inspectors';
-import { startStagingLocationsSync } from './services/stagingLocations';
-import { startInventorySync } from './shared/services/inventorySync';
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
 import { SyncRefreshButton } from './components/SyncRefreshButton';
 
 export default function App() {
-  useEffect(() => {
-    startBackgroundSync();
-    startSitesSync();
-    startInspectorsSync();
-    startStagingLocationsSync();
-    startInventorySync();
-  }, []);
-
   return (
     <LanguageProvider>
       <BrowserRouter>
         <Shell>
+          <Suspense fallback={<main className="page"><div className="soft">Loading…</div></main>}>
           <Routes>
             <Route path="/" element={<HomeRoute />} />
             <Route path="/setup" element={<SetupRoute />} />
@@ -76,54 +64,24 @@ export default function App() {
             <Route path="/admin" element={<AdminGate><AdminRoute /></AdminGate>} />
             <Route path="/admin/dashboard" element={<AdminGate><DashboardRoute /></AdminGate>} />
           </Routes>
+          </Suspense>
         </Shell>
       </BrowserRouter>
     </LanguageProvider>
   );
 }
 
-function AdminGate({ children }: { children: React.ReactNode }) {
+function AdminGate({ children }: { children: ReactNode }) {
   if (!isAdminAuthenticated()) {
     return <AdminGateRoute />;
   }
   return <>{children}</>;
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children }: { children: ReactNode }) {
   const config = getDeviceConfig();
   const location = useLocation();
   const t = useT();
-
-  const [sync, setSync] = useState({ pending: 0, photos: 0 });
-  const [online, setOnline] = useState(navigator.onLine);
-
-  useEffect(() => {
-    const refresh = async () => {
-      try {
-        const [p, ph] = await Promise.all([
-          dbGetPendingSyncCount(),
-          dbGetUnuploadedPhotoCount(),
-        ]);
-        setSync({ pending: p, photos: ph });
-      } catch {
-        // ignore
-      }
-    };
-    refresh();
-    const interval = setInterval(refresh, 5000);
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    // A manual refresh shouldn't leave a stale count sitting there for 5s.
-    window.addEventListener('loadout-sync-updated', refresh);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      window.removeEventListener('loadout-sync-updated', refresh);
-    };
-  }, [location.pathname]);
 
   const isAdminArea = location.pathname.startsWith('/admin');
 
@@ -159,20 +117,8 @@ function Shell({ children }: { children: React.ReactNode }) {
               </div>
             )}
             <div className="topbar__status">
-              <span
-                className={`topbar__status-dot ${
-                  !online
-                    ? 'topbar__status-dot--offline'
-                    : sync.pending > 0 || sync.photos > 0
-                    ? 'topbar__status-dot--syncing'
-                    : ''
-                }`}
-              />
-              {!online
-                ? t('shell.offline', 'Offline')
-                : sync.pending > 0 || sync.photos > 0
-                ? t('shell.pending', '{count} pending', { count: sync.pending + sync.photos })
-                : t('shell.synced', 'Synced')}
+              <span className="topbar__status-dot" />
+              {t('shell.savedLocally', 'Saved locally')}
             </div>
             <SyncRefreshButton />
             <LanguageToggle />

@@ -6,7 +6,7 @@ A React-based single-page application built with Vite and TypeScript for capturi
 - **Load Inspections**: Scan and document outgoing loads with detailed pallet-by-pallet photographic evidence.
 - **Returns Workflow**: Process incoming returns, verifying expected quantities against BOL data and photographing pallet condition.
 - **Dynamic Semantic Photo Verification**: Enforces rigorous checklist of necessary photos (placards, product, conditions) based on dynamic pallet configurations.
-- **Offline-First PWA**: Uses local browser storage (IndexedDB via IDB-Keyval) for fast, persistent state management.
+- **Device-local PWA**: Uses IndexedDB for resilient offline storage. Inspections and photos intentionally stay on the warehouse device; there is no cloud sync queue.
 - **Barcode & QR Scanning**: Integrated ZXing barcode scanner to ingest LPNs, batch codes, and routing labels efficiently.
 - **Image Quality Analysis**: Built-in computer vision rules engine checking captured photos for blurriness, darkness, and clipping before saving.
 
@@ -14,9 +14,9 @@ A React-based single-page application built with Vite and TypeScript for capturi
 - **Framework**: React + Vite
 - **Language**: TypeScript
 - **State Management**: React Router + Context
-- **Storage**: IndexedDB (`idb-keyval`)
+- **Storage**: IndexedDB (`idb`)
 - **Routing**: React Router DOM
-- **Scanner**: `@zxing/browser`
+- **Scanner**: `html5-qrcode`
 
 ## Local Development
 1. Run `npm install` to install dependencies.
@@ -46,14 +46,12 @@ DETECTOR_SERVICE_KEY = <optional bearer key>  # only if the service sets DETECTO
 The service runs one of two interchangeable, Apache-2.0-licensed detection backends
 (`DETECTOR_BACKEND`) — both safe to call from this closed-source app:
 
-- **RF-DETR** (`rfdetr`, production) — accurate and fine-tunable, but the COCO base
+- **RF-DETR Small** (`rfdetr`, production default) — the best starting balance of
+  accuracy, inference time, and training cost. The COCO base
   has no *bag* class, so it needs a checkpoint **fine-tuned on labeled pallet
   photos** before it counts anything. See [`detector-service/README.md`](detector-service/README.md).
-- **OWLv2** (`owlv2`, zero-shot bootstrap) — open-vocabulary, so it detects from
-  text prompts with **no training data at all**. This is what runs today: with no
-  fine-tuned weights or dataset yet, OWLv2 is the only backend that produces a
-  result out of the box. Less accurate on tight stacks; treat it as a starting
-  point, and use its detections as pre-labels toward an RF-DETR training set.
+- **OWLv2** (`owlv2`, wiring/pre-labeling only) — works without training data, but
+  measured counts on shrink-wrapped seed pallets were not reliable enough for use.
 
 > AGPL-licensed detectors such as Ultralytics YOLO were deliberately **not** used:
 > serving them over HTTP would trip AGPL's network clause and obligate open-sourcing
@@ -64,8 +62,13 @@ The service runs one of two interchangeable, Apache-2.0-licensed detection backe
 A detector sees only the **front + top faces**; interior bags are occluded, so the
 per-face `estimatedBags` is a **visible-face** count, not the pallet total — the
 client still does `layers × bags-per-layer` for the real number and the verifier
-confirms it. `gaps` / `damage` are only meaningful if the fine-tuned model has those
-classes; otherwise they default to `false`.
+confirms it. Train a single `bag_flap` class first; keep damage checks in the human
+inspection workflow rather than weakening the counting dataset with extra classes.
+
+Open [`/bag-count-console.html`](https://white-meadow-0dc31e50f.7.azurestaticapps.net/bag-count-console.html)
+to label/export images, verify API health, and visualize `eval-results.json`. The
+manual **Train RF-DETR** GitHub Action validates the dataset, trains the chosen
+model size, evaluates the held-out split, and publishes checkpoint/results artifacts.
 
 ### Client-side image prep
 

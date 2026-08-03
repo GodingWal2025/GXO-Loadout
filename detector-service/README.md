@@ -9,7 +9,7 @@ Two interchangeable backends, selected with `DETECTOR_BACKEND`:
 | backend  | when                | weights needed            | quality |
 |----------|---------------------|---------------------------|---------|
 | `owlv2`  | wiring test / pre-labeling | **none** (text prompts) | **not usable for counts** — see below |
-| `rfdetr` | production *(default)* | fine-tuned `.pth`      | good, once trained on your bags |
+| `rfdetr` | production *(default, Small)* | fine-tuned `.pth` | good, once trained on your bags |
 
 > **Tested 2026-07-29 on the real Bags_Phots pallets — OWLv2 zero-shot does not
 > work on shrink-wrapped seed pallets.** Across prompt sets (`a bag of seed`,
@@ -43,7 +43,8 @@ Same contract for both backends:
 | `layers`        | box centers clustered into horizontal courses                 |
 | `estimatedBags` | count of **visible-face** boxes (interior bags are occluded)  |
 | `confidence`    | mean detection confidence                                     |
-| `gaps`/`damage` | only if your fine-tuned model has those classes (see env)     |
+| `boxes`         | normalized `[x1,y1,x2,y2]` bag-flap boxes for review overlays |
+| `gaps`/`damage` | false for the recommended single-class counting model          |
 | `topLayerFull`  | always `true` (a detector can't judge a partial top course)   |
 
 The client still computes the real total as `layers × bagsPerLayer`; the visible
@@ -83,14 +84,16 @@ order in `RFDETR_CLASS_NAMES`. See [dataset/README.md](dataset/README.md) and
 `train.py`.
 
 ```bash
-python train.py --dataset-dir ./dataset --epochs 100 --batch-size 4
+python validate_dataset.py --dataset-dir ./dataset
+python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-size 4
 # -> output/checkpoint_best.pth
 ```
 
-Label ~200–500 pallet-face photos in Roboflow (class `bag`; optionally `gap` and
-`damage`), export as **COCO**. Your confirmed pallet photos from the verifier
-confirm-loop are the dataset source. Running `demo.py` with `--backend owlv2` first
-gives you rough boxes to correct rather than drawing every box from scratch.
+Label ~200–500 pallet-face photos in Roboflow or the web console using the single
+class `bag_flap`, export as **COCO**, and split by whole pallet so related views do
+not leak across train and test. RF-DETR Small is the recommended first model. The
+repository's **Train RF-DETR** GitHub Action validates, trains, evaluates, and
+uploads the checkpoint plus `eval-results.json`.
 
 ## Deploy (Azure Container Apps, CPU)
 
@@ -131,6 +134,7 @@ return 501, and the app degrades cleanly to manual layer entry.
 | var                    | default        | meaning                                       |
 |------------------------|----------------|-----------------------------------------------|
 | `DETECTOR_BACKEND`     | `rfdetr`       | `rfdetr` or `owlv2`                           |
+| `RFDETR_MODEL_SIZE`    | `small`        | `nano`, `small`, `medium`, `base`, or `large` |
 | `RFDETR_WEIGHTS`       | *(COCO base)*  | fine-tuned `.pth` checkpoint path             |
 | `RFDETR_CONF`          | `0.5`          | confidence threshold                          |
 | `RFDETR_RESOLUTION`    | *(model dflt)* | inference resolution (multiple of 56)         |

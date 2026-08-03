@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { consensusLayers } from './palletVision';
 
-// The sample arrays below are the real measured outputs from Cosmos3 Nano Reasoner
+// The sample arrays below are measured outputs from the original reasoning model
 // on the Bags_Phots pallets — see prior pallet-photo evaluation. The 60-bag pallets are
 // 10 layers of 6, so 10 is ground truth for pallets 2-6.
 

@@ -1,4 +1,4 @@
-# CPU inference image. Both backends run on CPU, so — unlike the Cosmos NIM — this
+# CPU inference image. Both supported backends can run on CPU, so this
 # does NOT need a GPU host; an Azure Container App (consumption) or small VM is enough.
 # For GPU throughput, swap the base for an nvidia/cuda runtime + CUDA torch build.
 FROM python:3.11-slim
@@ -21,7 +21,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir -r "requirements-${DETECTOR_BACKEND}.txt" \
        --extra-index-url https://download.pytorch.org/whl/cpu
 
-COPY app.py zeroshot.py ./
+COPY app.py zeroshot.py geometry.py rfdetr_model.py ./
 # Bake weights in so the container starts offline. Drop your fine-tuned RF-DETR
 # checkpoint in weights/ and set RFDETR_WEIGHTS to match; without it the service
 # loads the COCO base model (which has no bag class — for smoke tests only).
@@ -41,7 +41,7 @@ ENV DETECTOR_BACKEND=${DETECTOR_BACKEND} \
     RFDETR_CONF=0.5 \
     PORT=8080
 # e.g. RFDETR_WEIGHTS=/app/weights/checkpoint_best.pth
-#      RFDETR_CLASS_NAMES=bag,gap,damage
+#      RFDETR_MODEL_SIZE=small RFDETR_CLASS_NAMES=bag_flap RFDETR_BAG_CLASSES=bag_flap
 
 EXPOSE 8080
 CMD ["sh", "-c", "uvicorn app:app --host 0.0.0.0 --port ${PORT}"]

@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   dbListInventoryItems,
   dbSaveInventoryItems,
@@ -8,7 +7,6 @@ import {
 } from '../shared/services/db';
 import type { InventoryItem } from '../shared/types/inventory';
 import { parsePackInfo } from '../shared';
-import { pushInventory } from '../shared/services/inventorySync';
 
 export function InventoryRoute() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -34,37 +32,40 @@ export function InventoryRoute() {
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const data = evt.target?.result;
-      const workbook = XLSX.read(data, { type: 'binary' });
-      const firstSheet = workbook.SheetNames[0];
-      const worksheet = workbook.Sheets[firstSheet];
-      
-      const json: any[] = XLSX.utils.sheet_to_json(worksheet);
-      
-      const newItems: InventoryItem[] = json.map(row => {
-        const sku = (row['Material'] || row['SKU'] || '').toString().trim();
-        const batch = (row['LOTATR3'] || row['BATCH'] || row['Batch'] || '').toString().trim();
-        const description = (
-          row['Material Description'] ||
-          row['Description'] ||
-          row['DESCRIPTION'] ||
-          ''
-        )
-          .toString()
-          .trim();
-        
-        return {
+      if (!(data instanceof ArrayBuffer)) return;
+      const ExcelJS = await import('exceljs');
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(data as any);
+      const worksheet = workbook.worksheets[0];
+      if (!worksheet) throw new Error('The workbook has no worksheets.');
+
+      const headers = new Map<string, number>();
+      worksheet.getRow(1).eachCell((cell, column) => {
+        headers.set(cell.text.trim().toLowerCase(), column);
+      });
+      const column = (...names: string[]) =>
+        names.map((name) => headers.get(name.toLowerCase())).find((value) => value !== undefined);
+      const skuColumn = column('Material', 'SKU');
+      const batchColumn = column('LOTATR3', 'BATCH', 'Batch');
+      const descriptionColumn = column('Material Description', 'Description');
+
+      const newItems: InventoryItem[] = [];
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) return;
+        const sku = skuColumn ? row.getCell(skuColumn).text.trim() : '';
+        const batch = batchColumn ? row.getCell(batchColumn).text.trim() : '';
+        const description = descriptionColumn ? row.getCell(descriptionColumn).text.trim() : '';
+        if (!sku || !batch) return;
+        newItems.push({
           id: `${sku}_${batch}`,
           sku,
           batch,
           description,
           lastUpdated: new Date().toISOString()
-        };
-      }).filter(item => item.sku && item.batch);
+        });
+      });
 
-      // Save to IndexedDB
       await dbSaveInventoryItems(newItems);
-      // Sync to the cloud so other devices (review screen, PDF) get it too.
-      void pushInventory(newItems);
 
       alert(`Imported ${newItems.length} items successfully.`);
       loadItems();
@@ -87,7 +88,6 @@ export function InventoryRoute() {
         lastUpdated: new Date().toISOString()
       };
       await dbUpdateInventoryItem(saved);
-      void pushInventory([saved]);
       setEditItem(null);
       loadItems();
     }
@@ -111,7 +111,7 @@ export function InventoryRoute() {
           <div style={{ display: 'flex', gap: '1rem' }}>
             <label className="btn btn-secondary">
               Import Excel
-              <input type="file" accept=".xlsx, .xls" style={{ display: 'none' }} onChange={handleFileUpload} />
+              <input type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleFileUpload} />
             </label>
             <button className="btn btn-primary" onClick={startAddRow}>
               Add Item

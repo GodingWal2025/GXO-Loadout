@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { extractJsonObject } from '../../../api/src/index';
 
-// The pallet-count reply parser. Cosmos3 Nano Reasoner narrates inside <think>
+// The pallet-count reply parser. Some reasoning models narrate inside <think>
 // before answering, and that narration contains braces — coordinates, JSON
 // sketches, set notation. Reading the FIRST object would return the model's
 // scratch work as the answer, so these pin the reasoning-model behaviour.
@@ -39,7 +39,7 @@ describe('extractJsonObject', () => {
   });
 
   it('handles bounding-box coordinates in the narration', () => {
-    // Cosmos emits point localization and boxes; those braces must not win.
+    // Some models emit point localization and boxes; those braces must not win.
     const reply =
       '<think>Boxes: {"bbox": [0,0,10,10]}, {"bbox": [0,10,10,20]}</think>' +
       JSON.stringify(ANSWER);

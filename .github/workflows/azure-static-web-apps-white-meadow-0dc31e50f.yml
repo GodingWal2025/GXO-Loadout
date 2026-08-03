@@ -10,22 +10,42 @@ on:
       - main
 
 jobs:
+  verify:
+    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install web dependencies
+        run: npm ci
+      - name: Test web app
+        run: npm test
+      - name: Build web app
+        run: npm run build
+      - name: Install and build Functions API
+        run: npm ci && npm run build
+        working-directory: api
+
   build_and_deploy_job:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
+    needs: verify
     name: Build and Deploy Job
     permissions:
        id-token: write
        contents: read
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         id: idtoken
         with:
            script: |
@@ -45,6 +65,9 @@ jobs:
           output_location: "dist" # Built app content directory - optional
           github_id_token: ${{ steps.idtoken.outputs.result }}
           ###### End of Repository/Build Configurations ######
+      - name: Verify deployed health endpoint
+        if: github.event_name == 'push'
+        run: curl --fail --retry 6 --retry-delay 10 https://white-meadow-0dc31e50f.7.azurestaticapps.net/api/health
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'

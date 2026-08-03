@@ -354,7 +354,7 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 /**
  * Assess a whole pallet from several face photos in ONE request.
  *
- * Cosmos accepts up to 5 images per call, so the model reconciles the faces
+ * The detector accepts up to 5 images per call, so the service reconciles the faces
  * itself — they are views of one rigid object — instead of the client voting over
  * independent single-photo guesses. That also lets it answer things no single
  * face supports: the occluded interior count, and whether the load is physically
@@ -436,17 +436,7 @@ export async function analyzePalletCount(blob: Blob): Promise<PalletCountResult>
 }
 
 async function postForAnalysis(upload: Blob): Promise<PalletCountResult> {
-  const customDetectorUrl = (
-    (typeof localStorage !== 'undefined' ? localStorage.getItem('loadout_detector_url') : null) ||
-    import.meta.env.VITE_DETECTOR_SERVICE_URL ||
-    ''
-  ).trim().replace(/\/+$/, '');
-
-  const endpoint = customDetectorUrl
-    ? (customDetectorUrl.endsWith('/analyze') ? customDetectorUrl : `${customDetectorUrl}/analyze`)
-    : `${apiBase}/api/analyze-pallet-count`;
-
-  const res = await fetch(endpoint, {
+  const res = await fetch(`${apiBase}/api/analyze-pallet-count`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: upload,

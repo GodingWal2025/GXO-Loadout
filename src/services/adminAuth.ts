@@ -39,8 +39,12 @@ export function tryAdminLogin(attemptedPassword: string): boolean {
 }
 
 export function isAdminAuthenticated(): boolean {
-  // Admin password check disabled for now per user request.
-  return true;
+  try {
+    const session = JSON.parse(sessionStorage.getItem(ADMIN_SESSION_KEY) || 'null');
+    return typeof session?.authenticatedAt === 'string';
+  } catch {
+    return false;
+  }
 }
 
 export function adminLogout(): void {

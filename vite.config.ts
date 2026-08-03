@@ -11,6 +11,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      workbox: {
+        // Excel import is a rarely used admin feature and is almost 1 MB by
+        // itself. Load it on demand instead of slowing every PWA install.
+        globIgnores: ['**/exceljs*.js'],
+      },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {
         name: 'GXO Loadout',

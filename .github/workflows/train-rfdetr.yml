@@ -1,0 +1,71 @@
+name: Train RF-DETR
+
+on:
+  workflow_dispatch:
+    inputs:
+      runner:
+        description: Runner label (choose gpu after registering a self-hosted GPU runner)
+        type: choice
+        options: [ubuntu-latest, gpu]
+        default: ubuntu-latest
+      model_size:
+        description: RF-DETR size (small is the recommended starting point)
+        type: choice
+        options: [small, nano, medium, base]
+        default: small
+      epochs:
+        description: Training epochs
+        type: number
+        default: 100
+      batch_size:
+        description: Images per training batch
+        type: number
+        default: 4
+
+jobs:
+  train:
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: detector-service
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            detector-service/requirements.txt
+            detector-service/requirements-rfdetr.txt
+      - name: Install detector dependencies
+        run: pip install -r requirements.txt -r requirements-rfdetr.txt pytest
+      - name: Validate dataset
+        run: python validate_dataset.py --dataset-dir dataset --require-test --minimum-images 20
+      - name: Test detector geometry
+        run: pytest -q test_geometry.py
+      - name: Train model
+        run: >-
+          python train.py --dataset-dir dataset --output-dir output
+          --model-size '${{ inputs.model_size }}'
+          --epochs '${{ inputs.epochs }}'
+          --batch-size '${{ inputs.batch_size }}'
+      - name: Evaluate best checkpoint
+        run: >-
+          python eval.py --dataset-dir dataset
+          --weights output/checkpoint_best.pth
+          --model-size '${{ inputs.model_size }}'
+          --output eval-results.json
+          --min-exact-layer-accuracy 0.85
+          --min-within-one-layer-accuracy 0.95
+          --max-visible-bag-mae 1.5
+      - name: Upload checkpoint and evaluation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rfdetr-${{ inputs.model_size }}-${{ github.run_number }}
+          path: |
+            detector-service/output/checkpoint_best.pth
+            detector-service/eval-results.json
+          if-no-files-found: error
+          retention-days: 30

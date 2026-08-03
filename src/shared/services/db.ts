@@ -1,13 +1,5 @@
-// IndexedDB persistence layer.
-//
-// localStorage isn't viable for this app because photos are large binary blobs
-// (~500KB-2MB each), and a single inspection can have 80+ photos. IndexedDB
-// handles gigabytes and supports binary data natively.
-//
-// Stores:
-//   inspections      - inspection records (JSON), keyed by id
-//   photoBlobs       - photo binary data, keyed by photoId, with inspectionId index
-//   syncQueue        - pending operations to push to SharePoint when online
+// Device-local persistence. Inspections and photos intentionally remain on the
+// warehouse device so capture keeps working without a network connection.
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Inspection } from '../types/inspection';
@@ -31,11 +23,6 @@ interface InspectionDB extends DBSchema {
     };
     indexes: { 'by-inspection': string; 'by-uploaded': string };
   };
-  syncQueue: {
-    key: number;
-    value: SyncQueueEntry;
-    indexes: { 'by-status': string };
-  };
   inventory: {
     key: string;
     value: InventoryItem;
@@ -43,32 +30,15 @@ interface InspectionDB extends DBSchema {
   };
 }
 
-export interface SyncQueueEntry {
-  id?: number;
-  type: 'inspection-save' | 'inspection-complete' | 'photo-upload';
-  inspectionId: string;
-  photoId?: string;
-  payload?: any;
-  attempts: number;
-  lastAttemptAt?: string;
-  lastError?: string;
-  status: 'pending' | 'in-progress' | 'failed' | 'done';
-  createdAt: string;
-}
-
 const DB_NAME = 'loadout';
-const DB_VERSION = 3;
-
-// Cap on automatic retries so a permanently-bad record eventually stops
-// hammering the server instead of being retried forever.
-export const MAX_SYNC_ATTEMPTS = 5;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<InspectionDB>> | null = null;
 
 export function getDB(): Promise<IDBPDatabase<InspectionDB>> {
   if (!dbPromise) {
     dbPromise = openDB<InspectionDB>(DB_NAME, DB_VERSION, {
-      upgrade(db) {
+      upgrade(db, oldVersion) {
         if (!db.objectStoreNames.contains('inspections')) {
           const store = db.createObjectStore('inspections', { keyPath: 'id' });
           store.createIndex('by-site', 'siteId');
@@ -80,14 +50,19 @@ export function getDB(): Promise<IDBPDatabase<InspectionDB>> {
           store.createIndex('by-inspection', 'inspectionId');
           store.createIndex('by-uploaded', 'uploaded');
         }
-        if (!db.objectStoreNames.contains('syncQueue')) {
-          const store = db.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
-          store.createIndex('by-status', 'status');
-        }
         if (!db.objectStoreNames.contains('inventory')) {
           const store = db.createObjectStore('inventory', { keyPath: 'id' });
           store.createIndex('by-sku', 'sku');
           store.createIndex('by-batch', 'batch');
+        }
+        const legacyDb = db as unknown as {
+          objectStoreNames: DOMStringList;
+          deleteObjectStore(name: string): void;
+        };
+        if (oldVersion < 4 && legacyDb.objectStoreNames.contains('syncQueue')) {
+          // Retired cloud-sync operations are the source of the stale
+          // "pending" badge. Removing this store does not touch user data.
+          legacyDb.deleteObjectStore('syncQueue');
         }
       },
     });
@@ -95,75 +70,36 @@ export function getDB(): Promise<IDBPDatabase<InspectionDB>> {
   return dbPromise;
 }
 
-// ---- Inspections ----
-
 export async function dbSaveInspection(inspection: Inspection): Promise<void> {
   const db = await getDB();
   await db.put('inspections', inspection);
-  dbEnqueueSync({
-    type: inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED' ? 'inspection-complete' : 'inspection-save',
-    inspectionId: inspection.id
-  }).catch(e => console.error("dbEnqueueSync error", e));
+  window.dispatchEvent(new CustomEvent('loadout-data-updated'));
 }
 
-// Same as dbSaveInspection, but doesn't enqueue a sync back to the server
-export async function upsertDownloadedInspection(inspection: Inspection): Promise<void> {
-  const db = await getDB();
-
-  // A tombstone always wins, even against newer local edits. An admin deleted
-  // this record; letting a local edit outrank the delete would push the
-  // inspection back to the server and undo it on every other device.
-  if (inspection.deleted) {
-    await db.delete('inspections', inspection.id);
-    return;
-  }
-
-  const existing = await db.get('inspections', inspection.id);
-  // Simple conflict resolution: if we have local changes, don't overwrite
-  // (In a real app, you might compare lastEditedAt timestamps or use a sync status flag)
-  if (existing && new Date(existing.lastEditedAt || 0) >= new Date(inspection.lastEditedAt || 0)) {
-    return;
-  }
-  await db.put('inspections', inspection);
-}
-
-/**
- * Picklist lines used to carry a single `productName` that held whichever of
- * the material number or the material description the OCR happened to grab.
- * Those two are separate fields now. Move the legacy value into `description`
- * (the safer of the two — a description in the SKU box would look like a
- * confirmed material number) and leave the SKU empty for the verifier.
- *
- * Applied on read rather than as a one-shot upgrade so records arriving later
- * from sync are migrated too. In-progress inspections keep their data; nothing
- * is wiped.
- */
 function migrateInspection(inspection: Inspection | undefined): Inspection | undefined {
   if (!inspection) return inspection;
 
-  // BOL line items were added later — old records have no `bol.lineItems`.
-  // Default it so the cross-reference/review code can read it unconditionally.
   if (inspection.bol && !Array.isArray(inspection.bol.lineItems)) {
     inspection = { ...inspection, bol: { ...inspection.bol, lineItems: [] } };
   }
 
   if (!inspection.picklist?.lineItems?.length) return inspection;
   let changed = false;
-
-  const lineItems = inspection.picklist.lineItems.map((li) => {
-    if (li.sku !== undefined && li.description !== undefined) return li;
+  const lineItems = inspection.picklist.lineItems.map((line) => {
+    if (line.sku !== undefined && line.description !== undefined) return line;
     changed = true;
-    const legacy = li.productName;
-    const { productName: _drop, ...rest } = li;
+    const legacy = line.productName;
+    const { productName: _drop, ...rest } = line;
     return {
       ...rest,
-      sku: li.sku ?? emptySuggestable<string>(),
-      description: li.description ?? legacy ?? emptySuggestable<string>(),
+      sku: line.sku ?? emptySuggestable<string>(),
+      description: line.description ?? legacy ?? emptySuggestable<string>(),
     };
   });
 
-  if (!changed) return inspection;
-  return { ...inspection, picklist: { ...inspection.picklist, lineItems } };
+  return changed
+    ? { ...inspection, picklist: { ...inspection.picklist, lineItems } }
+    : inspection;
 }
 
 export async function dbGetInspection(id: string): Promise<Inspection | undefined> {
@@ -173,48 +109,42 @@ export async function dbGetInspection(id: string): Promise<Inspection | undefine
 
 export async function dbListAllInspections(): Promise<Inspection[]> {
   const db = await getDB();
-  const all = await db.getAll('inspections');
-  return all.filter((i) => !i.deleted);
+  return (await db.getAll('inspections')).filter((inspection) => !inspection.deleted);
 }
 
 export async function dbListInspectionsForSite(siteId: string): Promise<Inspection[]> {
   const db = await getDB();
-  const results = await db.getAllFromIndex('inspections', 'by-site', siteId);
-  return results
-    .filter((i) => !i.archived && !i.deleted)
+  const inspections = await db.getAllFromIndex('inspections', 'by-site', siteId);
+  return inspections
+    .filter((inspection) => !inspection.archived && !inspection.deleted)
     .sort((a, b) => (b.lastEditedAt || '').localeCompare(a.lastEditedAt || ''));
 }
 
 export async function dbListInProgressForSite(siteId: string): Promise<Inspection[]> {
-  const all = await dbListInspectionsForSite(siteId);
-  return all.filter((i) => i.status === 'PENDING' || i.status === 'IN_PROGRESS');
+  return (await dbListInspectionsForSite(siteId)).filter(
+    (inspection) => inspection.status === 'PENDING' || inspection.status === 'IN_PROGRESS'
+  );
 }
 
 export async function dbListCompletedForSite(siteId: string): Promise<Inspection[]> {
-  const all = await dbListInspectionsForSite(siteId);
-  return all.filter((i) => i.status === 'COMPLETED' || i.status === 'FLAGGED');
+  return (await dbListInspectionsForSite(siteId)).filter(
+    (inspection) => inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED'
+  );
 }
 
 export async function dbHardDeleteInspection(id: string): Promise<void> {
   const db = await getDB();
   await db.delete('inspections', id);
+  window.dispatchEvent(new CustomEvent('loadout-data-updated'));
 }
 
 export async function dbArchiveInspection(id: string): Promise<void> {
   const db = await getDB();
-  const ins = await db.get('inspections', id);
-  if (ins) {
-    ins.archived = true;
-    await db.put('inspections', ins);
-    await dbEnqueueSync({
-      type: 'inspection-save',
-      inspectionId: ins.id,
-      payload: ins,
-    });
-  }
+  const inspection = await db.get('inspections', id);
+  if (!inspection) return;
+  await db.put('inspections', { ...inspection, archived: true });
+  window.dispatchEvent(new CustomEvent('loadout-data-updated'));
 }
-
-// ---- Photo blobs ----
 
 export async function dbSavePhotoBlob(
   photoId: string,
@@ -227,181 +157,19 @@ export async function dbSavePhotoBlob(
     inspectionId,
     blob,
     capturedAt: new Date().toISOString(),
-    uploaded: false,
-  });
-  await dbEnqueueSync({
-    type: 'photo-upload',
-    inspectionId,
-    photoId
+    uploaded: true,
   });
 }
 
 export async function dbGetPhotoBlob(photoId: string): Promise<Blob | undefined> {
   const db = await getDB();
-  const record = await db.get('photoBlobs', photoId);
-  return record?.blob;
+  return (await db.get('photoBlobs', photoId))?.blob;
 }
-
-export async function dbMarkPhotoUploaded(photoId: string): Promise<void> {
-  const db = await getDB();
-  const record = await db.get('photoBlobs', photoId);
-  if (record) {
-    record.uploaded = true;
-    await db.put('photoBlobs', record);
-  }
-}
-
-// ---- Sync queue ----
-
-export async function dbEnqueueSync(entry: Omit<SyncQueueEntry, 'id' | 'createdAt' | 'attempts' | 'status'>): Promise<number> {
-  const db = await getDB();
-  const tx = db.transaction('syncQueue', 'readwrite');
-
-  // Deduplicate pending updates for the same inspection
-  if (entry.type === 'inspection-save' || entry.type === 'inspection-complete') {
-    const allPending = await tx.store.index('by-status').getAll('pending');
-    for (const record of allPending) {
-      if (
-        record.inspectionId === entry.inspectionId &&
-        (record.type === 'inspection-save' || record.type === 'inspection-complete') &&
-        record.id !== undefined
-      ) {
-        await tx.store.delete(record.id);
-      }
-    }
-  }
-
-  const resultPromise = tx.store.add({
-    ...entry,
-    attempts: 0,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-  });
-
-  await tx.done;
-  return resultPromise as Promise<number>;
-}
-
-export async function dbGetPendingSync(): Promise<SyncQueueEntry[]> {
-  const db = await getDB();
-  return db.getAllFromIndex('syncQueue', 'by-status', 'pending');
-}
-
-/**
- * Resurrect entries that would otherwise be stranded so the sync loop can
- * retry them:
- *   - 'failed'      — a previous push errored (e.g. the API was down). These
- *                     were never retried because the queue only processed
- *                     'pending' entries, so any inspection created while the
- *                     backend was unavailable stayed local forever.
- *   - 'in-progress' — orphaned when a tab closed mid-sync; also never retried.
- *
- * Entries that have already burned through MAX_SYNC_ATTEMPTS are left as
- * 'failed' so a genuinely bad record stops retrying. Returns the number of
- * entries moved back to 'pending'.
- */
-export async function dbRequeueStalledSync(): Promise<number> {
-  const db = await getDB();
-  const tx = db.transaction('syncQueue', 'readwrite');
-  const all = await tx.store.getAll();
-  let requeued = 0;
-  for (const entry of all) {
-    if (entry.id === undefined) continue;
-    const isRetriableFailure = entry.status === 'failed' && entry.attempts < MAX_SYNC_ATTEMPTS;
-    const isOrphanedInProgress = entry.status === 'in-progress';
-    if (isRetriableFailure || isOrphanedInProgress) {
-      entry.status = 'pending';
-      await tx.store.put(entry);
-      requeued++;
-    }
-  }
-  await tx.done;
-  return requeued;
-}
-
-/**
- * Manual-refresh counterpart to dbRequeueStalledSync: revive EVERY stranded
- * entry, including ones that burned through MAX_SYNC_ATTEMPTS, and reset their
- * attempt counters. A device that was away while the API was misbehaving can
- * exhaust the cap on records that are perfectly fine — the automatic loop then
- * never touches them again, and the data sits on the device forever. Tapping
- * refresh is an explicit "try again anyway".
- */
-export async function dbResetFailedSync(): Promise<number> {
-  const db = await getDB();
-  const tx = db.transaction('syncQueue', 'readwrite');
-  const all = await tx.store.getAll();
-  let revived = 0;
-  for (const entry of all) {
-    if (entry.id === undefined) continue;
-    if (entry.status === 'failed' || entry.status === 'in-progress') {
-      entry.status = 'pending';
-      entry.attempts = 0;
-      await tx.store.put(entry);
-      revived++;
-    }
-  }
-  await tx.done;
-  return revived;
-}
-
-/**
- * Re-enqueue photos whose blob is still un-uploaded but which have no sync
- * queue entry left. That happens when an entry was dropped (the queue deletes
- * 'done' records) or lost with a partially-written transaction — the blob then
- * shows up in the "pending" badge forever with nothing driving it. Returns the
- * number of uploads re-queued.
- */
-export async function dbReenqueueOrphanedPhotos(): Promise<number> {
-  const db = await getDB();
-  const [blobs, queue] = await Promise.all([
-    db.getAll('photoBlobs'),
-    db.getAll('syncQueue'),
-  ]);
-  const queuedPhotoIds = new Set(
-    queue.filter((e) => e.type === 'photo-upload' && e.photoId).map((e) => e.photoId)
-  );
-
-  let requeued = 0;
-  for (const record of blobs) {
-    if (record.uploaded) continue;
-    if (queuedPhotoIds.has(record.photoId)) continue;
-    await dbEnqueueSync({
-      type: 'photo-upload',
-      inspectionId: record.inspectionId,
-      photoId: record.photoId,
-    });
-    requeued++;
-  }
-  return requeued;
-}
-
-export async function dbUpdateSyncEntry(entry: SyncQueueEntry): Promise<void> {
-  const db = await getDB();
-  await db.put('syncQueue', entry);
-}
-
-// ---- Stats ----
-
-export async function dbGetPendingSyncCount(): Promise<number> {
-  const db = await getDB();
-  return db.countFromIndex('syncQueue', 'by-status', 'pending');
-}
-
-export async function dbGetUnuploadedPhotoCount(): Promise<number> {
-  const db = await getDB();
-  const all = await db.getAll('photoBlobs');
-  return all.filter((p) => !p.uploaded).length;
-}
-
-// ---- Inventory ----
 
 export async function dbSaveInventoryItems(items: InventoryItem[]): Promise<void> {
   const db = await getDB();
   const tx = db.transaction('inventory', 'readwrite');
-  for (const item of items) {
-    await tx.store.put(item);
-  }
+  for (const item of items) await tx.store.put(item);
   await tx.done;
 }
 
@@ -424,4 +192,3 @@ export async function dbClearInventory(): Promise<void> {
   const db = await getDB();
   await db.clear('inventory');
 }
-

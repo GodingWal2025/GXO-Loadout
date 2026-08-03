@@ -801,7 +801,6 @@ function InspectionManagementPanel() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
-  const [deleteError, setDeleteError] = useState('');
   const pageSize = 25;
 
   useEffect(() => {
@@ -810,26 +809,6 @@ function InspectionManagementPanel() {
 
   const loadInspections = async (p: number) => {
     setLoading(true);
-    try {
-      // GET /api/inspections returns every record; paging is done client-side.
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections`);
-      if (res.ok) {
-        const data = await res.json();
-        if (!Array.isArray(data.resources)) {
-          throw new Error('Unexpected API response structure');
-        }
-        // Tombstoned records stay in Cosmos so the delete can propagate — they
-        // must not show up here as though they were still live.
-        const live = data.resources.filter((i: any) => !i.deleted);
-        setInspections(live.slice((p - 1) * pageSize, p * pageSize));
-        setTotal(live.length);
-        setLoading(false);
-        return;
-      }
-    } catch {
-      // Server unreachable — fall back to local IndexedDB
-    }
-    // Fallback to local
     const all = await dbListAllInspections();
     setInspections(all.slice((p - 1) * pageSize, p * pageSize));
     setTotal(all.length);
@@ -843,34 +822,6 @@ function InspectionManagementPanel() {
       )
     )
       return;
-
-    // Delete on the server FIRST. Deleting locally first only clears this
-    // device — the next pull would hand the record straight back, so a failure
-    // here has to surface rather than look like it worked.
-    setDeleteError('');
-    try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/inspections/${id}`, {
-        method: 'DELETE',
-      });
-      if (!res.ok && res.status !== 404) {
-        setDeleteError(
-          t(
-            'admin.deleteRefused',
-            'Server refused the delete ({status}). Nothing was removed — try again.',
-            { status: res.status }
-          )
-        );
-        return;
-      }
-    } catch {
-      setDeleteError(
-        t(
-          'admin.deleteOffline',
-          'Could not reach the server. Deleting needs a connection, so nothing was removed.'
-        )
-      );
-      return;
-    }
 
     await dbHardDeleteInspection(id);
     loadInspections(page);
@@ -888,13 +839,6 @@ function InspectionManagementPanel() {
           {t('admin.totalInspections', '{count} total inspections', { count: total })}
         </span>
       </div>
-
-      {deleteError && (
-        <div className="banner banner--danger" style={{ marginBottom: 12 }}>
-          <span className="banner__icon">⚠</span>
-          <div className="banner__body">{deleteError}</div>
-        </div>
-      )}
 
       {loading ? (
         <div className="soft">{t('admin.loadingInspections', 'Loading inspections...')}</div>

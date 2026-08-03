@@ -27,6 +27,7 @@ Honest limits (independent of backend):
 Env:
   DETECTOR_BACKEND     "rfdetr" | "owlv2"                    (default: rfdetr)
   RFDETR_WEIGHTS       path to fine-tuned .pth checkpoint    (default: COCO base)
+  RFDETR_MODEL_SIZE    nano|small|medium|base|large           (default: small)
   RFDETR_CONF          confidence threshold                  (default: 0.5)
   RFDETR_RESOLUTION    inference resolution, mult. of 56     (default: model default)
   RFDETR_CLASS_NAMES   ordered comma-sep names, id 0..N-1    (default: model names)
@@ -46,12 +47,15 @@ from fastapi import FastAPI, Header, HTTPException, Request
 from PIL import Image, ImageOps
 
 from zeroshot import Detection
+from geometry import estimate_layers, normalize_boxes
+from rfdetr_model import create_rfdetr_model
 
 # --- config ---------------------------------------------------------------
 BACKEND = (os.environ.get("DETECTOR_BACKEND", "rfdetr").strip().lower() or "rfdetr")
 WEIGHTS = os.environ.get("RFDETR_WEIGHTS", "").strip()
 CONF = float(os.environ.get("RFDETR_CONF", "0.5"))
 RESOLUTION = os.environ.get("RFDETR_RESOLUTION", "").strip()
+MODEL_SIZE = (os.environ.get("RFDETR_MODEL_SIZE", "small").strip().lower() or "small")
 SERVICE_KEY = os.environ.get("DETECTOR_SERVICE_KEY", "").strip()
 
 
@@ -80,16 +84,14 @@ if BACKEND == "owlv2":
     _owl = Owlv2Detector()
     MODEL_VERSION = _owl.version
 else:
-    from rfdetr import RFDETRBase
-
     _kwargs = {}
     if WEIGHTS:
         _kwargs["pretrain_weights"] = WEIGHTS
     if RESOLUTION:
         _kwargs["resolution"] = int(RESOLUTION)
-    _rf_model = RFDETRBase(**_kwargs)
+    _rf_model = create_rfdetr_model(MODEL_SIZE, **_kwargs)
     _rf_model.optimize_for_inference()  # fuses/compiles for faster repeated predict()
-    MODEL_VERSION = f"rf-detr:{os.path.basename(WEIGHTS) if WEIGHTS else 'base-coco'}"
+    MODEL_VERSION = f"rf-detr-{MODEL_SIZE}:{os.path.basename(WEIGHTS) if WEIGHTS else 'coco'}"
 
 # Prefer explicit env names; fall back to whatever the model exposes.
 _model_names = getattr(_rf_model, "class_names", None) or {}
@@ -139,17 +141,7 @@ def load_image(raw: bytes) -> Image.Image:
     return img.convert("RGB")
 
 
-from fastapi.middleware.cors import CORSMiddleware
-
 app = FastAPI(title="pallet-bag-count")
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 
 @app.get("/health")
@@ -161,32 +153,6 @@ def health():
         "names": CLASS_NAMES or _model_names,
         **({"prompts": _owl.prompts} if _owl else {}),
     }
-
-
-def _estimate_layers(boxes: list[tuple[float, float, float, float]]) -> int:
-    """
-    Cluster detected boxes into horizontal courses (layers) by vertical position.
-
-    Bags in one layer share a similar box-center Y. Sort centers top to bottom and
-    start a new layer whenever the gap to the previous center exceeds ~60% of the
-    median box height (a robust, scale-free row threshold).
-    """
-    if not boxes:
-        return 0
-
-    centers = [((y1 + y2) / 2.0, abs(y2 - y1)) for x1, y1, x2, y2 in boxes]
-    centers.sort(key=lambda c: c[0])
-
-    median_h = statistics.median(h for _, h in centers) or 1.0
-    threshold = 0.6 * median_h
-
-    layers = 1
-    prev_cy = centers[0][0]
-    for cy, _ in centers[1:]:
-        if cy - prev_cy > threshold:
-            layers += 1
-        prev_cy = cy
-    return layers
 
 
 def analyze_image(img: Image.Image) -> dict:
@@ -213,7 +179,7 @@ def analyze_image(img: Image.Image) -> dict:
             confs.append(d.score)
 
     visible_bags = len(bag_boxes)
-    layers = _estimate_layers(bag_boxes)
+    layers = estimate_layers(bag_boxes)
     mean_conf = round(statistics.mean(confs), 3) if confs else None
     per_layer = round(visible_bags / layers, 1) if layers else None
 
@@ -233,6 +199,7 @@ def analyze_image(img: Image.Image) -> dict:
         # Visible-face count only — interior bags are occluded. Client uses
         # layers x bagsPerLayer for the real total; this is a cross-check.
         "estimatedBags": visible_bags or None,
+        "boxes": normalize_boxes(bag_boxes, img.width, img.height),
         "confidence": mean_conf,
         "rationale": rationale,
         "modelVersion": MODEL_VERSION,

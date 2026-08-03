@@ -9,13 +9,12 @@ NOT a YOLO data.yaml. Expected layout under --dataset-dir:
       valid/ _annotations.coco.json  + image files
       test/  _annotations.coco.json  + image files   (optional)
 
-Label one class "bag" (add "gap" and "damage" if you want those signals — then set
-the matching RFDETR_*_CLASSES env vars on the service). The class order in the COCO
+Label one class "bag_flap". The class order in the COCO
 categories becomes the class_id order; pass the SAME order as RFDETR_CLASS_NAMES to
 detector-service so names line up at inference time.
 
 Usage:
-    python train.py --dataset-dir ./pallet-bags-coco --epochs 100 --batch-size 4
+    python train.py --dataset-dir ./pallet-bags-coco --model-size small --epochs 100 --batch-size 4
     # -> best checkpoint at <output-dir>/checkpoint_best.pth
     # then run the service with:
     #   RFDETR_WEIGHTS=output/checkpoint_best.pth RFDETR_CLASS_NAMES=bag,gap,damage
@@ -24,7 +23,7 @@ Usage:
 import argparse
 import os
 
-from rfdetr import RFDETRBase
+from rfdetr_model import SUPPORTED_MODEL_SIZES, create_rfdetr_model
 
 
 def main() -> None:
@@ -32,6 +31,8 @@ def main() -> None:
     p.add_argument("--dataset-dir", required=True,
                    help="COCO-format dataset dir (train/ valid/ [test/] with _annotations.coco.json)")
     p.add_argument("--output-dir", default="output", help="where checkpoints are written")
+    p.add_argument("--model-size", choices=SUPPORTED_MODEL_SIZES, default="small",
+                   help="small is the recommended accuracy/speed starting point")
     p.add_argument("--epochs", type=int, default=100)
     p.add_argument("--batch-size", type=int, default=4)
     p.add_argument("--grad-accum-steps", type=int, default=4,
@@ -51,7 +52,7 @@ def main() -> None:
     if args.resolution:
         kwargs["resolution"] = args.resolution
 
-    model = RFDETRBase(**kwargs)
+    model = create_rfdetr_model(args.model_size, **kwargs)
     model.train(
         dataset_dir=args.dataset_dir,
         epochs=args.epochs,
@@ -64,7 +65,8 @@ def main() -> None:
     best = os.path.join(args.output_dir, "checkpoint_best.pth")
     print(f"\nDone. Best checkpoint: {best}")
     print("Serve it with:")
-    print(f"  RFDETR_WEIGHTS={best} RFDETR_CLASS_NAMES=bag,gap,damage \\")
+    print(f"  RFDETR_MODEL_SIZE={args.model_size} RFDETR_WEIGHTS={best} \\")
+    print("  RFDETR_CLASS_NAMES=bag_flap RFDETR_BAG_CLASSES=bag_flap \\")
     print("    uvicorn app:app --port 8080")
 
 

@@ -37,8 +37,8 @@ export function HomeRoute() {
 
     fetchInspections();
 
-    window.addEventListener('loadout-sync-updated', fetchInspections);
-    return () => window.removeEventListener('loadout-sync-updated', fetchInspections);
+    window.addEventListener('loadout-data-updated', fetchInspections);
+    return () => window.removeEventListener('loadout-data-updated', fetchInspections);
   }, [config, navigate]);
 
   if (!config) return null;
