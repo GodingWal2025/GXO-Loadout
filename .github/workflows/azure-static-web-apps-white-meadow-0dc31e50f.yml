@@ -21,12 +21,15 @@ jobs:
           cache: npm
       - name: Install web dependencies
         run: npm ci
+      - name: Install Functions API dependencies
+        run: npm ci
+        working-directory: api
       - name: Test web app
         run: npm test
       - name: Build web app
         run: npm run build
-      - name: Install and build Functions API
-        run: npm ci && npm run build
+      - name: Build Functions API
+        run: npm run build
         working-directory: api
 
   build_and_deploy_job:
