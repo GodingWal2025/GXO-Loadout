@@ -59,7 +59,8 @@ current inspection workload requires.
 
 - All devices converge on shared server state while continuing to work offline.
 - A Storage account connection string must be configured in Azure as
-  `LOADOUT_STORAGE_CONNECTION_STRING`.
+  `LOADOUT_STORAGE_CONNECTION_STRING`, or the existing `STORAGE_ACCOUNT_NAME`
+  and `STORAGE_ACCOUNT_KEY` settings can be retained.
 - The server is authoritative; local changes can be rejected when another device
   has already saved a newer version.
 - Table scans are acceptable at current scale; a future high-volume analytics need

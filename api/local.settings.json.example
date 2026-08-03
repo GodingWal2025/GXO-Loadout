@@ -7,6 +7,8 @@
     "LOADOUT_STORAGE_CONNECTION_STRING": "",
     "LOADOUT_TABLE_NAME": "LoadoutRecords",
     "LOADOUT_PHOTO_CONTAINER": "loadout-photos",
+    "STORAGE_ACCOUNT_NAME": "",
+    "STORAGE_ACCOUNT_KEY": "",
 
     "DOC_INTEL_ENDPOINT": "",
     "DOC_INTEL_KEY": "",
