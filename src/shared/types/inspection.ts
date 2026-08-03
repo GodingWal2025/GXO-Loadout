@@ -426,6 +426,8 @@ export interface Site {
   address?: string;
   active: boolean;
   createdAt?: string;
+  /** Stamped on every write; drives the cross-device sync merge. */
+  updatedAt?: string;
 }
 
 export interface Inspector {

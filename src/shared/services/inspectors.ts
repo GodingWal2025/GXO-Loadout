@@ -1,5 +1,6 @@
 import { generateId } from '../utils/uuid';
 import type { Inspector } from '../types/inspection';
+import { dbEnqueueRecord } from './db';
 
 const KEY = 'loadout.inspectors';
 
@@ -38,17 +39,20 @@ export function addInspector(name: string, siteId: string): Inspector {
     updatedAt: new Date().toISOString(),
   };
   saveAll([...inspectors, inspector]);
+  void dbEnqueueRecord('inspectors', inspector);
   return inspector;
 }
 
 export function updateInspector(id: string, patch: Partial<Inspector>): void {
+  let updated: Inspector | undefined;
   saveAll(
     loadAll().map((inspector) =>
       inspector.id === id
-        ? { ...inspector, ...patch, updatedAt: new Date().toISOString() }
+        ? (updated = { ...inspector, ...patch, updatedAt: new Date().toISOString() })
         : inspector
     )
   );
+  if (updated) void dbEnqueueRecord('inspectors', updated);
 }
 
 export function deactivateInspector(id: string): void {

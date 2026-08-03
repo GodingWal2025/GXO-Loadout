@@ -6,7 +6,7 @@ A React-based single-page application built with Vite and TypeScript for capturi
 - **Load Inspections**: Scan and document outgoing loads with detailed pallet-by-pallet photographic evidence.
 - **Returns Workflow**: Process incoming returns, verifying expected quantities against BOL data and photographing pallet condition.
 - **Dynamic Semantic Photo Verification**: Enforces rigorous checklist of necessary photos (placards, product, conditions) based on dynamic pallet configurations.
-- **Device-local PWA**: Uses IndexedDB for resilient offline storage. Inspections and photos intentionally stay on the warehouse device; there is no cloud sync queue.
+- **Shared, offline-capable PWA**: Azure Table Storage is the source of truth for inspections and reference data, Azure Blob Storage holds photos, and IndexedDB provides an offline cache plus durable retry queue.
 - **Barcode & QR Scanning**: Integrated ZXing barcode scanner to ingest LPNs, batch codes, and routing labels efficiently.
 - **Image Quality Analysis**: Built-in computer vision rules engine checking captured photos for blurriness, darkness, and clipping before saving.
 
@@ -14,7 +14,7 @@ A React-based single-page application built with Vite and TypeScript for capturi
 - **Framework**: React + Vite
 - **Language**: TypeScript
 - **State Management**: React Router + Context
-- **Storage**: IndexedDB (`idb`)
+- **Storage**: Azure Table Storage + Azure Blob Storage; IndexedDB (`idb`) offline cache
 - **Routing**: React Router DOM
 - **Scanner**: `html5-qrcode`
 
@@ -22,6 +22,13 @@ A React-based single-page application built with Vite and TypeScript for capturi
 1. Run `npm install` to install dependencies.
 2. Run `npm run dev` to start the local development server.
 3. Open `http://localhost:5173` in your browser.
+
+To exercise cross-device sync locally, run Azurite and copy
+`api/local.settings.json.example` to `api/local.settings.json`. In Azure, set
+`LOADOUT_STORAGE_CONNECTION_STRING` as a Static Web Apps application setting.
+The connection string is used only by the Functions API and must never be placed
+in a `VITE_*` variable. Shared data routes require workers to sign in through
+Microsoft Entra ID using Azure Static Web Apps authentication.
 
 ## Pallet bag-count vision assist
 

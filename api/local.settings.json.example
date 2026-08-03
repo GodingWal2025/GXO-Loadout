@@ -4,6 +4,10 @@
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "node",
 
+    "LOADOUT_STORAGE_CONNECTION_STRING": "",
+    "LOADOUT_TABLE_NAME": "LoadoutRecords",
+    "LOADOUT_PHOTO_CONTAINER": "loadout-photos",
+
     "DOC_INTEL_ENDPOINT": "",
     "DOC_INTEL_KEY": "",
     "DOC_INTEL_MODEL_ID": "",

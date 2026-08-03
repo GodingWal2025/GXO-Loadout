@@ -1,4 +1,5 @@
 import { generateId, type Site } from '../shared';
+import { dbEnqueueRecord } from '../shared/services/db';
 
 const KEY = 'loadout.sites';
 
@@ -42,13 +43,21 @@ export function addSite(name: string, address?: string): Site {
     address: address?.trim() || undefined,
     active: true,
     createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
   saveAll([...sites, site]);
+  void dbEnqueueRecord('sites', site);
   return site;
 }
 
 export function updateSite(id: string, patch: Partial<Site>): void {
-  saveAll(loadAll().map((site) => (site.id === id ? { ...site, ...patch } : site)));
+  let updated: Site | undefined;
+  saveAll(loadAll().map((site) => {
+    if (site.id !== id) return site;
+    updated = { ...site, ...patch, updatedAt: new Date().toISOString() };
+    return updated;
+  }));
+  if (updated) void dbEnqueueRecord('sites', updated);
 }
 
 export function deleteSite(id: string): { ok: boolean; reason?: string } {
@@ -67,6 +76,9 @@ export function deleteSite(id: string): { ok: boolean; reason?: string } {
     // A malformed legacy device config should not prevent cleanup.
   }
 
-  saveAll(sites.filter((site) => site.id !== id));
+  const site = sites.find((item) => item.id === id)!;
+  const now = new Date().toISOString();
+  saveAll(sites.filter((item) => item.id !== id));
+  void dbEnqueueRecord('sites', { ...site, deleted: true, deletedAt: now, updatedAt: now });
   return { ok: true };
 }

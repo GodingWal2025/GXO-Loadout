@@ -1,5 +1,6 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { DocumentAnalysisClient, AzureKeyCredential } from "@azure/ai-form-recognizer";
+import { probeSharedStorage } from './storage';
 
 // Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
 // App settings (never shipped to the client) so picklist/BOL images are read
@@ -998,11 +999,12 @@ export async function analyzePalletFaces(request: HttpRequest, context: Invocati
 
 export async function health(_request: HttpRequest, _context: InvocationContext): Promise<HttpResponseInit> {
     const detector = validateDetectorUrl(detectorServiceUrl);
+    const storage = await probeSharedStorage();
     return {
-        status: 200,
+        status: storage.available ? 200 : 503,
         jsonBody: {
-            ok: true,
-            storage: "device-local",
+            ok: storage.available,
+            storage: { mode: "shared-server", ...storage },
             documentIntelligence: Boolean(docIntelEndpoint && docIntelKey),
             detector: detector.ok
                 ? { configured: true }

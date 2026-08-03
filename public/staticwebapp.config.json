@@ -1,4 +1,14 @@
 {
+  "routes": [
+    {
+      "route": "/api/records/*",
+      "allowedRoles": ["authenticated"]
+    },
+    {
+      "route": "/api/photos/*",
+      "allowedRoles": ["authenticated"]
+    }
+  ],
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [

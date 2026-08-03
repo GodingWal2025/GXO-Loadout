@@ -1,4 +1,5 @@
 import { generateId } from '../shared';
+import { dbEnqueueRecord } from '../shared/services/db';
 
 export interface StagingLocation {
   id: string;
@@ -44,19 +45,28 @@ export function addStagingLocation(name: string, siteId: string): StagingLocatio
     updatedAt: new Date().toISOString(),
   };
   saveAll([...loadAll(), location]);
+  void dbEnqueueRecord('staging', location);
   return location;
 }
 
 export function updateStagingLocation(id: string, patch: Partial<StagingLocation>): void {
+  let updated: StagingLocation | undefined;
   saveAll(
     loadAll().map((location) =>
       location.id === id
-        ? { ...location, ...patch, updatedAt: new Date().toISOString() }
+        ? (updated = { ...location, ...patch, updatedAt: new Date().toISOString() })
         : location
     )
   );
+  if (updated) void dbEnqueueRecord('staging', updated);
 }
 
 export function deleteStagingLocation(id: string): void {
-  saveAll(loadAll().filter((location) => location.id !== id));
+  const locations = loadAll();
+  const location = locations.find((item) => item.id === id);
+  saveAll(locations.filter((item) => item.id !== id));
+  if (location) {
+    const now = new Date().toISOString();
+    void dbEnqueueRecord('staging', { ...location, deleted: true, deletedAt: now, updatedAt: now });
+  }
 }
