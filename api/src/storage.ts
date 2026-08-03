@@ -2,8 +2,16 @@ import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/fu
 import { TableClient, TableEntity } from '@azure/data-tables';
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
 
+const legacyStorageAccountName = (process.env.STORAGE_ACCOUNT_NAME || '').trim().toLowerCase();
+const legacyStorageAccountKey = (process.env.STORAGE_ACCOUNT_KEY || '').trim();
+const legacyConnectionString = /^[a-z0-9]{3,24}$/.test(legacyStorageAccountName) && legacyStorageAccountKey
+  ? `DefaultEndpointsProtocol=https;AccountName=${legacyStorageAccountName};AccountKey=${legacyStorageAccountKey};EndpointSuffix=core.windows.net`
+  : '';
 const connectionString = (
-  process.env.LOADOUT_STORAGE_CONNECTION_STRING || process.env.AzureWebJobsStorage || ''
+  process.env.LOADOUT_STORAGE_CONNECTION_STRING ||
+  legacyConnectionString ||
+  process.env.AzureWebJobsStorage ||
+  ''
 ).trim();
 const tableName = (process.env.LOADOUT_TABLE_NAME || 'LoadoutRecords').trim();
 const photoContainerName = (process.env.LOADOUT_PHOTO_CONTAINER || 'loadout-photos').trim();

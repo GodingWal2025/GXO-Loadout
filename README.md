@@ -30,6 +30,11 @@ The connection string is used only by the Functions API and must never be placed
 in a `VITE_*` variable. Shared data routes require workers to sign in through
 Microsoft Entra ID using Azure Static Web Apps authentication.
 
+Existing deployments can keep the legacy `STORAGE_ACCOUNT_NAME` and
+`STORAGE_ACCOUNT_KEY` API settings instead. When both are present, the API builds
+the Storage connection internally; `LOADOUT_STORAGE_CONNECTION_STRING` takes
+precedence when explicitly configured.
+
 ## Pallet bag-count vision assist
 
 `POST /api/analyze-pallet-count` estimates the **layer count** of a single pallet
