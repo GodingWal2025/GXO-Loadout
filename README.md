@@ -27,8 +27,8 @@ To exercise cross-device sync locally, run Azurite and copy
 `api/local.settings.json.example` to `api/local.settings.json`. In Azure, set
 `LOADOUT_STORAGE_CONNECTION_STRING` as a Static Web Apps application setting.
 The connection string is used only by the Functions API and must never be placed
-in a `VITE_*` variable. Shared data routes require workers to sign in through
-Microsoft Entra ID using Azure Static Web Apps authentication.
+in a `VITE_*` variable. The warehouse app does not require user sign-in; shared
+data routes are available to devices that can reach the site URL.
 
 Existing deployments can keep the legacy `STORAGE_ACCOUNT_NAME` and
 `STORAGE_ACCOUNT_KEY` API settings instead. When both are present, the API builds

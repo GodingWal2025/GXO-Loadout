@@ -9,7 +9,6 @@ export const shell: Record<string, string> = {
   'shell.syncing': 'Sincronizando…',
   'shell.pendingSync': '{count} pendientes',
   'shell.offline': 'Sin conexión',
-  'shell.signIn': 'Iniciar sesión',
   'shell.refresh': 'Actualizar datos',
   'shell.localRefreshed': 'Datos compartidos sincronizados',
   'shell.localOnlyHint': 'Las inspecciones y fotos se comparten con todos los dispositivos.',

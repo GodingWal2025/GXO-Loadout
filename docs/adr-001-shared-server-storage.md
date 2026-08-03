@@ -23,8 +23,9 @@ Static Web Apps.
 - Deletes are tombstones so an offline device cannot resurrect deleted records.
 - The browser never receives storage account credentials. Photo upload/download
   goes through the same-origin Function proxy.
-- Shared record and photo routes require an authenticated Microsoft Entra session
-  through Azure Static Web Apps; anonymous visitors cannot read warehouse data.
+- Shared record and photo routes do not require user authentication, per the
+  warehouse workflow requirement. The private Storage account remains reachable
+  only by the Functions API, but the API itself is accessible from the site URL.
 
 ## Options Considered
 
