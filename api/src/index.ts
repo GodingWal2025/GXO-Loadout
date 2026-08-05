@@ -1,6 +1,7 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { DocumentAnalysisClient, AzureKeyCredential } from "@azure/ai-form-recognizer";
 import { probeSharedStorage } from './storage';
+import './training';
 
 // Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
 // App settings (never shipped to the client) so picklist/BOL images are read

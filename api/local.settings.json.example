@@ -10,6 +10,9 @@
     "STORAGE_ACCOUNT_NAME": "",
     "STORAGE_ACCOUNT_KEY": "",
 
+    "TRAINING_TABLE_NAME": "TrainingSamples",
+    "TRAINING_PHOTO_CONTAINER": "training-photos",
+
     "DOC_INTEL_ENDPOINT": "",
     "DOC_INTEL_KEY": "",
     "DOC_INTEL_MODEL_ID": "",

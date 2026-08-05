@@ -47,6 +47,49 @@ function requireConnectionString(): string {
   return connectionString;
 }
 
+// Other modules (training data collection) need their own table + container on
+// the same storage account. These share the connection-string resolution above
+// so there is exactly one place that decides which account we talk to.
+const namedTables = new Map<string, Promise<TableClient>>();
+const namedContainers = new Map<string, Promise<ContainerClient>>();
+
+export async function getNamedTable(name: string): Promise<TableClient> {
+  let ready = namedTables.get(name);
+  if (!ready) {
+    ready = (async () => {
+      const client = TableClient.fromConnectionString(requireConnectionString(), name);
+      await client.createTable();
+      return client;
+    })().catch((error) => {
+      namedTables.delete(name);
+      throw error;
+    });
+    namedTables.set(name, ready);
+  }
+  return ready;
+}
+
+export async function getNamedContainer(name: string): Promise<ContainerClient> {
+  let ready = namedContainers.get(name);
+  if (!ready) {
+    ready = (async () => {
+      const service = BlobServiceClient.fromConnectionString(requireConnectionString());
+      const container = service.getContainerClient(name);
+      await container.createIfNotExists();
+      return container;
+    })().catch((error) => {
+      namedContainers.delete(name);
+      throw error;
+    });
+    namedContainers.set(name, ready);
+  }
+  return ready;
+}
+
+export function toRowKey(id: string): string {
+  return Buffer.from(id, 'utf8').toString('base64url');
+}
+
 async function getTable(): Promise<TableClient> {
   if (!tableReady) {
     tableReady = (async () => {

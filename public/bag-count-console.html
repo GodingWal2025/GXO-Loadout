@@ -239,6 +239,63 @@
     border: 1px solid var(--border); background: var(--surface); color: var(--muted); }
   ol.steps { margin: 0; padding-left: 20px; }
   ol.steps li { margin: 6px 0; }
+
+  /* ---- collect tab ---------------------------------------------------- */
+  .collectgrid { display: grid; grid-template-columns: 1fr 330px; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .collectgrid { grid-template-columns: 1fr; } }
+
+  .fieldrow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .fieldrow.three { grid-template-columns: 1fr 1fr 1fr; }
+  @media (max-width: 560px) { .fieldrow, .fieldrow.three { grid-template-columns: 1fr; } }
+  input[type=number] {
+    width: 100%; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 8px; padding: 9px 11px; font-size: 15px; font-family: var(--mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .req { color: var(--crit); font-weight: 600; text-transform: none; letter-spacing: 0; font-size: 10.5px; }
+  .fld { display: block; font-size: 12px; color: var(--muted); margin-bottom: 5px; font-weight: 600; }
+
+  /* photo slots — a slot is a fixed role (FRONT, FLAP_1…), not a free-for-all
+     upload list, so a half-finished pallet is obvious at a glance. */
+  .slotgrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .slotgrid.flaps { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 620px) { .slotgrid { grid-template-columns: repeat(2, 1fr); }
+    .slotgrid.flaps { grid-template-columns: repeat(3, 1fr); } }
+  .slot {
+    position: relative; aspect-ratio: 3/4; border-radius: 10px; overflow: hidden;
+    border: 1.5px dashed var(--border-strong); background: var(--surface-2);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; cursor: pointer; text-align: center; padding: 8px; transition: border-color .15s;
+  }
+  .slot:hover { border-color: var(--accent); }
+  .slot.filled { border-style: solid; border-color: var(--ok); cursor: default; }
+  .slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .slot .name { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--muted); }
+  .slot .plus { font-size: 21px; line-height: 1; color: var(--faint); }
+  .slot .tagline { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center;
+    gap: 6px; padding: 3px 6px; background: rgba(0,0,0,.62); color: #fff;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .04em; }
+  .slot .tagline .grow { flex: 1; }
+  .slot .redo { background: none; border: none; color: #fff; font-size: 10px; text-decoration: underline; padding: 0; }
+  .slot .drop-x { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px;
+    background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
+
+  .totalrow { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+  .calc { font-size: 27px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .calc small { font-size: 13px; color: var(--faint); font-weight: 400; font-family: var(--sans); }
+
+  .queuelist { display: flex; flex-direction: column; gap: 8px; max-height: 340px; overflow: auto; }
+  .qrow { border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; background: var(--surface-2);
+    display: flex; flex-direction: column; gap: 5px; }
+  .qrow .top { display: flex; align-items: baseline; gap: 8px; }
+  .qrow .pid { font-family: var(--mono); font-weight: 600; font-size: 12.5px; }
+  .qrow .grow { flex: 1; }
+  .qrow .meta { font-size: 11.5px; color: var(--muted); font-family: var(--mono); }
+  .qrow .err { font-size: 11.5px; color: var(--crit); }
+  .qrow button { background: none; border: none; color: var(--faint); font-size: 12px; padding: 0; }
+  .qrow button:hover { color: var(--crit); }
+  .banner.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -255,14 +312,129 @@
   </div>
 
   <div class="tabs" role="tablist">
-    <button class="tab" role="tab" aria-selected="true" data-tab="count">Count <span class="k">test</span></button>
+    <button class="tab" role="tab" aria-selected="true" data-tab="collect">Collect <span class="k">gather</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="count">Count <span class="k">test</span></button>
     <button class="tab" role="tab" aria-selected="false" data-tab="eval">Eval <span class="k">score</span></button>
     <button class="tab" role="tab" aria-selected="false" data-tab="label">Label <span class="k">train</span></button>
   </div>
 
   <main>
+    <!-- ================= COLLECT ================= -->
+    <section class="panel active" id="panel-collect" role="tabpanel">
+      <div class="collectgrid">
+        <div class="stack">
+          <div class="card">
+            <div class="hd"><span class="eyebrow">1 · Who &amp; what</span></div>
+            <div class="bd stack">
+              <div class="fieldrow">
+                <label><span class="fld">Collector <span class="req">required</span></span><input type="text" id="cCollector" placeholder="Your name" autocomplete="name"></label>
+                <label><span class="fld">Site</span><input type="text" id="cSite" placeholder="e.g. Bloomington"></label>
+              </div>
+              <p class="hint" style="margin:0">Name and site are remembered on this device — you only type them once.</p>
+              <div class="fieldrow">
+                <label><span class="fld">Pallet ID <span class="req">required</span></span><input type="text" id="cPalletId" class="mono" placeholder="Pallet / license plate"></label>
+                <label><span class="fld">Batch code</span><input type="text" id="cBatch" class="mono" placeholder="From the bag flap"></label>
+              </div>
+              <div class="fieldrow">
+                <label><span class="fld">Material description</span><input type="text" id="cMaterial" placeholder="From the bag flap"></label>
+                <label><span class="fld">Material / SKU no.</span><input type="text" id="cSku" class="mono" placeholder="e.g. 91007244"></label>
+              </div>
+              <p class="hint" style="margin:0">Leave batch/material blank if the flap photo is legible — the fields are a convenience, the photo is the record.</p>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd">
+              <span class="eyebrow">2 · Four sides</span>
+              <div class="grow"></div>
+              <span class="status" id="cSideState">0 / 4</span>
+            </div>
+            <div class="bd">
+              <p class="hint" style="margin:0 0 12px">Walk the pallet and shoot each face square-on, the whole stack in frame, top course to bottom. All four are required.</p>
+              <div class="slotgrid" id="cSideSlots"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd">
+              <span class="eyebrow">3 · Bag flap</span>
+              <div class="grow"></div>
+              <span class="status" id="cFlapState">0 / 3</span>
+            </div>
+            <div class="bd">
+              <p class="hint" style="margin:0 0 12px">Close-up of the sewn flap showing the batch code and material description. One is enough; add up to three if the print wraps or is hard to read.</p>
+              <div class="slotgrid flaps" id="cFlapSlots"></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="hd"><span class="eyebrow">4 · The count</span></div>
+            <div class="bd stack">
+              <p class="hint" style="margin:0">This is the ground truth the model is scored against. Count it, do not estimate it.</p>
+              <div class="fieldrow three">
+                <label><span class="fld">Bags per layer</span><input type="number" id="cPerLayer" min="1" max="200" inputmode="numeric" placeholder="e.g. 6"></label>
+                <label><span class="fld">Full layers</span><input type="number" id="cLayers" min="1" max="200" inputmode="numeric" placeholder="e.g. 10"></label>
+                <label><span class="fld">Partial top count</span><input type="number" id="cPartial" min="0" max="200" inputmode="numeric" value="0"></label>
+              </div>
+              <div class="totalrow">
+                <div>
+                  <span class="fld" style="margin:0">Total bags on pallet</span>
+                  <div class="calc mono" id="cCalc">—</div>
+                </div>
+                <label style="width:150px"><span class="fld">Actual total</span><input type="number" id="cTotal" min="1" max="20000" inputmode="numeric" placeholder="counted"></label>
+              </div>
+              <div id="cTotalNote"></div>
+              <label><span class="fld">Notes</span><input type="text" id="cNotes" placeholder="Anything odd — leaning, damaged wrap, mixed bag types…"></label>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="bd">
+              <div id="cValidation"></div>
+              <div class="row" style="margin-top:12px">
+                <button class="btn" id="cSaveBtn">Save pallet to queue</button>
+                <button class="btn ghost" id="cResetBtn">Clear form</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="card">
+            <div class="hd">
+              <span class="eyebrow">Queue</span>
+              <div class="grow"></div>
+              <span class="status" id="cStorageState">checking…</span>
+            </div>
+            <div class="bd stack">
+              <div class="tiles" style="grid-template-columns:1fr 1fr">
+                <div class="tile"><div class="v mono" id="cQueued">0</div><div class="l">waiting to upload</div></div>
+                <div class="tile"><div class="v mono" id="cSent">0</div><div class="l">uploaded</div></div>
+              </div>
+              <button class="btn" id="cUploadBtn" disabled>Upload queue</button>
+              <p class="hint" style="margin:0">Saved pallets live on this device until they upload, so you can keep shooting in a dead-signal aisle and send them all when you have wifi.</p>
+              <div class="queuelist" id="cQueue"></div>
+            </div>
+          </div>
+
+          <div class="card"><div class="bd stack">
+            <span class="eyebrow">Getting it into the repo</span>
+            <ol class="steps sub">
+              <li>Collectors upload from this page — no GitHub account or token needed.</li>
+              <li>You run the sync script to pull everything into <code class="inline">detector-service/dataset/raw/</code>.</li>
+              <li>Review, commit, then label the side photos on the <b>Label</b> tab.</li>
+            </ol>
+            <div class="cmd"><pre id="syncCmd">cd detector-service
+python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestaticapps.net
+# -> dataset/raw/&lt;pallet&gt;/{FRONT,RIGHT,BACK,LEFT,FLAP_1}.jpg
+# -> dataset/raw/samples.csv   (the ground-truth counts)</pre><button data-copy="syncCmd">Copy</button></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
     <!-- ================= COUNT ================= -->
-    <section class="panel active" id="panel-count" role="tabpanel">
+    <section class="panel" id="panel-count" role="tabpanel">
       <div class="split">
         <div class="stack">
           <div class="card">
@@ -367,7 +539,8 @@
               <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
               <button class="btn" id="exportBtn" style="flex:1">Export COCO</button>
             </div>
-            <p class="hint" style="margin:0"><span class="kbd">1</span> bag flap · <span class="kbd">Del</span> remove selected · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
+            <p class="hint" style="margin:0">Drag on empty space to draw. Click a box to select it, drag inside to move, drag a handle to resize.</p>
+            <p class="hint" style="margin:0"><span class="kbd">1</span> bag flap · <span class="kbd">Del</span> remove selected · <span class="kbd">Esc</span> deselect · <span class="kbd">↑↓←→</span> nudge (<span class="kbd">Shift</span> resize) · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
           </div></div>
 
           <div class="card"><div class="bd stack">
@@ -450,21 +623,337 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
 
   /* ---- image prep (mirror prepareForVision) ---- */
   const blobToDataUrl = b => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
-  async function prepImage(file, maxEdge=1024, maxBytes=128*1024) {
+  async function prepImage(file, maxEdge=1024, maxBytes=128*1024, quality=0.82) {
     const bmp = await createImageBitmap(file);
     let scale = Math.min(1, maxEdge / Math.max(bmp.width, bmp.height));
     let w = Math.max(1, Math.round(bmp.width*scale)), h = Math.max(1, Math.round(bmp.height*scale));
     const cv = document.createElement("canvas"); const ctx = cv.getContext("2d");
-    let q = 0.82, blob = null;
+    let q = quality, blob = null;
     for (let i=0; i<8; i++) {
       cv.width = w; cv.height = h; ctx.drawImage(bmp, 0, 0, w, h);
       blob = await new Promise(r => cv.toBlob(r, "image/jpeg", q));
       if (blob && blob.size <= maxBytes) break;
-      if (q > 0.5) q -= 0.12; else { w = Math.round(w*0.8); h = Math.round(h*0.8); q = 0.82; }
+      if (q > 0.5) q -= 0.12; else { w = Math.round(w*0.8); h = Math.round(h*0.8); q = quality; }
     }
     const dataUrl = await blobToDataUrl(blob);
     if (bmp.close) bmp.close();
     return { blob, dataUrl, width: w, height: h };
+  }
+
+  /* ================= COLLECT =================
+     Field data gathering. Several people shoot pallets on phones, so every
+     submission is held in IndexedDB first and uploaded separately — a dropped
+     connection in the middle of an aisle must never cost someone a pallet they
+     already walked around and counted. */
+
+  // Training photos are kept far larger than the 1024px/128KB inference images:
+  // a sewn flap 40 bags back in the stack has to survive being labeled.
+  const TRAIN_MAX_EDGE = 1600, TRAIN_MAX_BYTES = 900*1024;
+  const SIDE_ROLES = [
+    { role: "FRONT", label: "Front" },
+    { role: "RIGHT", label: "Right" },
+    { role: "BACK",  label: "Back" },
+    { role: "LEFT",  label: "Left" }
+  ];
+  const FLAP_ROLES = [
+    { role: "FLAP_1", label: "Flap 1" },
+    { role: "FLAP_2", label: "Flap 2" },
+    { role: "FLAP_3", label: "Flap 3" }
+  ];
+
+  const randId = (prefix) => {
+    const bytes = new Uint8Array(12);
+    (crypto.getRandomValues ? crypto : { getRandomValues: a => a.forEach((_,i)=>a[i]=Math.floor(Math.random()*256)) })
+      .getRandomValues(bytes);
+    return prefix + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
+  };
+
+  /* ---- IndexedDB: manifests in one store, photo blobs in another ---- */
+  const DB_NAME = "bcc-training", DB_VER = 1;
+  let dbPromise = null;
+  function db() {
+    if (!dbPromise) dbPromise = new Promise((res, rej) => {
+      const req = indexedDB.open(DB_NAME, DB_VER);
+      req.onupgradeneeded = () => {
+        const d = req.result;
+        if (!d.objectStoreNames.contains("samples")) d.createObjectStore("samples", { keyPath: "id" });
+        if (!d.objectStoreNames.contains("photos")) d.createObjectStore("photos");
+      };
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+    return dbPromise;
+  }
+  async function idbTx(store, mode, fn) {
+    const d = await db();
+    return new Promise((res, rej) => {
+      const tx = d.transaction(store, mode);
+      const req = fn(tx.objectStore(store));
+      tx.onerror = () => rej(tx.error);
+      tx.oncomplete = () => res(req ? req.result : undefined);
+    });
+  }
+  const idbPut    = (store, val, key) => idbTx(store, "readwrite", s => s.put(val, key));
+  const idbGet    = (store, key)      => idbTx(store, "readonly",  s => s.get(key));
+  const idbDel    = (store, key)      => idbTx(store, "readwrite", s => s.delete(key));
+  const idbAll    = (store)           => idbTx(store, "readonly",  s => s.getAll());
+
+  /* ---- form state ---- */
+  const draft = { photos: {} };   // role -> { id, blob, dataUrl, width, height, bytes }
+  let queue = [];                 // saved-but-not-yet-uploaded samples
+  let uploadedCount = Number(store.get("bcc-uploaded") || 0);
+
+  $("#cCollector").value = store.get("bcc-collector") || "";
+  $("#cSite").value = store.get("bcc-site") || "";
+  $("#cCollector").addEventListener("change", e => store.set("bcc-collector", e.target.value.trim()));
+  $("#cSite").addEventListener("change", e => store.set("bcc-site", e.target.value.trim()));
+
+  function slotMarkup(def) {
+    const p = draft.photos[def.role];
+    if (!p) return `<span class="plus" aria-hidden="true">+</span><span class="name">${def.label}</span>`;
+    return `<img src="${p.dataUrl}" alt="${def.label} of the pallet">
+      <button class="drop-x" data-drop="${def.role}" title="Remove ${def.label}" aria-label="Remove ${def.label}">×</button>
+      <span class="tagline"><span>${def.label}</span><span class="grow"></span><button class="redo" data-redo="${def.role}">retake</button></span>`;
+  }
+  function renderSlots() {
+    [["#cSideSlots", SIDE_ROLES], ["#cFlapSlots", FLAP_ROLES]].forEach(([sel, defs]) => {
+      const host = $(sel); host.innerHTML = "";
+      defs.forEach(def => {
+        const el = document.createElement("label");
+        el.className = "slot" + (draft.photos[def.role] ? " filled" : "");
+        el.innerHTML = slotMarkup(def) +
+          `<input type="file" accept="image/*" capture="environment" hidden data-role="${def.role}">`;
+        host.appendChild(el);
+      });
+    });
+    $$("#cSideSlots input, #cFlapSlots input").forEach(input =>
+      input.addEventListener("change", e => takePhoto(e.target.dataset.role, e.target.files[0])));
+    $$("[data-drop]").forEach(b => b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      delete draft.photos[b.dataset.drop]; renderSlots(); validateDraft();
+    }));
+    // A filled slot must not reopen the picker on a stray tap — only "retake" does.
+    $$("[data-redo]").forEach(b => b.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      const input = b.closest(".slot").querySelector("input"); input.value = ""; input.click();
+    }));
+    $$(".slot.filled").forEach(s => s.addEventListener("click", e => {
+      if (!e.target.closest("[data-redo], [data-drop]")) e.preventDefault();
+    }));
+    const sides = SIDE_ROLES.filter(d => draft.photos[d.role]).length;
+    const flaps = FLAP_ROLES.filter(d => draft.photos[d.role]).length;
+    $("#cSideState").textContent = `${sides} / 4`;
+    $("#cFlapState").textContent = `${flaps} / 3`;
+  }
+
+  async function takePhoto(role, file) {
+    if (!file || !file.type.startsWith("image/")) return;
+    try {
+      const p = await prepImage(file, TRAIN_MAX_EDGE, TRAIN_MAX_BYTES, 0.9);
+      draft.photos[role] = { id: randId("ph"), blob: p.blob, dataUrl: p.dataUrl,
+                             width: p.width, height: p.height, bytes: p.blob.size };
+    } catch (err) {
+      draft.photos[role] = null; delete draft.photos[role];
+      alert("Could not read that photo: " + (err && err.message ? err.message : err));
+    }
+    renderSlots(); validateDraft();
+  }
+
+  /* ---- counts ---- */
+  const numVal = sel => { const v = Number($(sel).value); return Number.isFinite(v) && $(sel).value !== "" ? v : null; };
+  function recalc() {
+    const per = numVal("#cPerLayer"), layers = numVal("#cLayers"), partial = numVal("#cPartial") ?? 0;
+    const calc = (per != null && layers != null) ? per*layers + partial : null;
+    $("#cCalc").innerHTML = calc == null ? "—" : `${calc} <small>= ${per} × ${layers}${partial ? " + " + partial : ""}</small>`;
+    // Prefill, but never overwrite what the collector typed — if their hand count
+    // disagrees with the arithmetic that disagreement is the interesting signal.
+    const totalEl = $("#cTotal");
+    if (calc != null && (totalEl.value === "" || totalEl.dataset.auto === "1")) {
+      totalEl.value = calc; totalEl.dataset.auto = "1";
+    }
+    const total = numVal("#cTotal");
+    $("#cTotalNote").innerHTML = (calc != null && total != null && total !== calc)
+      ? `<div class="banner"><b>Total does not match the layers.</b> You entered <span class="mono">${total}</span>, the layers give <span class="mono">${calc}</span>. Fine if the hand count is right — just make sure it is, this is the number the model gets graded on.</div>`
+      : "";
+    return { per, layers, partial, calc, total };
+  }
+  ["#cPerLayer","#cLayers","#cPartial"].forEach(sel => $(sel).addEventListener("input", () => { recalc(); validateDraft(); }));
+  $("#cTotal").addEventListener("input", e => { e.target.dataset.auto = "0"; recalc(); validateDraft(); });
+
+  /* ---- validation ---- */
+  function draftProblems() {
+    const out = [];
+    if (!$("#cCollector").value.trim()) out.push("your name");
+    if (!$("#cPalletId").value.trim()) out.push("a pallet ID");
+    const missing = SIDE_ROLES.filter(d => !draft.photos[d.role]);
+    if (missing.length) out.push(`all four sides (missing ${missing.map(d=>d.label.toLowerCase()).join(", ")})`);
+    if (!FLAP_ROLES.some(d => draft.photos[d.role])) out.push("at least one bag-flap photo");
+    const { per, layers, partial, total } = recalcQuiet();
+    if (per == null || per < 1) out.push("bags per layer");
+    if (layers == null || layers < 1) out.push("full layers");
+    if (per != null && partial != null && partial >= per) out.push("a partial count below the bags-per-layer (a full layer counts as a layer)");
+    if (total == null || total < 1) out.push("a total");
+    return out;
+  }
+  function recalcQuiet() {
+    return { per: numVal("#cPerLayer"), layers: numVal("#cLayers"),
+             partial: numVal("#cPartial") ?? 0, total: numVal("#cTotal") };
+  }
+  function validateDraft() {
+    const problems = draftProblems();
+    $("#cSaveBtn").disabled = problems.length > 0;
+    $("#cValidation").innerHTML = problems.length
+      ? `<div class="banner"><b>Still needed:</b> ${problems.join("; ")}.</div>`
+      : `<div class="banner ok"><b>Ready.</b> Save it to the queue and start the next pallet.</div>`;
+  }
+
+  /* ---- save / queue / upload ---- */
+  $("#cSaveBtn").addEventListener("click", async () => {
+    if (draftProblems().length) return;
+    const { per, layers, partial, total } = recalcQuiet();
+    const id = randId("smp");
+    const photos = [...SIDE_ROLES, ...FLAP_ROLES]
+      .filter(d => draft.photos[d.role])
+      .map(d => { const p = draft.photos[d.role];
+        return { id: p.id, role: d.role, width: p.width, height: p.height, bytes: p.bytes }; });
+
+    const sample = {
+      id,
+      palletId: $("#cPalletId").value.trim(),
+      site: $("#cSite").value.trim() || "unspecified",
+      collector: $("#cCollector").value.trim(),
+      batchCode: $("#cBatch").value.trim() || null,
+      materialDescription: $("#cMaterial").value.trim() || null,
+      sku: $("#cSku").value.trim() || null,
+      bagsPerLayer: per, fullLayers: layers, partialBags: partial, totalBags: total,
+      notes: $("#cNotes").value.trim() || null,
+      photos,
+      capturedAt: new Date().toISOString(),
+      status: "queued", error: null
+    };
+
+    try {
+      for (const d of [...SIDE_ROLES, ...FLAP_ROLES]) {
+        const p = draft.photos[d.role];
+        if (p) await idbPut("photos", p.blob, `${id}/${p.id}`);
+      }
+      await idbPut("samples", sample);
+    } catch (err) {
+      alert("Could not save to this device: " + (err && err.message ? err.message : err));
+      return;
+    }
+    queue.push(sample);
+    resetDraft(true);
+    renderQueue();
+    uploadQueue();   // opportunistic; failures just leave it queued
+  });
+
+  function resetDraft(keepIdentity) {
+    draft.photos = {};
+    ["#cPalletId","#cBatch","#cMaterial","#cSku","#cNotes"].forEach(s => $(s).value = "");
+    ["#cPerLayer","#cLayers","#cTotal"].forEach(s => { $(s).value = ""; $(s).dataset.auto = "1"; });
+    $("#cPartial").value = "0";
+    if (!keepIdentity) { $("#cCollector").value = ""; $("#cSite").value = ""; }
+    renderSlots(); recalc(); validateDraft();
+    $("#cPalletId").focus();
+  }
+  $("#cResetBtn").addEventListener("click", () => resetDraft(true));
+
+  function renderQueue() {
+    const pending = queue.filter(s => s.status !== "sent");
+    $("#cQueued").textContent = pending.length;
+    $("#cSent").textContent = uploadedCount;
+    $("#cUploadBtn").disabled = pending.length === 0;
+    const host = $("#cQueue"); host.innerHTML = "";
+    queue.slice().reverse().forEach(s => {
+      const row = document.createElement("div"); row.className = "qrow";
+      const state = s.status === "sent" ? chip("uploaded","ok")
+                  : s.status === "sending" ? chip("uploading…","acc")
+                  : s.status === "error" ? chip("failed","crit") : chip("queued","");
+      row.innerHTML = `<div class="top"><span class="pid">${escapeHtml(s.palletId)}</span>${state}<span class="grow"></span>
+          <button data-drop-sample="${s.id}" title="Delete">×</button></div>
+        <div class="meta">${s.totalBags} bags · ${s.bagsPerLayer}×${s.fullLayers}${s.partialBags?"+"+s.partialBags:""} · ${s.photos.length} photos</div>
+        ${s.error ? `<div class="err">${escapeHtml(s.error)}</div>` : ""}`;
+      row.querySelector("[data-drop-sample]").addEventListener("click", async () => {
+        if (s.status !== "sent" && !confirm(`Delete pallet ${s.palletId}? Its photos have not uploaded yet.`)) return;
+        await Promise.all(s.photos.map(p => idbDel("photos", `${s.id}/${p.id}`)));
+        await idbDel("samples", s.id);
+        queue = queue.filter(q => q.id !== s.id);
+        renderQueue();
+      });
+      host.appendChild(row);
+    });
+  }
+
+  let uploading = false;
+  async function uploadQueue() {
+    if (uploading) return;
+    uploading = true;
+    $("#cUploadBtn").disabled = true;
+    try {
+      for (const s of queue.filter(x => x.status !== "sent")) {
+        s.status = "sending"; s.error = null; renderQueue();
+        try {
+          // Photos first: a manifest referencing a photo that never landed
+          // would strand the sync script, so the bytes go up before the record.
+          for (const photo of s.photos) {
+            const blob = await idbGet("photos", `${s.id}/${photo.id}`);
+            if (!blob) throw new Error(`Photo ${photo.role} is missing from this device`);
+            const r = await fetch(`/api/training/photos/${s.id}/${photo.id}`, {
+              method: "POST",
+              headers: { "Content-Type": "image/jpeg", "X-Photo-Role": photo.role },
+              body: blob
+            });
+            if (!r.ok) throw new Error(await failText(r, `photo ${photo.role}`));
+          }
+          const { status, error, ...manifest } = s;
+          const r = await fetch(`/api/training/samples/${s.id}`, {
+            method: "PUT", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(manifest)
+          });
+          if (!r.ok) throw new Error(await failText(r, "counts"));
+
+          s.status = "sent"; s.error = null;
+          uploadedCount++; store.set("bcc-uploaded", String(uploadedCount));
+          await Promise.all(s.photos.map(p => idbDel("photos", `${s.id}/${p.id}`)));
+          await idbDel("samples", s.id);
+          queue = queue.filter(q => q.id !== s.id);
+        } catch (err) {
+          s.status = "error";
+          s.error = String(err && err.message ? err.message : err);
+          await idbPut("samples", s).catch(()=>{});
+        }
+        renderQueue();
+      }
+    } finally {
+      uploading = false;
+      renderQueue();
+    }
+  }
+  async function failText(resp, what) {
+    const j = await resp.json().catch(() => null);
+    const detail = j ? (j.error || "") + (j.detail ? " — " + j.detail : "") : "";
+    return `Upload of ${what} failed (HTTP ${resp.status})${detail ? ": " + detail : ""}`;
+  }
+  $("#cUploadBtn").addEventListener("click", uploadQueue);
+  addEventListener("online", () => { if (queue.some(s => s.status !== "sent")) uploadQueue(); });
+
+  async function initCollect() {
+    try {
+      queue = (await idbAll("samples")) || [];
+      queue.forEach(s => { if (s.status === "sending") s.status = "queued"; });
+    } catch { queue = []; }
+    renderSlots(); recalc(); validateDraft(); renderQueue();
+    try {
+      const r = await fetch("/api/health").then(x => x.json());
+      const ok = r && r.storage && r.storage.available;
+      $("#cStorageState").textContent = ok ? "server ready" : "server offline";
+      if (!ok) $("#cStorageState").style.color = "var(--warn)";
+    } catch {
+      $("#cStorageState").textContent = "server unreachable";
+      $("#cStorageState").style.color = "var(--warn)";
+    }
+    if (queue.some(s => s.status !== "sent")) uploadQueue();
   }
 
   /* ================= COUNT ================= */
@@ -733,20 +1222,88 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (curImg < 0 || !labImgs[curImg]) { empty.hidden = false; canvas.hidden = true; $("#imgPos").textContent = "—"; $("#boxList").innerHTML=""; $("#boxCount").textContent="0"; return; }
     empty.hidden = true; canvas.hidden = false;
     const im = labImgs[curImg];
-    const maxW = Math.min(760, $("#stage").clientWidth || 760);
-    dispScale = Math.min(1, maxW / im.w);
+    // The canvas is CSS-stretched to the stage width, so the bitmap scale must
+    // be derived from the width the canvas is actually *displayed* at. Deriving
+    // it from a fixed 760px cap instead put every box ~12% away from where it
+    // was dragged, and boxes drawn near the right or bottom edge landed off the
+    // canvas entirely — which read as "the lines aren't showing up".
+    const stageW = $("#stage").clientWidth || 760;
+    dispScale = stageW / im.w;
     canvas.width = Math.round(im.w * dispScale); canvas.height = Math.round(im.h * dispScale);
     ctx.drawImage(im.img, 0, 0, canvas.width, canvas.height);
     im.boxes.forEach((b, i) => {
       const c = CLASSES[b.cls].color;
-      ctx.lineWidth = i === selBox ? 3 : 2; ctx.strokeStyle = c;
-      ctx.strokeRect(b.x*dispScale, b.y*dispScale, b.w*dispScale, b.h*dispScale);
-      ctx.fillStyle = c + "22"; ctx.fillRect(b.x*dispScale, b.y*dispScale, b.w*dispScale, b.h*dispScale);
-      ctx.fillStyle = c; ctx.font = "11px ui-monospace, monospace";
-      ctx.fillText(CLASSES[b.cls].name, b.x*dispScale+3, b.y*dispScale+12);
+      const x = b.x*dispScale, y = b.y*dispScale, w = b.w*dispScale, h = b.h*dispScale;
+      // Fill first so the outline is never painted over by its own tint.
+      ctx.fillStyle = c + "26"; ctx.fillRect(x, y, w, h);
+      // A white underlay keeps thin flap boxes legible against pale shrink wrap.
+      ctx.lineWidth = (i === selBox ? 4 : 3); ctx.strokeStyle = "rgba(255,255,255,.85)";
+      ctx.strokeRect(x, y, w, h);
+      ctx.lineWidth = (i === selBox ? 2.5 : 1.5); ctx.strokeStyle = c;
+      ctx.strokeRect(x, y, w, h);
+      const tag = CLASSES[b.cls].name;
+      ctx.font = "11px ui-monospace, monospace";
+      const tw = ctx.measureText(tag).width + 6;
+      ctx.fillStyle = c; ctx.fillRect(x, Math.max(0, y-14), tw, 14);
+      ctx.fillStyle = "#fff"; ctx.fillText(tag, x+3, Math.max(0, y-14)+10.5);
+      // Grab handles on the selected box only — eight of them on every box would
+      // bury the photo you are trying to read.
+      if (i === selBox) {
+        ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.fillStyle = "#fff";
+        handlePoints(b).forEach(pt => {
+          const hx = pt.x*dispScale, hy = pt.y*dispScale;
+          ctx.fillRect(hx-HANDLE/2, hy-HANDLE/2, HANDLE, HANDLE);
+          ctx.strokeRect(hx-HANDLE/2, hy-HANDLE/2, HANDLE, HANDLE);
+        });
+      }
     });
     $("#imgPos").textContent = `${curImg+1} / ${labImgs.length} · ${im.name}`;
     renderBoxList();
+  }
+
+  /* ---- box editing: handles, hit-testing, move + resize ---------------- */
+  const HANDLE = 9;                       // handle square, in canvas px
+  const HANDLE_GRAB = 11;                 // slightly forgiving grab radius
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+
+  /** Eight handles in *image* coordinates: corners then edge midpoints. */
+  function handlePoints(b) {
+    return [
+      { id:"nw", x:b.x,        y:b.y        }, { id:"n", x:b.x+b.w/2, y:b.y        },
+      { id:"ne", x:b.x+b.w,    y:b.y        }, { id:"e", x:b.x+b.w,   y:b.y+b.h/2  },
+      { id:"se", x:b.x+b.w,    y:b.y+b.h    }, { id:"s", x:b.x+b.w/2, y:b.y+b.h    },
+      { id:"sw", x:b.x,        y:b.y+b.h    }, { id:"w", x:b.x,       y:b.y+b.h/2  },
+    ];
+  }
+  const CURSORS = { nw:"nwse-resize", se:"nwse-resize", ne:"nesw-resize", sw:"nesw-resize",
+                    n:"ns-resize", s:"ns-resize", e:"ew-resize", w:"ew-resize" };
+
+  /**
+   * What is under the pointer, in priority order: a handle of the selected box,
+   * then the smallest box containing the point, then empty canvas.
+   *
+   * Smallest-first matters because flap boxes overlap constantly in a tight
+   * stack — picking the topmost by index would make a big early box swallow
+   * every small one drawn inside it later.
+   */
+  function hitTest(p) {
+    const im = labImgs[curImg];
+    if (!im) return { type: "draw" };
+    if (selBox >= 0 && im.boxes[selBox]) {
+      const tol = HANDLE_GRAB / dispScale;
+      for (const pt of handlePoints(im.boxes[selBox])) {
+        if (Math.abs(p.x-pt.x) <= tol && Math.abs(p.y-pt.y) <= tol) {
+          return { type: "resize", index: selBox, handle: pt.id };
+        }
+      }
+    }
+    let best = -1, bestArea = Infinity;
+    im.boxes.forEach((b, i) => {
+      if (p.x >= b.x && p.x <= b.x+b.w && p.y >= b.y && p.y <= b.y+b.h && b.w*b.h < bestArea) {
+        best = i; bestArea = b.w*b.h;
+      }
+    });
+    return best >= 0 ? { type: "move", index: best } : { type: "draw" };
   }
   function renderBoxList() {
     const im = labImgs[curImg]; const list = $("#boxList"); list.innerHTML = "";
@@ -773,20 +1330,120 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       : `<b>Dataset not ready.</b> ${labImgs.length - labeled} image(s) still need at least one bag-flap box.`;
   }
 
-  const evtPos = e => { const r = canvas.getBoundingClientRect(); const p = e.touches?e.touches[0]:e; return { x:(p.clientX-r.left)/dispScale, y:(p.clientY-r.top)/dispScale }; };
-  function startDraw(e){ if (curImg<0) return; e.preventDefault(); const p = evtPos(e); dragging = { x0:p.x, y0:p.y, x1:p.x, y1:p.y }; }
-  function moveDraw(e){ if (!dragging) return; const p = evtPos(e); dragging.x1=p.x; dragging.y1=p.y; drawLab();
-    ctx.strokeStyle = CLASSES[curClass].color; ctx.lineWidth = 2; ctx.setLineDash([5,4]);
-    const x=Math.min(dragging.x0,dragging.x1)*dispScale, y=Math.min(dragging.y0,dragging.y1)*dispScale;
-    ctx.strokeRect(x,y,Math.abs(dragging.x1-dragging.x0)*dispScale,Math.abs(dragging.y1-dragging.y0)*dispScale); ctx.setLineDash([]); }
-  function endDraw(){ if (!dragging) return; const im = labImgs[curImg];
-    const x=Math.min(dragging.x0,dragging.x1), y=Math.min(dragging.y0,dragging.y1);
-    const w=Math.abs(dragging.x1-dragging.x0), h=Math.abs(dragging.y1-dragging.y0);
+  /**
+   * Pointer position in *image* coordinates.
+   *
+   * Mapped through the canvas's live bounding rect rather than the cached
+   * `dispScale`. Those two agree only when the bitmap is displayed 1:1 — browser
+   * zoom, a non-integer device pixel ratio, or a resize that has not redrawn yet
+   * all break that assumption, and the box then starts somewhere other than
+   * where the cursor is.
+   */
+  const evtPos = e => {
+    const im = labImgs[curImg];
+    const r = canvas.getBoundingClientRect();
+    const p = (e.touches && e.touches.length) ? e.touches[0]
+            : (e.changedTouches && e.changedTouches.length) ? e.changedTouches[0]
+            : e;
+    if (!im || !r.width || !r.height) return { x: 0, y: 0 };
+    return { x: (p.clientX - r.left) / r.width * im.w,
+             y: (p.clientY - r.top) / r.height * im.h };
+  };
+
+  function startDraw(e){
+    if (curImg<0) return;
+    e.preventDefault();
+    const p = evtPos(e);
+    const hit = hitTest(p);
+    if (hit.type === "draw") {
+      selBox = -1;
+      dragging = { mode:"draw", x0:p.x, y0:p.y, x1:p.x, y1:p.y };
+    } else {
+      selBox = hit.index;
+      dragging = { mode: hit.type, handle: hit.handle, index: hit.index,
+                   start: p, orig: { ...labImgs[curImg].boxes[hit.index] } };
+    }
+    drawLab();
+  }
+
+  function moveDraw(e){
+    if (!dragging) { hoverCursor(e); return; }
+    const im = labImgs[curImg];
+    const p = evtPos(e);
+
+    if (dragging.mode === "draw") {
+      dragging.x1 = p.x; dragging.y1 = p.y;
+      drawLab();
+      ctx.strokeStyle = CLASSES[curClass].color; ctx.lineWidth = 2; ctx.setLineDash([5,4]);
+      const x=Math.min(dragging.x0,dragging.x1)*dispScale, y=Math.min(dragging.y0,dragging.y1)*dispScale;
+      ctx.strokeRect(x,y,Math.abs(dragging.x1-dragging.x0)*dispScale,Math.abs(dragging.y1-dragging.y0)*dispScale);
+      ctx.setLineDash([]);
+      return;
+    }
+
+    const b = im.boxes[dragging.index];
+    if (!b) return;
+    const o = dragging.orig;
+    const dx = p.x - dragging.start.x, dy = p.y - dragging.start.y;
+
+    if (dragging.mode === "move") {
+      // Clamped to the image so a box can never be dragged off the photo and lost.
+      b.x = Math.round(clamp(o.x + dx, 0, im.w - o.w));
+      b.y = Math.round(clamp(o.y + dy, 0, im.h - o.h));
+    } else {
+      let left = o.x, top = o.y, right = o.x + o.w, bottom = o.y + o.h;
+      if (dragging.handle.includes("w")) left   = o.x + dx;
+      if (dragging.handle.includes("e")) right  = o.x + o.w + dx;
+      if (dragging.handle.includes("n")) top    = o.y + dy;
+      if (dragging.handle.includes("s")) bottom = o.y + o.h + dy;
+      // min/max rather than assuming left<right: dragging an edge past its
+      // opposite flips the box instead of collapsing it to nothing.
+      const x0 = clamp(Math.min(left, right), 0, im.w), x1 = clamp(Math.max(left, right), 0, im.w);
+      const y0 = clamp(Math.min(top, bottom), 0, im.h), y1 = clamp(Math.max(top, bottom), 0, im.h);
+      b.x = Math.round(x0); b.y = Math.round(y0);
+      b.w = Math.max(1, Math.round(x1 - x0)); b.h = Math.max(1, Math.round(y1 - y0));
+    }
+    drawLab();
+  }
+
+  function endDraw(){
+    if (!dragging) return;
+    const im = labImgs[curImg];
+    const d = dragging;
     dragging = null;
-    if (w>4 && h>4) { im.boxes.push({ x:Math.round(x), y:Math.round(y), w:Math.round(w), h:Math.round(h), cls:curClass }); selBox = im.boxes.length-1; updateProgress(); }
-    drawLab(); }
-  canvas.addEventListener("mousedown", startDraw); window.addEventListener("mousemove", moveDraw); window.addEventListener("mouseup", endDraw);
-  canvas.addEventListener("touchstart", startDraw, {passive:false}); canvas.addEventListener("touchmove", moveDraw, {passive:false}); canvas.addEventListener("touchend", endDraw);
+    if (d.mode === "draw") {
+      const x=Math.min(d.x0,d.x1), y=Math.min(d.y0,d.y1);
+      const w=Math.abs(d.x1-d.x0), h=Math.abs(d.y1-d.y0);
+      if (w>4 && h>4) {
+        im.boxes.push({ x:Math.round(x), y:Math.round(y), w:Math.round(w), h:Math.round(h), cls:curClass });
+        selBox = im.boxes.length-1;
+      }
+    } else {
+      // A resize that collapsed the box to a sliver is a misgrab, not an edit.
+      const b = im.boxes[d.index];
+      if (b && (b.w < 4 || b.h < 4)) Object.assign(b, d.orig);
+    }
+    updateProgress();
+    drawLab();
+  }
+
+  /** Shows what a click would do before it happens. */
+  function hoverCursor(e){
+    if (curImg < 0) return;
+    const hit = hitTest(evtPos(e));
+    canvas.style.cursor = hit.type === "resize" ? CURSORS[hit.handle]
+                        : hit.type === "move" ? "move"
+                        : "crosshair";
+  }
+
+  canvas.addEventListener("mousedown", startDraw);
+  window.addEventListener("mousemove", moveDraw);
+  window.addEventListener("mouseup", endDraw);
+  canvas.addEventListener("mousemove", hoverCursor);
+  canvas.addEventListener("touchstart", startDraw, {passive:false});
+  canvas.addEventListener("touchmove", moveDraw, {passive:false});
+  canvas.addEventListener("touchend", endDraw);
+  canvas.addEventListener("touchcancel", endDraw);
 
   $("#prevImg").addEventListener("click", ()=>{ if (curImg>0){curImg--;selBox=-1;drawLab();} });
   $("#nextImg").addEventListener("click", ()=>{ if (curImg<labImgs.length-1){curImg++;selBox=-1;drawLab();} });
@@ -795,8 +1452,26 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
     if (e.key === "1") { curClass = 0; syncClass(); }
     else if (e.key === "Delete" || e.key === "Backspace") { if (selBox>=0 && labImgs[curImg]) { labImgs[curImg].boxes.splice(selBox,1); selBox=-1; drawLab(); updateProgress(); e.preventDefault(); } }
+    else if (e.key === "Escape") { if (selBox>=0) { selBox=-1; drawLab(); } }
     else if (e.key === "[") $("#prevImg").click();
     else if (e.key === "]") $("#nextImg").click();
+    // Arrow keys nudge the selected box a pixel at a time — pointer dragging
+    // cannot reliably hit single image pixels once a 4032px photo is scaled to
+    // fit an 850px stage.
+    else if (selBox >= 0 && labImgs[curImg] && /^Arrow(Up|Down|Left|Right)$/.test(e.key)) {
+      const im = labImgs[curImg], b = im.boxes[selBox];
+      const step = e.altKey ? 1 : 5;
+      const dx = (e.key === "ArrowRight" ? step : 0) - (e.key === "ArrowLeft" ? step : 0);
+      const dy = (e.key === "ArrowDown"  ? step : 0) - (e.key === "ArrowUp"   ? step : 0);
+      if (e.shiftKey) {                       // grow/shrink from the far edge
+        b.w = Math.max(1, Math.min(im.w - b.x, b.w + dx));
+        b.h = Math.max(1, Math.min(im.h - b.y, b.h + dy));
+      } else {
+        b.x = clamp(b.x + dx, 0, im.w - b.w);
+        b.y = clamp(b.y + dy, 0, im.h - b.h);
+      }
+      drawLab(); e.preventDefault();
+    }
   });
 
   $("#exportBtn").addEventListener("click", () => {
@@ -831,6 +1506,7 @@ python train.py --dataset-dir ./dataset --model-size ${size} --epochs ${epochs} 
   );
   updateTrainCommand();
   updateProgress();
+  initCollect();
 
   window.addEventListener("resize", () => { if (!$("#panel-label").classList.contains("active")) return; drawLab(); });
 

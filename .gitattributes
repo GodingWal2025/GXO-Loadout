@@ -1,0 +1,11 @@
+# Collected pallet photos are binary and never diffable. Store them with Git LFS
+# so a `git clone` does not have to drag every revision of every JPEG.
+#
+# One-time setup, per machine that will commit photos:
+#     git lfs install
+#
+# See detector-service/dataset/raw/README.md for the storage-budget tradeoff —
+# GitHub's free LFS tier is 1 GB, which is roughly 200 pallets at 7 photos each.
+detector-service/dataset/raw/**/*.jpg  filter=lfs diff=lfs merge=lfs -text
+detector-service/dataset/raw/**/*.jpeg filter=lfs diff=lfs merge=lfs -text
+detector-service/dataset/raw/**/*.png  filter=lfs diff=lfs merge=lfs -text

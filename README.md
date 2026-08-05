@@ -35,6 +35,40 @@ Existing deployments can keep the legacy `STORAGE_ACCOUNT_NAME` and
 the Storage connection internally; `LOADOUT_STORAGE_CONNECTION_STRING` takes
 precedence when explicitly configured.
 
+## Collecting training data
+
+The detector has to be trained on real pallets from your own building. The
+**Collect** tab of [`/bag-count-console.html`](public/bag-count-console.html) is
+what the people gathering that data use — it runs on a phone, needs no login and
+no GitHub account, and holds submissions on the device until they upload, so a
+dead-signal aisle never costs someone a pallet they already walked around.
+
+Each submission is one pallet: four side photos (all required), one to three
+close-ups of the bag flap for the batch code and material description, and the
+hand count broken out as **bags per layer**, **full layers**, and **partial top
+count**. The console cross-checks that arithmetic against the collector's total
+and flags a disagreement rather than silently trusting either number.
+
+Photos go to blob storage and counts to table storage via `/api/training/*`,
+using the same `LOADOUT_STORAGE_CONNECTION_STRING` as the rest of the app. To
+pull a batch into the repo for labeling:
+
+```bash
+cd detector-service
+python sync_training_data.py --api https://<your-app>.azurestaticapps.net
+```
+
+That writes `detector-service/dataset/raw/<site>__<pallet>__<id>/` plus a
+`samples.csv` of every ground-truth count. See
+[`dataset/raw/README.md`](detector-service/dataset/raw/README.md) for the layout
+and the Git LFS storage budget.
+
+> These endpoints are anonymous, like the rest of the shared-data routes —
+> anyone who can reach the site URL can submit a pallet. That is deliberate for
+> now (collectors are handed a link, not credentials); the queue view lets you
+> delete anything that should not be there, and `--purge-remote` clears the
+> server once a batch is committed.
+
 ## Pallet bag-count vision assist
 
 `POST /api/analyze-pallet-count` estimates the **layer count** of a single pallet

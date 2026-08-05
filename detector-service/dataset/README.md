@@ -20,15 +20,24 @@ dataset/
 
 ## Getting there from your photos
 
-1. **Collect** pallet-face photos from the verifier confirm-loop (the ones inspectors
-   already confirm). Aim for 200–500 across the bag types, lighting, and stack heights
-   you actually see. Variety matters more than raw count.
-2. **Label** in [Roboflow](https://roboflow.com) or [CVAT]. Draw one box around each
-   visible front-facing bag flap and use the single class `bag_flap`.
+1. **Collect** with the **Collect** tab of `/bag-count-console.html`. Collectors shoot
+   four sides of a pallet plus one to three bag-flap close-ups and enter the hand
+   count; `python sync_training_data.py --api <app-url>` pulls it all into
+   [`raw/`](raw/README.md) with the ground-truth counts in `raw/samples.csv`. Aim
+   for 200–500 faces across the bag types, lighting, and stack heights you actually
+   see. Variety matters more than raw count.
+2. **Label** the four side photos on the console's **Label** tab (or in
+   [Roboflow](https://roboflow.com) / CVAT). Draw one box around each visible
+   front-facing bag flap and use the single class `bag_flap`. The flap close-ups are
+   reference for batch/material, not detector training images — do not label them.
 3. **Export** as **"COCO"** (not "YOLOv8" / not a `data.yaml`). Unzip into this folder.
 4. **Class order:** the order of categories in `_annotations.coco.json` = the
    `class_id` order. Pass the same order to the service as `RFDETR_CLASS_NAMES`
    (`bag_flap`) so names match at inference.
+
+`raw/` holds the unlabeled originals and is committed; `train/`, `valid/`, and `test/`
+are cut from it and gitignored, since they are reproducible from `raw/` plus the
+annotations.
 
 Split by **whole pallet**, not by random image. Different views of one pallet must
 stay in one split or the evaluation score will be misleadingly high. Target 70%
