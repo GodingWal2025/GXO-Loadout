@@ -913,7 +913,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     const { per, layers, partial, total } = recalcQuiet();
     if (per == null || per < 1) out.push("bags per layer");
     if (layers == null || layers < 1) out.push("full layers");
-    if (per != null && partial != null && partial >= per) out.push("a partial count below the bags-per-layer (a full layer counts as a layer)");
     if (total == null || total < 1) out.push("a total");
     return out;
   }
@@ -933,7 +932,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   $("#cSaveBtn").addEventListener("click", async () => {
     if (draftProblems().length) return;
     const { per, layers, partial, total } = recalcQuiet();
-    const id = randId("smp");
+    const id = draft.editId || randId("smp");
     const photos = [...SIDE_ROLES, ...FLAP_ROLES]
       .filter(d => draft.photos[d.role])
       .map(d => { const p = draft.photos[d.role];
@@ -968,6 +967,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
 
   function resetDraft() {
     draft.photos = {};
+    delete draft.editId;
     ["#cBatch","#cNotes"].forEach(s => $(s).value = "");
     ["#cPerLayer","#cLayers","#cTotal"].forEach(s => { $(s).value = ""; $(s).dataset.auto = "1"; });
     $("#cPartial").value = "0";
@@ -1154,6 +1154,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         <span class="eyebrow">${escapeHtml(s.batchCode || "pallet " + String(s.id).slice(-6))}</span>
         <div class="grow"></div>
         <span class="sub mono">${escapeHtml(when)} · ${escapeHtml(s.collector || "")}</span>
+        <button class="iconbtn" data-edit="${escapeHtml(s.id)}" title="Edit this pallet">Edit</button>
         <button class="iconbtn" data-del="${escapeHtml(s.id)}" title="Delete this pallet">Delete</button>
       </div>
       <div class="bd stack">
@@ -1184,6 +1185,52 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         e.currentTarget.disabled = false;
       }
     });
+    
+    const editBtn = card.querySelector("[data-edit]");
+    if (editBtn) {
+      editBtn.addEventListener("click", async () => {
+        if (Object.keys(draft.photos).length > 0 && !confirm("This will overwrite your current draft. Continue?")) return;
+        
+        $$(".tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.tab === "collect")));
+        $$(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-collect"));
+        
+        draft.editId = s.id;
+        $("#cBatch").value = s.batchCode || "";
+        $("#cPerLayer").value = s.bagsPerLayer || "";
+        $("#cLayers").value = s.fullLayers || "";
+        $("#cPartial").value = s.partialBags || 0;
+        $("#cTotal").value = s.totalBags || "";
+        $("#cTotal").dataset.auto = "0";
+        $("#cNotes").value = s.notes || "";
+        
+        draft.photos = {};
+        renderSlots();
+        
+        for (const p of (s.photos || [])) {
+          try {
+            const resp = await fetch(photoUrl(s.id, p.id));
+            if (resp.ok) {
+              const blob = await resp.blob();
+              const dataUrl = await blobToDataUrl(blob);
+              draft.photos[p.role] = {
+                id: p.id,
+                blob: blob,
+                dataUrl: dataUrl,
+                width: p.width,
+                height: p.height,
+                bytes: p.bytes || blob.size
+              };
+            }
+          } catch (e) {
+            console.error("Failed to load photo", p.role, e);
+          }
+        }
+        renderSlots();
+        recalc();
+        validateDraft();
+      });
+    }
+
     // Server photos open in the same viewer as the draft ones.
     card.querySelectorAll(".rvshot img").forEach(img =>
       img.addEventListener("click", () => openUrlViewer(img.dataset.full, img.dataset.role)));
