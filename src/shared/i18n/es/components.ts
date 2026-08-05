@@ -87,4 +87,38 @@ export const components: Record<string, string> = {
 
   // InspectorPicker
   'inspectorPicker.placeholder': 'Seleccione inspector…',
+
+  // AdjustOrderModal & Adjustments
+  'adjust.titleLead': 'Ajustar',
+  'adjust.titleEm': 'Pedido / Lista de surtido',
+  'adjust.bannerInfo':
+    'Use este formulario para manejar cambios de lote, reducciones de cantidad o líneas canceladas durante la inspección. Todos los ajustes se registran con su nombre de inspector.',
+  'adjust.globalReasonLabel': 'Motivo del ajuste (opcional)',
+  'adjust.globalReasonPlaceholder': 'ej. Lote H18 agotado en pasillo 4, cambiado por H22',
+  'adjust.currentLines': 'Líneas actuales de la lista de surtido',
+  'adjust.lineItemNum': 'Línea #{n}',
+  'adjust.previouslyAdjusted': 'Ajustado previamente',
+  'adjust.cancelLine': 'Cancelar línea',
+  'adjust.uncancelLine': 'Reactivar línea',
+  'adjust.batchCode': 'Código de lote',
+  'adjust.expectedQty': 'Cant. esperada ({uom})',
+  'adjust.bagsTally': 'Equivalente en bolsas',
+  'adjust.bags': 'bolsas',
+  'adjust.addNewLineTitle': 'Agregar nueva línea de lote',
+  'adjust.qtyBags': 'Cantidad (bolsas)',
+  'adjust.skuOptional': 'SKU / Material # (opcional)',
+  'adjust.descOptional': 'Descripción (opcional)',
+  'adjust.cancel': 'Cancelar',
+  'adjust.addLineBtn': 'Agregar línea',
+  'adjust.addNewLine': 'Agregar nueva línea de lote / producto',
+  'adjust.saveAdjustments': 'Guardar ajustes',
+  'adjust.newLineReason': 'Nueva línea agregada al pedido',
+
+  // RunningTallyHeader
+  'tally.swappedFrom': 'Cambiado desde {orig}',
+  'tally.qtyAdjusted': 'Cantidad ajustada',
+  'tally.adjBadge': 'AJU',
+
+  // Workspace
+  'workspace.adjustOrder': 'Ajustar pedido',
 };

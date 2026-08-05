@@ -16,10 +16,12 @@ export function RunningTallyHeader({ picklist }: Props) {
   const bagsExpected = (li: Picklist['lineItems'][number]) =>
     expectedBags(li.uom, li.expectedQuantity.value, li.description.value);
 
-  const totalExpected = picklist.lineItems.reduce((sum, li) => sum + bagsExpected(li), 0);
-  const totalActual = picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
+  const activeLineItems = picklist.lineItems.filter((li) => !li.cancelled);
+
+  const totalExpected = activeLineItems.reduce((sum, li) => sum + bagsExpected(li), 0);
+  const totalActual = activeLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
   const allFulfilled =
-    picklist.lineItems.length > 0 && picklist.lineItems.every((li) => li.fulfilled);
+    activeLineItems.length > 0 && activeLineItems.every((li) => li.fulfilled);
 
   return (
     <div className="tally">
@@ -35,10 +37,11 @@ export function RunningTallyHeader({ picklist }: Props) {
         </div>
 
         <div className="tally__bars">
-          {picklist.lineItems.map((li) => {
+          {activeLineItems.map((li) => {
             const expected = bagsExpected(li);
             const actual = li.actualQuantity;
             const pct = expected ? Math.min(100, (actual / expected) * 100) : 0;
+            const isAdjusted = Boolean(li.originalBatchCode || li.originalExpectedQuantity !== undefined);
             const status =
               actual === 0
                 ? 'empty'
@@ -60,7 +63,21 @@ export function RunningTallyHeader({ picklist }: Props) {
 
             return (
               <div key={li.id} className={`tally__bar ${cls}`}>
-                <div className="tally__bar-batch mono">{li.batchCode.value || '—'}</div>
+                <div className="tally__bar-batch mono" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span>{li.batchCode.value || '—'}</span>
+                  {isAdjusted && (
+                    <span
+                      title={
+                        li.originalBatchCode
+                          ? t('tally.swappedFrom', 'Swapped from {orig}', { orig: li.originalBatchCode })
+                          : t('tally.qtyAdjusted', 'Quantity adjusted')
+                      }
+                      style={{ fontSize: 10, padding: '1px 3px', borderRadius: 3, background: 'var(--accent)', color: '#fff' }}
+                    >
+                      {t('tally.adjBadge', 'ADJ')}
+                    </span>
+                  )}
+                </div>
                 <div className="tally__bar-vals tnum">
                   {actual}
                   <span className="of"> / {expected}</span>

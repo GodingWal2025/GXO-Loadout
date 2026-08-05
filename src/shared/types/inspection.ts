@@ -263,6 +263,13 @@ export interface PicklistLineItemEntry {
   deliveryId?: string; // which delivery does this line belong to (after picklist/BOL cross-ref)
   actualQuantity: number;
   fulfilled: boolean;
+  /** Adjustment tracking (e.g. batch swap, quantity reduction, or line cancellation) */
+  originalBatchCode?: string;
+  originalExpectedQuantity?: number;
+  adjustedAt?: string;
+  adjustedBy?: string;
+  adjustmentReason?: string;
+  cancelled?: boolean;
 }
 
 // ============================================================

@@ -98,6 +98,13 @@ export type Action =
   | { type: 'SET_PICKLIST'; patch: Partial<Picklist> }
   | { type: 'ADD_PICKLIST_PHOTO'; photo: InspectionPhoto }
   | { type: 'UPDATE_PICKLIST_LINE'; index: number; patch: Partial<PicklistLineItemEntry> }
+  | {
+      type: 'ADJUST_PICKLIST_LINE';
+      index: number;
+      patch: Partial<PicklistLineItemEntry>;
+      adjustedBy: string;
+      reason?: string;
+    }
   | { type: 'ADD_PICKLIST_LINE'; line: PicklistLineItemEntry }
   | { type: 'REMOVE_PICKLIST_LINE'; index: number }
   | { type: 'SET_BOL'; patch: Partial<BOLData> }
@@ -155,11 +162,19 @@ export function recomputeTallies(state: Inspection): Inspection {
   // an over-scan still surfaces as "Over by N" rather than silently vanishing.
   const lastLineForCode: Record<string, number> = {};
   state.picklist.lineItems.forEach((li, i) => {
+    if (li.cancelled) return;
     const code = li.batchCode.value;
     if (code) lastLineForCode[code] = i;
   });
 
   const lineItems = state.picklist.lineItems.map((li, i) => {
+    if (li.cancelled) {
+      return {
+        ...li,
+        actualQuantity: 0,
+        fulfilled: true,
+      };
+    }
     const batch = li.batchCode.value;
     const expected = expectedByLine[i];
     let actual = 0;
@@ -294,6 +309,39 @@ function reducer(state: Inspection, action: Action): Inspection {
                   lineItemIds: lineItems.filter((li) => li.deliveryId === d.id).map((li) => li.id),
                 })),
               },
+      };
+      break;
+    }
+
+    case 'ADJUST_PICKLIST_LINE': {
+      const timestamp = new Date().toISOString();
+      const lineItems = state.picklist.lineItems.map((li, i) => {
+        if (i !== action.index) return li;
+        const updates: Partial<PicklistLineItemEntry> = { ...action.patch };
+        if (
+          action.patch.batchCode &&
+          action.patch.batchCode.value !== li.batchCode.value
+        ) {
+          updates.originalBatchCode = li.originalBatchCode || li.batchCode.value || undefined;
+        }
+        if (
+          action.patch.expectedQuantity &&
+          action.patch.expectedQuantity.value !== li.expectedQuantity.value
+        ) {
+          updates.originalExpectedQuantity =
+            li.originalExpectedQuantity ?? (li.expectedQuantity.value ?? undefined);
+        }
+        return {
+          ...li,
+          ...updates,
+          adjustedAt: timestamp,
+          adjustedBy: action.adjustedBy,
+          adjustmentReason: action.reason || li.adjustmentReason,
+        };
+      });
+      next = {
+        ...state,
+        picklist: { ...state.picklist, lineItems },
       };
       break;
     }

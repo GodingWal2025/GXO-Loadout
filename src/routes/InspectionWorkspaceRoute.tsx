@@ -7,6 +7,7 @@ import { PALLET_TYPES, expectedBags } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
+import { AdjustOrderModal } from '../components/AdjustOrderModal';
 import { useT } from '../shared/i18n/LanguageContext';
 
 // Pallet types are persisted data, so the stored value stays English. This hook
@@ -49,6 +50,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
+  const [showAdjustModal, setShowAdjustModal] = useState(false);
 
   const warnings = useMemo(() => {
     const list: string[] = [];
@@ -227,6 +229,11 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
               {t('workspace.reviewProgress', 'Review progress')}
             </button>
             {!readOnly && (
+              <button className="btn btn--ghost" onClick={() => setShowAdjustModal(true)}>
+                {t('workspace.adjustOrder', 'Adjust order')}
+              </button>
+            )}
+            {!readOnly && (
               <button className="btn btn--ghost" onClick={handleArchive}>
                 {t('workspace.archive', 'Archive')}
               </button>
@@ -346,6 +353,27 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           <InspectionProgressModal
             inspection={inspection}
             onClose={() => setShowProgressModal(false)}
+          />
+        )}
+
+        {showAdjustModal && (
+          <AdjustOrderModal
+            inspection={inspection}
+            onClose={() => setShowAdjustModal(false)}
+            onAdjustLine={(index, patch, reason) => {
+              const inspectorName =
+                inspection.currentInspector || inspection.startedBy || 'unknown';
+              dispatch({
+                type: 'ADJUST_PICKLIST_LINE',
+                index,
+                patch,
+                adjustedBy: inspectorName,
+                reason,
+              });
+            }}
+            onAddLine={(line) => {
+              dispatch({ type: 'ADD_PICKLIST_LINE', line });
+            }}
           />
         )}
 
