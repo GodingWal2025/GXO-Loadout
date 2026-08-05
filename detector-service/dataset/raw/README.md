@@ -8,7 +8,9 @@ source of truth the labeled COCO splits are cut from — `train/`, `valid/`, and
 
 1. A collector opens the **Collect** tab of `/bag-count-console.html` on their
    phone, shoots four sides of a pallet plus one to three bag-flap close-ups,
-   enters the count, and taps upload. No GitHub account or token involved.
+   enters the count, and taps upload. No GitHub account or token involved, and
+   no name, site, or pallet ID to type — the only optional text field is the
+   batch code, for when the flap photo came out hard to read.
 2. Photos land in Azure blob storage, counts in table storage.
 3. You pull them down:
 
@@ -24,7 +26,7 @@ source of truth the labeled COCO splits are cut from — `train/`, `valid/`, and
 ```
 raw/
   samples.csv                       # every pallet's ground-truth count, rebuilt on each sync
-  <site>__<palletId>__<short-id>/
+  <batch-or-pallet>__<short-id>/
     manifest.json                   # the full submission as the collector entered it
     FRONT.jpg  RIGHT.jpg  BACK.jpg  LEFT.jpg
     FLAP_1.jpg [FLAP_2.jpg] [FLAP_3.jpg]
@@ -34,6 +36,11 @@ The four sides are what you label (one `bag_flap` box per visible sewn end). The
 flap close-ups are **not** training images for the detector — they carry the
 batch code and material description so a pallet can be traced back to what was
 actually on it.
+
+Folders are named from the batch code when one was entered, and always carry a
+short slice of the sample id so two pallets can never collide. `manifest.json`
+holds the submission verbatim, including the anonymous per-device tag in
+`collector` — that is what tells you which phone shot a given batch.
 
 `samples.csv` has a `total_matches` column. A `NO` there means the collector's
 hand count disagreed with `bags_per_layer × full_layers + partial_bags`. That is

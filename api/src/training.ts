@@ -41,8 +41,10 @@ type PhotoRef = {
 
 type TrainingSample = {
   id: string;
+  /** Empty unless a caller supplies one — the console no longer asks. */
   palletId: string;
   site: string;
+  /** Anonymous per-device tag from the console, or 'unknown'. */
   collector: string;
   batchCode: string | null;
   materialDescription: string | null;
@@ -95,11 +97,10 @@ function validateSample(id: string, body: any): { sample: TrainingSample } | { e
   if (!body || typeof body !== 'object') return { error: 'Body must be a JSON object' };
   if (body.id !== id) return { error: 'Body id must match the route id' };
 
-  const palletId = str(body.palletId, 64);
-  const collector = str(body.collector, 64);
-  if (!palletId) return { error: 'palletId is required' };
-  if (!collector) return { error: 'collector is required' };
-
+  // palletId, site, and collector are all optional: the console stopped asking
+  // for them so that a collector can go straight from photo to count without
+  // typing. Submissions are identified by their sample id, and the console sends
+  // an anonymous per-device tag as the collector so batches stay separable.
   const bagsPerLayer = num(body.bagsPerLayer);
   const fullLayers = num(body.fullLayers);
   const partialBags = num(body.partialBags);
@@ -142,9 +143,9 @@ function validateSample(id: string, body: any): { sample: TrainingSample } | { e
   return {
     sample: {
       id,
-      palletId,
+      palletId: str(body.palletId, 64) || '',
       site: str(body.site, 64) || 'unspecified',
-      collector,
+      collector: str(body.collector, 64) || 'unknown',
       batchCode: str(body.batchCode, 64),
       materialDescription: str(body.materialDescription, 256),
       sku: str(body.sku, 64),

@@ -11,7 +11,7 @@ Layout produced::
 
     dataset/raw/
       samples.csv                     # every pallet's ground-truth count
-      <site>__<palletId>__<short-id>/
+      <batch-or-pallet>__<short-id>/
         manifest.json
         FRONT.jpg  RIGHT.jpg  BACK.jpg  LEFT.jpg
         FLAP_1.jpg [FLAP_2.jpg FLAP_3.jpg]
@@ -82,10 +82,15 @@ def request_delete(url: str, timeout: int) -> None:
 
 
 def folder_name(sample: dict) -> str:
-    site = slug(sample.get("site") or "site", "site")
-    pallet = slug(sample.get("palletId") or "pallet", "pallet")
+    """``<batch-or-pallet>__<short-id>``.
+
+    The console no longer asks for a pallet ID or site, so the name leans on the
+    batch code when there is one and on the sample id otherwise. The id suffix is
+    always present, which is what actually keeps two folders from colliding.
+    """
+    label = slug(sample.get("batchCode") or sample.get("palletId") or "", "")
     short = slug(sample.get("id", ""))[-8:] or "00000000"
-    return f"{site}__{pallet}__{short}"
+    return f"{label}__{short}" if label else f"pallet__{short}"
 
 
 def download_sample(api: str, sample: dict, raw_dir: Path, timeout: int, force: bool) -> tuple[Path, int]:
@@ -160,7 +165,7 @@ def write_csv(raw_dir: Path, samples: list[dict]) -> Path:
             "notes": s.get("notes") or "",
         })
 
-    rows.sort(key=lambda r: (r["site"], r["pallet_id"], r["captured_at"]))
+    rows.sort(key=lambda r: (r["captured_at"], r["folder"]))
     csv_path = raw_dir / "samples.csv"
     with csv_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=CSV_COLUMNS)
@@ -200,7 +205,7 @@ def main() -> int:
 
     downloaded = skipped = failed = 0
     for sample in samples:
-        label = f"{sample.get('site','?')} / {sample.get('palletId','?')}"
+        label = sample.get("batchCode") or sample.get("palletId") or sample.get("id", "?")[-8:]
         try:
             dest, written = download_sample(api, sample, raw_dir, args.timeout, args.force)
         except (urllib.error.URLError, urllib.error.HTTPError, OSError, KeyError, TimeoutError) as err:

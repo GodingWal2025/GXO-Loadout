@@ -49,6 +49,11 @@ hand count broken out as **bags per layer**, **full layers**, and **partial top
 count**. The console cross-checks that arithmetic against the collector's total
 and flags a disagreement rather than silently trusting either number.
 
+There are no name, site, or pallet-ID fields — every field between a collector
+and the next pallet costs pallets, and the flap photo already carries the batch
+and material. Submissions are told apart by their sample id plus an anonymous
+per-device tag the console generates once and never shows.
+
 Photos go to blob storage and counts to table storage via `/api/training/*`,
 using the same `LOADOUT_STORAGE_CONNECTION_STRING` as the rest of the app. To
 pull a batch into the repo for labeling:
@@ -58,7 +63,7 @@ cd detector-service
 python sync_training_data.py --api https://<your-app>.azurestaticapps.net
 ```
 
-That writes `detector-service/dataset/raw/<site>__<pallet>__<id>/` plus a
+That writes `detector-service/dataset/raw/<batch-or-pallet>__<id>/` plus a
 `samples.csv` of every ground-truth count. See
 [`dataset/raw/README.md`](detector-service/dataset/raw/README.md) for the layout
 and the Git LFS storage budget.

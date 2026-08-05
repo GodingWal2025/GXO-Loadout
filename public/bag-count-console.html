@@ -324,28 +324,8 @@
       <div class="collectgrid">
         <div class="stack">
           <div class="card">
-            <div class="hd"><span class="eyebrow">1 · Who &amp; what</span></div>
-            <div class="bd stack">
-              <div class="fieldrow">
-                <label><span class="fld">Collector <span class="req">required</span></span><input type="text" id="cCollector" placeholder="Your name" autocomplete="name"></label>
-                <label><span class="fld">Site</span><input type="text" id="cSite" placeholder="e.g. Bloomington"></label>
-              </div>
-              <p class="hint" style="margin:0">Name and site are remembered on this device — you only type them once.</p>
-              <div class="fieldrow">
-                <label><span class="fld">Pallet ID <span class="req">required</span></span><input type="text" id="cPalletId" class="mono" placeholder="Pallet / license plate"></label>
-                <label><span class="fld">Batch code</span><input type="text" id="cBatch" class="mono" placeholder="From the bag flap"></label>
-              </div>
-              <div class="fieldrow">
-                <label><span class="fld">Material description</span><input type="text" id="cMaterial" placeholder="From the bag flap"></label>
-                <label><span class="fld">Material / SKU no.</span><input type="text" id="cSku" class="mono" placeholder="e.g. 91007244"></label>
-              </div>
-              <p class="hint" style="margin:0">Leave batch/material blank if the flap photo is legible — the fields are a convenience, the photo is the record.</p>
-            </div>
-          </div>
-
-          <div class="card">
             <div class="hd">
-              <span class="eyebrow">2 · Four sides</span>
+              <span class="eyebrow">1 · Four sides</span>
               <div class="grow"></div>
               <span class="status" id="cSideState">0 / 4</span>
             </div>
@@ -357,18 +337,19 @@
 
           <div class="card">
             <div class="hd">
-              <span class="eyebrow">3 · Bag flap</span>
+              <span class="eyebrow">2 · Bag flap</span>
               <div class="grow"></div>
               <span class="status" id="cFlapState">0 / 3</span>
             </div>
-            <div class="bd">
-              <p class="hint" style="margin:0 0 12px">Close-up of the sewn flap showing the batch code and material description. One is enough; add up to three if the print wraps or is hard to read.</p>
+            <div class="bd stack">
+              <p class="hint" style="margin:0">Close-up of the sewn flap showing the batch code and material description. One is enough; add up to three if the print wraps or is hard to read.</p>
               <div class="slotgrid flaps" id="cFlapSlots"></div>
+              <label><span class="fld">Batch code <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">optional</span></span><input type="text" id="cBatch" class="mono" placeholder="Type it only if the flap photo is hard to read"></label>
             </div>
           </div>
 
           <div class="card">
-            <div class="hd"><span class="eyebrow">4 · The count</span></div>
+            <div class="hd"><span class="eyebrow">3 · The count</span></div>
             <div class="bd stack">
               <p class="hint" style="margin:0">This is the ground truth the model is scored against. Count it, do not estimate it.</p>
               <div class="fieldrow three">
@@ -703,10 +684,12 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   let queue = [];                 // saved-but-not-yet-uploaded samples
   let uploadedCount = Number(store.get("bcc-uploaded") || 0);
 
-  $("#cCollector").value = store.get("bcc-collector") || "";
-  $("#cSite").value = store.get("bcc-site") || "";
-  $("#cCollector").addEventListener("change", e => store.set("bcc-collector", e.target.value.trim()));
-  $("#cSite").addEventListener("change", e => store.set("bcc-site", e.target.value.trim()));
+  // Nobody types a name or a pallet ID any more — the fewer fields between a
+  // collector and the next pallet, the more pallets get collected. Submissions
+  // are still told apart by a per-device tag generated once and never shown, so
+  // a batch can be traced back to the phone that shot it without any typing.
+  let deviceTag = store.get("bcc-device");
+  if (!deviceTag) { deviceTag = "device-" + randId("").slice(0, 6); store.set("bcc-device", deviceTag); }
 
   function slotMarkup(def) {
     const p = draft.photos[def.role];
@@ -783,8 +766,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   /* ---- validation ---- */
   function draftProblems() {
     const out = [];
-    if (!$("#cCollector").value.trim()) out.push("your name");
-    if (!$("#cPalletId").value.trim()) out.push("a pallet ID");
     const missing = SIDE_ROLES.filter(d => !draft.photos[d.role]);
     if (missing.length) out.push(`all four sides (missing ${missing.map(d=>d.label.toLowerCase()).join(", ")})`);
     if (!FLAP_ROLES.some(d => draft.photos[d.role])) out.push("at least one bag-flap photo");
@@ -819,12 +800,8 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
 
     const sample = {
       id,
-      palletId: $("#cPalletId").value.trim(),
-      site: $("#cSite").value.trim() || "unspecified",
-      collector: $("#cCollector").value.trim(),
       batchCode: $("#cBatch").value.trim() || null,
-      materialDescription: $("#cMaterial").value.trim() || null,
-      sku: $("#cSku").value.trim() || null,
+      collector: deviceTag,
       bagsPerLayer: per, fullLayers: layers, partialBags: partial, totalBags: total,
       notes: $("#cNotes").value.trim() || null,
       photos,
@@ -843,21 +820,25 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       return;
     }
     queue.push(sample);
-    resetDraft(true);
+    resetDraft();
     renderQueue();
     uploadQueue();   // opportunistic; failures just leave it queued
   });
 
-  function resetDraft(keepIdentity) {
+  function resetDraft() {
     draft.photos = {};
-    ["#cPalletId","#cBatch","#cMaterial","#cSku","#cNotes"].forEach(s => $(s).value = "");
+    ["#cBatch","#cNotes"].forEach(s => $(s).value = "");
     ["#cPerLayer","#cLayers","#cTotal"].forEach(s => { $(s).value = ""; $(s).dataset.auto = "1"; });
     $("#cPartial").value = "0";
-    if (!keepIdentity) { $("#cCollector").value = ""; $("#cSite").value = ""; }
     renderSlots(); recalc(); validateDraft();
-    $("#cPalletId").focus();
+    // No focus grab: the next action is raising the phone to the next pallet,
+    // and popping a keyboard open over the slot grid gets in the way of that.
   }
-  $("#cResetBtn").addEventListener("click", () => resetDraft(true));
+  $("#cResetBtn").addEventListener("click", resetDraft);
+
+  // Without a pallet ID a queued row still needs something a human can point at,
+  // so it falls back to the batch code and then to the tail of the sample id.
+  const sampleLabel = s => s.batchCode || ("pallet " + String(s.id).slice(-6));
 
   function renderQueue() {
     const pending = queue.filter(s => s.status !== "sent");
@@ -870,12 +851,12 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       const state = s.status === "sent" ? chip("uploaded","ok")
                   : s.status === "sending" ? chip("uploading…","acc")
                   : s.status === "error" ? chip("failed","crit") : chip("queued","");
-      row.innerHTML = `<div class="top"><span class="pid">${escapeHtml(s.palletId)}</span>${state}<span class="grow"></span>
+      row.innerHTML = `<div class="top"><span class="pid">${escapeHtml(sampleLabel(s))}</span>${state}<span class="grow"></span>
           <button data-drop-sample="${s.id}" title="Delete">×</button></div>
         <div class="meta">${s.totalBags} bags · ${s.bagsPerLayer}×${s.fullLayers}${s.partialBags?"+"+s.partialBags:""} · ${s.photos.length} photos</div>
         ${s.error ? `<div class="err">${escapeHtml(s.error)}</div>` : ""}`;
       row.querySelector("[data-drop-sample]").addEventListener("click", async () => {
-        if (s.status !== "sent" && !confirm(`Delete pallet ${s.palletId}? Its photos have not uploaded yet.`)) return;
+        if (s.status !== "sent" && !confirm(`Delete ${sampleLabel(s)}? Its photos have not uploaded yet.`)) return;
         await Promise.all(s.photos.map(p => idbDel("photos", `${s.id}/${p.id}`)));
         await idbDel("samples", s.id);
         queue = queue.filter(q => q.id !== s.id);
