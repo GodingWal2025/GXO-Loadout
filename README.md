@@ -63,6 +63,16 @@ cd detector-service
 python sync_training_data.py --api https://<your-app>.azurestaticapps.net
 ```
 
+**Review** shows every pallet that has landed on the server — thumbnails, counts,
+and a flag on anything missing a face or whose total does not match its layers.
+Delete a bad one there before it reaches the repo.
+
+**Label** pulls the collected side photos straight off the server with one button,
+so whoever labels never hunts for files. Flap close-ups are deliberately excluded:
+they carry the batch code, they are not bag-flap detection images. Loaded images
+are named `<batch>__<sample-id>__<ROLE>.jpg` so the train/valid/test split can be
+made by whole pallet.
+
 That writes `detector-service/dataset/raw/<batch-or-pallet>__<id>/` plus a
 `samples.csv` of every ground-truth count. See
 [`dataset/raw/README.md`](detector-service/dataset/raw/README.md) for the layout
@@ -116,9 +126,15 @@ client still does `layers × bags-per-layer` for the real number and the verifie
 confirms it. Train a single `bag_flap` class first; keep damage checks in the human
 inspection workflow rather than weakening the counting dataset with extra classes.
 
-Open [`/bag-count-console.html`](https://white-meadow-0dc31e50f.7.azurestaticapps.net/bag-count-console.html)
-to label/export images, verify API health, and visualize `eval-results.json`. The
-manual **Train RF-DETR** GitHub Action validates the dataset, trains the chosen
+The **detector is currently switched off** and the console no longer exposes it.
+`DETECTOR_SERVICE_URL` is unset, `/api/analyze-pallet-*` return 501, and the app
+degrades to manual layer entry exactly as designed. The service, the endpoints,
+and the training action all remain in the repo — nothing here was deleted, so
+turning it back on is a matter of training a checkpoint and setting the app
+setting. Until then [`/bag-count-console.html`](https://white-meadow-0dc31e50f.7.azurestaticapps.net/bag-count-console.html)
+is purely a training-data tool: **Collect → Review → Label**.
+
+The manual **Train RF-DETR** GitHub Action validates the dataset, trains the chosen
 model size, evaluates the held-out split, and publishes checkpoint/results artifacts.
 
 ### Client-side image prep

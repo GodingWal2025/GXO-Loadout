@@ -322,6 +322,19 @@
   body.lb-open { overflow: hidden; }
   .slot.filled img { cursor: zoom-in; }
 
+  /* review tab — a pallet's shots in one row, sides first */
+  .rvshots { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 10px; }
+  .rvshot { margin: 0; }
+  .rvshot img {
+    width: 100%; aspect-ratio: 3/4; object-fit: cover; display: block; cursor: zoom-in;
+    border: 1px solid var(--border); border-radius: 9px; background: var(--surface-2);
+  }
+  .rvshot img:hover { border-color: var(--accent); }
+  .rvshot figcaption {
+    font-family: var(--mono); font-size: 10.5px; color: var(--faint);
+    letter-spacing: .05em; margin-top: 4px; text-align: center;
+  }
+
   .totalrow { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
   .calc { font-size: 27px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
   .calc small { font-size: 13px; color: var(--faint); font-weight: 400; font-family: var(--sans); }
@@ -346,17 +359,15 @@
     <span class="scan-dot" aria-hidden="true"></span>
     <div class="wordmark">
       <b>Bag-Count Console</b>
-      <span class="tag">GXO · pallet vision</span>
+      <span class="tag">GXO · training data</span>
     </div>
     <div class="grow"></div>
-    <span class="status" id="epStatus">endpoint: same origin</span>
     <button class="iconbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
   </div>
 
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" aria-selected="true" data-tab="collect">Collect <span class="k">gather</span></button>
-    <button class="tab" role="tab" aria-selected="false" data-tab="count">Count <span class="k">test</span></button>
-    <button class="tab" role="tab" aria-selected="false" data-tab="eval">Eval <span class="k">score</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="review">Review <span class="k">check</span></button>
     <button class="tab" role="tab" aria-selected="false" data-tab="label">Label <span class="k">train</span></button>
   </div>
 
@@ -456,73 +467,22 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       </div>
     </section>
 
-    <!-- ================= COUNT ================= -->
-    <section class="panel" id="panel-count" role="tabpanel">
-      <div class="split">
-        <div class="stack">
-          <div class="card">
-            <div class="hd"><span class="eyebrow">1 · Connection</span></div>
-            <div class="bd stack">
-              <div class="row" style="justify-content:space-between">
-                <div>
-                  <div style="font-weight:700">Deployed detector service</div>
-                  <p class="hint" id="healthDetail" style="margin:6px 0 0">Checking <code class="inline">/api/health</code>…</p>
-                </div>
-                <button class="btn ghost" id="healthBtn">Check</button>
-              </div>
-              <div>
-                <span class="eyebrow">Mode</span>
-                <div class="seg" id="countMode" style="margin-top:6px">
-                  <button data-mode="single" aria-pressed="true">Single face</button>
-                  <button data-mode="faces" aria-pressed="false">Four-face assess</button>
-                </div>
-                <p class="hint" id="modeHint" style="margin:6px 0 0"></p>
-              </div>
-            </div>
-          </div>
-
-          <div class="card">
-            <div class="hd"><span class="eyebrow">2 · Photos</span></div>
-            <div class="bd">
-              <div class="drop" id="drop">
-                <div><b>Drop pallet photos</b> or <label style="color:var(--accent-ink);text-decoration:underline;cursor:pointer">browse<input type="file" id="fileIn" accept="image/*" multiple hidden></label></div>
-                <p class="hint" style="margin:6px 0 0">Downscaled to 1024px / ≤128 KB before upload, mirroring the app.</p>
-              </div>
-              <div class="thumbs" id="thumbs"></div>
-              <div class="row" style="margin-top:14px">
-                <button class="btn" id="runBtn" disabled>Analyze</button>
-                <button class="btn ghost" id="clearBtn">Clear</button>
-                <span class="status" id="runState"></span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div class="stack" id="countResults">
-          <div class="card"><div class="bd"><p class="lead">Results appear here. Requests stay on this site and the Azure Function calls the configured detector server-to-server. The layer count is a suggestion—the verified total remains <b>layers × bags-per-layer</b>.</p></div></div>
-        </div>
-      </div>
-    </section>
-
-    <!-- ================= EVAL ================= -->
-    <section class="panel" id="panel-eval" role="tabpanel">
+    <!-- ================= REVIEW ================= -->
+    <section class="panel" id="panel-review" role="tabpanel">
       <div class="stack">
-        <div>
-          <span class="eyebrow">Accuracy from eval.py</span>
-          <h2 style="font-size:19px;margin-top:4px">Score a run against ground truth</h2>
-          <p class="lead" style="margin-top:6px">Score the <code class="inline">detector-service</code> against ground-truth pallet photos, then paste the resulting <code class="inline">eval-results.json</code> to visualize per-face and per-pallet accuracy. This is how you decide whether the OWLv2 zero-shot bootstrap is good enough, or whether it is time to fine-tune RF-DETR on labeled data.</p>
-        </div>
-        <div class="card"><div class="bd">
-          <label class="fld" for="evalJson">eval-results.json</label>
-          <textarea id="evalJson" rows="7" placeholder='{ "model": "...", "results": [ ... ], "perPallet": { ... } }'></textarea>
-          <div class="row" style="margin-top:12px">
-            <button class="btn" id="evalBtn">Visualize</button>
-            <label class="btn ghost">Open results<input type="file" id="evalFile" accept="application/json,.json" hidden></label>
-            <button class="btn ghost" id="evalSample">Load sample</button>
-            <span class="status" id="evalMeta"></span>
+        <div class="card">
+          <div class="hd">
+            <span class="eyebrow">Uploaded pallets</span>
+            <div class="grow"></div>
+            <button class="btn ghost" id="rvRefresh">Refresh</button>
           </div>
-        </div></div>
-        <div id="evalOut"></div>
+          <div class="bd stack">
+            <p class="lead" style="margin:0">Everything collectors have successfully uploaded. Check a pallet here before you pull it into the repo — a blurry face or a count that does not add up is far cheaper to catch now than after it becomes ground truth.</p>
+            <div class="tiles" id="rvTiles"></div>
+            <div id="rvNote"></div>
+          </div>
+        </div>
+        <div id="rvList"></div>
       </div>
     </section>
 
@@ -534,7 +494,11 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <div class="empty" id="stageEmpty">
               <p style="margin:0 0 6px"><b>Load photos to label.</b></p>
               <p class="hint" style="margin:0">Drag a box over each visible bag <b>flap</b> (the sewn end). Export COCO when done, then train RF-DETR on it.</p>
-              <p style="margin:14px 0 0"><label class="btn ghost" style="display:inline-block">Add images<input type="file" id="labFileIn" accept="image/*" multiple hidden></label></p>
+              <p style="margin:14px 0 0">
+                <button class="btn" id="labPullBtn">Pull collected photos</button>
+                <label class="btn ghost" style="display:inline-block;margin-left:8px">Add images<input type="file" id="labFileIn" accept="image/*" multiple hidden></label>
+              </p>
+              <p class="hint" id="labPullHint" style="margin:10px 0 0">Pulls the four side photos of every uploaded pallet. Flap close-ups are left out — they carry the batch code, they are not detector training images.</p>
             </div>
             <canvas id="labCanvas" hidden></canvas>
           </div>
@@ -559,9 +523,11 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
               <div class="boxlist" id="boxList" style="margin-top:6px"></div>
             </div>
             <div class="row">
+              <button class="btn ghost" id="labPullBtn2" style="flex:1">Pull collected</button>
               <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
-              <button class="btn" id="exportBtn" style="flex:1">Export COCO</button>
             </div>
+            <button class="btn" id="exportBtn">Export COCO</button>
+            <span class="status" id="labPullState" hidden></span>
             <p class="hint" style="margin:0">Drag on empty space to draw. Click a box to select it, drag inside to move, drag a handle to resize.</p>
             <p class="hint" style="margin:0"><span class="kbd">1</span> bag flap · <span class="kbd">Del</span> remove selected · <span class="kbd">Esc</span> deselect · <span class="kbd">↑↓←→</span> nudge (<span class="kbd">Shift</span> resize) · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
           </div></div>
@@ -635,28 +601,19 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   $$(".tab").forEach(t => t.addEventListener("click", () => {
     $$(".tab").forEach(x => x.setAttribute("aria-selected", String(x === t)));
     $$(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-" + t.dataset.tab));
+    // Review is fetched on entry rather than on load: it is the one panel whose
+    // contents change because of what someone else did on another device.
+    if (t.dataset.tab === "review") loadReview();
+    // The stage has no width while its panel is hidden, so any image loaded from
+    // another tab was laid out against zero. Redraw once it is actually visible.
+    if (t.dataset.tab === "label") drawLab();
   }));
 
-  /* ---- same-origin service health ---- */
-  async function checkHealth() {
-    const detail = $("#healthDetail");
-    detail.textContent = "Checking /api/health…";
-    try {
-      const res = await fetch("/api/health", { cache: "no-store" });
-      const health = await res.json();
-      const detector = health.detector || {};
-      $("#epStatus").textContent = detector.configured ? "detector: ready" : "detector: setup needed";
-      detail.innerHTML = detector.configured
-        ? `<span class="chip ok">ready</span> RF-DETR endpoint configured · storage ${escapeHtml(health.storage || "device-local")}`
-        : `<span class="chip warn">not configured</span> ${escapeHtml(detector.error || "Set DETECTOR_SERVICE_URL to the deployed detector URL.")}`;
-    } catch {
-      $("#epStatus").textContent = "API unavailable";
-      detail.textContent = "The site API did not answer. Check the latest GitHub Actions deployment.";
-    }
-  }
-  $("#healthBtn").addEventListener("click", checkHealth);
+  /* ---- shared render helpers ---- */
+  const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const chip = (label, kind) => `<span class="chip ${kind||''}">${escapeHtml(label)}</span>`;
 
-  /* ---- image prep (mirror prepareForVision) ---- */
+  /* ---- image prep ---- */
   const blobToDataUrl = b => new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result); r.readAsDataURL(b); });
   async function prepImage(file, maxEdge=1024, maxBytes=128*1024, quality=0.82) {
     const bmp = await createImageBitmap(file);
@@ -854,6 +811,25 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     lb.setAttribute("open", "");
     document.body.classList.add("lb-open");
     showPhoto(role);
+    $("#lbClose").focus();
+  }
+
+  /**
+   * Same viewer for a photo that lives on the server rather than in the draft.
+   * Review has no draft to step through, so the arrows are hidden instead of
+   * pointing at whatever the collector happens to have half-captured.
+   */
+  function openUrlViewer(url, label) {
+    lbReturnFocus = document.activeElement;
+    lbRole = null;
+    lb.setAttribute("open", "");
+    document.body.classList.add("lb-open");
+    $("#lbImg").src = url;
+    $("#lbImg").alt = `${label}, full size`;
+    $("#lbTitle").textContent = label;
+    $("#lbSub").textContent = "";
+    $("#lbPrev").disabled = true;
+    $("#lbNext").disabled = true;
     $("#lbClose").focus();
   }
   function closeViewer() {
@@ -1102,234 +1078,118 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (queue.some(s => s.status !== "sent")) uploadQueue();
   }
 
-  /* ================= COUNT ================= */
-  const SLOTS = ["FRONT_VIEW", "SIDE_VIEW_1", "BACK_VIEW", "SIDE_VIEW_2"];
-  let mode = "single";
-  let items = []; // {name, blob, dataUrl, w, h}
-  const thumbs = $("#thumbs"), runBtn = $("#runBtn");
+  /* ================= REVIEW =================
+     What has actually landed on the server. Collectors work from their phones
+     and never see each other's pallets, so this is the only place the whole set
+     is visible — and the last chance to throw out a bad one before it becomes
+     ground truth in the repo. */
 
-  const modeHint = () => $("#modeHint").textContent = mode === "single"
-    ? "One photo → /api/analyze-pallet-count. Layers + visible bags per face."
-    : "Up to 4 photos of one pallet → /api/analyze-pallet-faces. Visible-bag counts summed across faces.";
-  $$("#countMode button").forEach(b => b.addEventListener("click", () => {
-    mode = b.dataset.mode;
-    $$("#countMode button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
-    modeHint(); renderThumbs();
-  }));
-  modeHint();
+  const photoUrl = (sampleId, photoId) =>
+    `/api/training/photos/${encodeURIComponent(sampleId)}/${encodeURIComponent(photoId)}`;
+  const roleLabel = r => ({ FRONT:"Front", RIGHT:"Right", BACK:"Back", LEFT:"Left",
+                            FLAP_1:"Flap 1", FLAP_2:"Flap 2", FLAP_3:"Flap 3" }[r] || r);
 
-  function renderThumbs() {
-    thumbs.innerHTML = "";
-    items.forEach((it, i) => {
-      const d = document.createElement("div"); d.className = "thumb";
-      const slot = (mode === "faces" && i < 4) ? `<span class="slot">${SLOTS[i].replace("_VIEW","")}</span>` : "";
-      d.innerHTML = `<img src="${it.dataUrl}" alt=""><button class="x" title="remove">×</button>${slot}`;
-      d.querySelector(".x").addEventListener("click", () => { items.splice(i,1); renderThumbs(); });
-      thumbs.appendChild(d);
-    });
-    runBtn.disabled = items.length === 0;
-    $("#runState").textContent = items.length ? items.length + " image" + (items.length>1?"s":"") : "";
+  /** Everything the review list needs to judge one submission at a glance. */
+  function auditSample(s) {
+    const roles = new Set((s.photos || []).map(p => p.role));
+    const missingSides = SIDE_ROLES.filter(d => !roles.has(d.role)).map(d => d.label);
+    const flaps = FLAP_ROLES.filter(d => roles.has(d.role)).length;
+    const computed = (s.bagsPerLayer || 0) * (s.fullLayers || 0) + (s.partialBags || 0);
+    return { missingSides, flaps, computed, countsAgree: computed === s.totalBags };
   }
 
-  async function addFiles(files) {
-    for (const f of files) {
-      if (!f.type.startsWith("image/")) continue;
-      const p = await prepImage(f);
-      items.push({ name: f.name, blob: p.blob, dataUrl: p.dataUrl, w: p.width, h: p.height });
-    }
-    renderThumbs();
-  }
-  $("#fileIn").addEventListener("change", e => addFiles(e.target.files));
-  $("#clearBtn").addEventListener("click", () => { items = []; renderThumbs(); });
-
-  const drop = $("#drop");
-  ["dragenter","dragover"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add("hot"); }));
-  ["dragleave","drop"].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove("hot"); }));
-  drop.addEventListener("drop", e => { if (e.dataTransfer?.files) addFiles(e.dataTransfer.files); });
-
-  const results = $("#countResults");
-  const chip = (label, kind) => `<span class="chip ${kind||''}">${escapeHtml(label)}</span>`;
-  function condChips(r) {
-    const c = [];
-    if (r.topLayerFull === false) c.push(chip("top course short", "warn"));
-    else if (r.topLayerFull === true) c.push(chip("top full", "ok"));
-    if (r.gaps) c.push(chip("gaps", "crit"));
-    if (r.damage) c.push(chip("damage", "crit"));
-    if (r.leaning) c.push(chip("leaning", "warn"));
-    if (r.overhang) c.push(chip("overhang", "warn"));
-    if (r.wrapIntact === false) c.push(chip("wrap damaged", "warn"));
-    if (r.loadStable === false) c.push(chip("load unstable", "crit"));
-    if (!c.length) c.push(chip("no anomalies", "ok"));
-    return c.join("");
-  }
-
-  function drawFace(canvas, dataUrl, boxes) {
-    const img = new Image();
-    img.onload = () => {
-      const W = 480, H = Math.round(W * img.height / img.width);
-      canvas.width = W; canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      ctx.drawImage(img, 0, 0, W, H);
-      (boxes || []).forEach((b, i) => {
-        const x = b[0]*W, y = b[1]*H, w = (b[2]-b[0])*W, h = (b[3]-b[1])*H;
-        ctx.strokeStyle = "#2dd4c4"; ctx.lineWidth = 2; ctx.strokeRect(x, y, w, h);
-        ctx.fillStyle = "rgba(45,212,196,.16)"; ctx.fillRect(x, y, w, h);
-        ctx.fillStyle = "#2dd4c4"; ctx.font = "10px ui-monospace, monospace";
-        ctx.fillText(String(i+1), x+2, y+11);
-      });
-    };
-    img.src = dataUrl;
-  }
-
-  function errBanner(msg, extra) {
-    return `<div class="card"><div class="bd"><div class="banner err"><b>Backend error.</b> ${msg}${extra?`<br><span class="mono" style="font-size:11px">${extra}</span>`:""}</div></div></div>`;
-  }
-
-  async function runSingle() {
-    results.innerHTML = "";
-    for (const it of items) {
-      const card = document.createElement("div"); card.className = "card";
-      card.innerHTML = `<div class="hd"><span class="eyebrow">${escapeHtml(it.name)}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
-      results.appendChild(card);
-      try {
-        const headers = { "Content-Type": "application/octet-stream" };
-        const resp = await fetch("/api/analyze-pallet-count", { method: "POST", headers, body: it.blob }).catch(() => null);
-
-        if (!resp) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to detector endpoint")); continue; }
-
-        const j = await resp.json().catch(() => ({}));
-        if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); continue; }
-        if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable count.</div>` + raw(j); continue; }
-        card.querySelector(".bd").innerHTML = `
-          <div class="facegrid"><div class="face">
-            <div class="cv"><canvas></canvas></div>
-            <div class="meta">
-              <div class="kv"><span class="sub">layers</span><span class="n">${fmt(j.layers)}<small> × bags/layer</small></span></div>
-              <div class="kv"><span class="sub">est. bags (face)</span><span class="n">${fmt(j.estimatedBags)}</span></div>
-              <div class="chips">${condChips(j)}</div>
-              ${j.confidence!=null?`<div class="sub">confidence <span class="mono">${(+j.confidence).toFixed(2)}</span> · <span class="mono">${j.modelVersion||""}</span></div>`:""}
-              ${j.rationale?`<div class="sub">“${escapeHtml(j.rationale)}”</div>`:""}
-            </div>
-          </div></div>` + raw(j);
-        drawFace(card.querySelector("canvas"), it.dataUrl, j.boxes || []);
-      } catch (e) { card.querySelector(".bd").innerHTML = errBanner(networkMsg(e)); }
-    }
-  }
-
-  async function runFaces() {
-    results.innerHTML = "";
-    const imgs = items.slice(0, 4).map((it, i) => ({ slotKey: SLOTS[i] || ("VIEW_"+i), dataUrl: it.dataUrl }));
-    const card = document.createElement("div"); card.className = "card";
-    card.innerHTML = `<div class="hd"><span class="eyebrow">Pallet · ${imgs.length} face${imgs.length>1?"s":""}</span></div><div class="bd"><span class="status">analyzing…</span></div>`;
-    results.appendChild(card);
+  let reviewSamples = [];
+  async function loadReview() {
+    const note = $("#rvNote"), list = $("#rvList"), tiles = $("#rvTiles");
+    note.innerHTML = `<span class="status">loading…</span>`;
+    let data;
     try {
-      const headers = { "Content-Type": "application/json" };
-      const resp = await fetch("/api/analyze-pallet-faces", {
-        method: "POST", headers,
-        body: JSON.stringify({ images: imgs })
-      }).catch(() => null);
+      const r = await fetch("/api/training/samples");
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        note.innerHTML = `<div class="banner err"><b>Could not load (HTTP ${r.status}).</b> ${escapeHtml(j.error || "")} ${escapeHtml(j.detail || "")}</div>`;
+        tiles.innerHTML = ""; list.innerHTML = ""; return;
+      }
+      data = await r.json();
+    } catch (e) {
+      note.innerHTML = `<div class="banner err"><b>Could not reach the server.</b> ${escapeHtml(String(e.message || e))}</div>`;
+      tiles.innerHTML = ""; list.innerHTML = ""; return;
+    }
 
-      const j = resp ? await resp.json().catch(() => ({})) : null;
+    reviewSamples = data.samples || [];
+    const audits = reviewSamples.map(auditSample);
+    const bags = reviewSamples.reduce((n, s) => n + (s.totalBags || 0), 0);
+    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree).length;
+    const labelable = reviewSamples.reduce((n, s, i) => n + (4 - audits[i].missingSides.length), 0);
 
-      if (!resp || !j) { card.querySelector(".bd").innerHTML = errBanner(networkMsg("Could not connect to backend")); return; }
-      if (!resp.ok) { card.querySelector(".bd").innerHTML = banner501(resp.status, j); return; }
-      if (j.success === false) { card.querySelector(".bd").innerHTML = `<div class="banner">Model returned no parseable assessment.</div>` + raw(j); return; }
-      const faces = j.faces || [];
-      const total = j.visibleBagTotalFromBoxes ?? j.visibleBagTotal;
-      card.querySelector(".bd").innerHTML = `
-        <div class="tiles" style="margin-bottom:14px">
-          <div class="tile"><div class="v">${fmt(total)}</div><div class="l">visible bags (summed faces)</div></div>
-          <div class="tile"><div class="v">${fmt(j.estimatedPalletTotal)}</div><div class="l">est. pallet total (incl. interior)</div></div>
-          <div class="tile"><div class="v">${fmt(j.interiorBags)}</div><div class="l">occluded interior</div></div>
-        </div>
-        <div class="chips" style="margin-bottom:14px">${condChips(j)}${j.confidence!=null?chip("conf "+(+j.confidence).toFixed(2),"acc"):""}${j.modelVersion?chip(j.modelVersion,""):""}</div>
-        <div class="facegrid" id="fg"></div>` + (j.rationale?`<p class="sub" style="margin-top:12px">“${escapeHtml(j.rationale)}”</p>`:"") + raw(j);
-      const fg = card.querySelector("#fg");
-      faces.forEach((f, i) => {
-        const src = imgs[f.index] ? imgs[f.index].dataUrl : (imgs[i]?imgs[i].dataUrl:"");
-        const el = document.createElement("div"); el.className = "face";
-        const gate = f.isPalletFace === false ? chip("not a pallet face · excluded","warn") : "";
-        const mism = (f.countMatchesBoxes === false) ? chip("tally≠boxes","warn") : "";
-        el.innerHTML = `<div class="cv"><canvas></canvas></div><div class="meta">
-          <div class="kv"><span class="sub">${escapeHtml((f.slotKey||("face "+f.index)).replace(/_/g," ").toLowerCase())}</span><span class="n">${fmt(f.bagFlaps)}<small> flaps</small></span></div>
-          <div class="kv"><span class="sub">layers</span><span class="mono">${fmt(f.layers)}</span> <span class="sub">boxes</span><span class="mono">${f.boxCount!=null?f.boxCount:"—"}</span></div>
-          <div class="chips">${gate}${mism||chip("ok","ok")}</div></div>`;
-        fg.appendChild(el);
-        drawFace(el.querySelector("canvas"), src, f.flapBoxes);
-      });
-    } catch (e) { card.querySelector(".bd").innerHTML = errBanner(networkMsg(e)); }
+    tiles.innerHTML = `
+      <div class="tile"><div class="v mono">${reviewSamples.length}</div><div class="l">pallet${reviewSamples.length===1?"":"s"} uploaded</div></div>
+      <div class="tile"><div class="v mono">${labelable}</div><div class="l">side photos to label</div></div>
+      <div class="tile"><div class="v mono">${bags.toLocaleString()}</div><div class="l">bags counted</div></div>
+      <div class="tile ${flagged ? "" : "good"}"><div class="v mono">${flagged}</div><div class="l">need a look</div></div>`;
+
+    note.innerHTML = !reviewSamples.length
+      ? `<div class="banner">Nothing uploaded yet. Collected pallets appear here once they leave a collector's device.</div>`
+      : flagged
+        ? `<div class="banner"><b>${flagged} pallet${flagged>1?"s":""} worth checking.</b> Flagged for a missing photo or a count that does not match its layers.</div>`
+        : `<div class="banner ok"><b>All ${reviewSamples.length} look complete.</b> Four sides, a flap photo, and counts that add up.</div>`;
+
+    list.innerHTML = "";
+    reviewSamples.forEach((s, i) => list.appendChild(reviewCard(s, audits[i])));
   }
 
-  function banner501(status, j) {
-    if (status === 501) return `<div class="banner"><b>Vision backend not configured.</b> ${escapeHtml(j.detail||"Set DETECTOR_SERVICE_URL in the app's environment variables.")}</div>` + raw(j);
-    return `<div class="banner err"><b>HTTP ${status}.</b> ${escapeHtml((j.error||"") + (j.detail ? ": " + j.detail : ""))}</div>` + raw(j);
-  }
-  function networkMsg(e) {
-    return `Request failed (${escapeHtml(String(e?.message||e))}). Use the Connection check above, then verify the detector deployment and DETECTOR_SERVICE_URL setting.`;
-  }
-  const fmt = v => (v===null||v===undefined||v==="") ? "—" : v;
-  const raw = j => `<details class="raw"><summary>raw JSON</summary><pre class="json">${escapeHtml(JSON.stringify(j,null,2))}</pre></details>`;
-  const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  function reviewCard(s, a) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.marginTop = "14px";
+    const flags = [
+      a.missingSides.length ? chip("missing " + a.missingSides.join(", ").toLowerCase(), "crit") : "",
+      !a.flaps ? chip("no flap photo", "crit") : "",
+      !a.countsAgree ? chip(`total ${s.totalBags} ≠ layers ${a.computed}`, "warn") : "",
+    ].filter(Boolean).join("") || chip("complete", "ok");
 
-  runBtn.addEventListener("click", () => { runBtn.disabled = true; (mode==="single"?runSingle():runFaces()).finally(()=>runBtn.disabled=false); });
-  renderThumbs();
-  checkHealth();
-
-  /* ================= EVAL ================= */
-  const median = a => { const s=[...a].sort((x,y)=>x-y); const m=Math.floor(s.length/2); return s.length%2?s[m]:Math.round((s[m-1]+s[m])/2); };
-  function renderEval() {
-    let data; try { data = JSON.parse($("#evalJson").value); } catch (e) { $("#evalMeta").textContent = "invalid JSON"; return; }
-    const rows = data.results || [];
-    const scored = rows.filter(r => r.expected != null && r.layers != null && r.isPalletFace !== false);
-    const hits = scored.filter(r => r.layers === r.expected).length;
-    const within = scored.filter(r => Math.abs(r.layers - r.expected) <= 1).length;
-    const per = data.perPallet || {};
-    let pOk = 0, pScored = 0;
-    const expByPallet = {}; rows.forEach(r => { if (r.expected != null) expByPallet[r.pallet] = r.expected; });
-    const palletRows = Object.keys(per).sort().map(pid => {
-      const vals = Array.isArray(per[pid]) ? per[pid].map(Number).filter(Number.isFinite) : [];
-      if (!vals.length) return null;
-      const vote = median(vals); const exp = expByPallet[pid];
-      const tied = new Set(vals).size > 1 && vals.filter(v=>v===vote).length*2 <= vals.length;
-      let note = "—", cls = "";
-      if (exp != null) { pScored++; if (vote===exp && !tied) { pOk++; note="ok"; cls="hit"; } else { note = tied?"tie":("miss "+(vote-exp>0?"+":"")+(vote-exp)); cls="miss"; } }
-      return { pid, vals, vote, exp, note, cls };
-    }).filter(Boolean);
-    const pct = (n,d) => d ? Math.round(100*n/d) : 0;
-    $("#evalMeta").textContent = `${data.model||"model"} · samples ${data.samples||1} · ${scored.length} scored faces`;
-    $("#evalOut").innerHTML = `
-      <div class="tiles" style="margin-bottom:16px">
-        <div class="tile ${pct(hits,scored.length)>=60?'good':''}"><div class="v">${pct(hits,scored.length)}<small>%</small></div><div class="l">per-face exact (${hits}/${scored.length})</div></div>
-        <div class="tile"><div class="v">${pct(within,scored.length)}<small>%</small></div><div class="l">within ±1 layer</div></div>
-        <div class="tile ${pOk===pScored&&pScored?'good':''}"><div class="v">${pOk}<small>/${pScored}</small></div><div class="l">pallets correct (voting)</div></div>
-        <div class="tile"><div class="v">${rows.length}</div><div class="l">photos analyzed</div></div>
+    const when = String(s.capturedAt || "").slice(0, 16).replace("T", " ");
+    card.innerHTML = `
+      <div class="hd">
+        <span class="eyebrow">${escapeHtml(s.batchCode || "pallet " + String(s.id).slice(-6))}</span>
+        <div class="grow"></div>
+        <span class="sub mono">${escapeHtml(when)} · ${escapeHtml(s.collector || "")}</span>
+        <button class="iconbtn" data-del="${escapeHtml(s.id)}" title="Delete this pallet">Delete</button>
       </div>
-      <div class="card"><div class="hd"><span class="eyebrow">Per pallet · voted across faces</span></div><div class="bd tblwrap">
-        <table><thead><tr><th>Pallet</th><th>Faces</th><th class="num">Vote</th><th class="num">Expected</th><th>Result</th></tr></thead>
-        <tbody>${palletRows.map(p=>`<tr class="${p.cls}"><td class="mono">${escapeHtml(p.pid)}</td><td class="mono co" style="color:var(--faint)">[${p.vals.join(", ")}]</td><td class="num">${p.vote}</td><td class="num">${p.exp??"—"}</td><td class="mono">${p.note}</td></tr>`).join("")}</tbody></table>
-      </div></div>`;
+      <div class="bd stack">
+        <div class="chips">${flags}</div>
+        <div class="row" style="gap:22px">
+          <div><div class="sub">total bags</div><div class="mono" style="font-size:21px;font-weight:600">${s.totalBags}</div></div>
+          <div><div class="sub">layers</div><div class="mono" style="font-size:21px;font-weight:600">${s.bagsPerLayer} × ${s.fullLayers}${s.partialBags ? " + " + s.partialBags : ""}</div></div>
+        </div>
+        ${s.notes ? `<p class="sub" style="margin:0">“${escapeHtml(s.notes)}”</p>` : ""}
+        <div class="rvshots">${(s.photos || []).map(p => `
+          <figure class="rvshot">
+            <img loading="lazy" src="${photoUrl(s.id, p.id)}" alt="${escapeHtml(roleLabel(p.role))} of this pallet"
+                 data-full="${photoUrl(s.id, p.id)}" data-role="${escapeHtml(roleLabel(p.role))}">
+            <figcaption>${escapeHtml(roleLabel(p.role))}</figcaption>
+          </figure>`).join("")}</div>
+      </div>`;
+
+    card.querySelector("[data-del]").addEventListener("click", async (e) => {
+      const id = e.currentTarget.dataset.del;
+      if (!confirm(`Delete this pallet and its ${(s.photos||[]).length} photos from the server? This cannot be undone.`)) return;
+      e.currentTarget.disabled = true;
+      try {
+        const r = await fetch(`/api/training/samples/${encodeURIComponent(id)}`, { method: "DELETE" });
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        loadReview();
+      } catch (err) {
+        alert("Could not delete: " + (err && err.message ? err.message : err));
+        e.currentTarget.disabled = false;
+      }
+    });
+    // Server photos open in the same viewer as the draft ones.
+    card.querySelectorAll(".rvshot img").forEach(img =>
+      img.addEventListener("click", () => openUrlViewer(img.dataset.full, img.dataset.role)));
+    return card;
   }
-  $("#evalBtn").addEventListener("click", renderEval);
-  $("#evalFile").addEventListener("change", async e => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    $("#evalJson").value = await file.text();
-    renderEval();
-  });
-  $("#evalSample").addEventListener("click", () => {
-    $("#evalJson").value = JSON.stringify({
-      model: "rf-detr:pallet-bags", samples: 3, bagsPerLayer: 6,
-      results: [
-        {file:"Pallet2.1.jpg",pallet:"2",layers:10,votes:[10,10,10],expected:10,isPalletFace:true},
-        {file:"Pallet3.1.jpg",pallet:"3",layers:10,votes:[10,8,10],expected:10,isPalletFace:true},
-        {file:"Pallet4.1.jpg",pallet:"4",layers:8,votes:[8,8,10],expected:10,isPalletFace:true},
-        {file:"Pallet5.1.jpg",pallet:"5",layers:10,votes:[10,10,12],expected:10,isPalletFace:true},
-        {file:"Pallet6-60.jpg",pallet:"6",layers:3,votes:[3],expected:10,isPalletFace:false}
-      ],
-      perPallet: { "2":[10,10,10,8], "3":[10,8,10,10], "4":[8,10,10,10], "5":[10,10,9,12] }
-    }, null, 2);
-    renderEval();
-  });
+  $("#rvRefresh").addEventListener("click", loadReview);
 
   /* ================= LABEL ================= */
   const CLASSES = [ {id:1,name:"bag_flap",color:"#1a7f37"} ];
@@ -1362,6 +1222,74 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   }
   $("#labFileIn").addEventListener("change", e => addLabFiles(e.target.files));
   $("#labFileIn2").addEventListener("change", e => addLabFiles(e.target.files));
+
+  /**
+   * Pull the collected side photos straight off the server into the labeler.
+   *
+   * This is the join between the two halves of the workflow: people in the
+   * warehouse fill Collect, and whoever labels never has to hunt for the files.
+   * Only the four sides come across — flap close-ups carry the batch code, they
+   * are not bag-flap detection training images, and labeling them would poison
+   * the dataset.
+   *
+   * Names encode the pallet (`<batch-or-id>__<ROLE>.jpg`) because the COCO
+   * export carries `file_name` through, and the train/valid/test split has to be
+   * made by whole pallet — a split that puts two faces of one stack on both
+   * sides of the line scores far higher than the model deserves.
+   */
+  let pulling = false;
+  async function pullCollected() {
+    if (pulling) return;
+    pulling = true;
+    const state = $("#labPullState");
+    const setState = (msg, show=true) => { state.hidden = !show; state.textContent = msg; };
+    [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && (b.disabled = true));
+    setState("loading list…");
+    try {
+      const r = await fetch("/api/training/samples");
+      if (!r.ok) throw new Error("Server returned HTTP " + r.status);
+      const { samples = [] } = await r.json();
+      if (!samples.length) { setState("nothing uploaded yet"); return; }
+
+      const already = new Set(labImgs.map(i => i.name));
+      let added = 0, failed = 0, skipped = 0, done = 0;
+      const wanted = samples.flatMap(s => (s.photos || [])
+        .filter(p => SIDE_ROLES.some(d => d.role === p.role))
+        .map(p => ({ s, p })));
+
+      for (const { s, p } of wanted) {
+        const stem = (s.batchCode ? s.batchCode.replace(/[^A-Za-z0-9._-]+/g, "-") : "pallet")
+                     + "__" + String(s.id).slice(-8);
+        const name = `${stem}__${p.role}.jpg`;
+        done++;
+        setState(`${done} / ${wanted.length}…`);
+        if (already.has(name)) { skipped++; continue; }
+        try {
+          const resp = await fetch(photoUrl(s.id, p.id));
+          if (!resp.ok) throw new Error("HTTP " + resp.status);
+          const blob = await resp.blob();
+          const url = URL.createObjectURL(blob);
+          const img = await new Promise((res, rej) => {
+            const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url;
+          });
+          labImgs.push({ name, img, w: img.naturalWidth, h: img.naturalHeight, boxes: [],
+                         palletId: s.id });
+          added++;
+        } catch { failed++; }
+      }
+
+      if (curImg < 0 && labImgs.length) curImg = 0;
+      drawLab(); updateProgress();
+      setState(`+${added} loaded` + (skipped ? ` · ${skipped} already here` : "")
+                                  + (failed ? ` · ${failed} failed` : ""));
+    } catch (err) {
+      setState("could not load: " + String(err && err.message ? err.message : err));
+    } finally {
+      pulling = false;
+      [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && (b.disabled = false));
+    }
+  }
+  [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && b.addEventListener("click", pullCollected));
 
   function drawLab() {
     const empty = $("#stageEmpty");
