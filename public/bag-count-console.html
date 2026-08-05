@@ -287,6 +287,41 @@
   .slot .drop-x { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px;
     background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
 
+  /* full-screen photo viewer */
+  .lightbox {
+    position: fixed; inset: 0; z-index: 100; display: none;
+    background: rgba(8,10,14,.94); padding: 56px 16px 16px;
+    align-items: center; justify-content: center;
+  }
+  .lightbox[open] { display: flex; }
+  .lightbox img {
+    max-width: 100%; max-height: 100%; object-fit: contain; display: block;
+    border-radius: 6px; box-shadow: 0 12px 48px rgba(0,0,0,.6);
+  }
+  .lightbox .lb-bar {
+    position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center;
+    gap: 12px; padding: 12px 16px; color: #fff;
+  }
+  .lightbox .lb-title { font-family: var(--mono); font-size: 12.5px; letter-spacing: .06em; }
+  .lightbox .lb-sub { font-family: var(--mono); font-size: 11px; color: #9aa4b2; }
+  .lightbox .lb-grow { flex: 1; }
+  .lightbox button {
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); color: #fff;
+    border-radius: 8px; padding: 7px 12px; font-size: 13px; line-height: 1;
+  }
+  .lightbox button:hover { background: rgba(255,255,255,.2); }
+  .lightbox button[disabled] { opacity: .3; cursor: not-allowed; }
+  .lightbox .lb-nav {
+    position: absolute; top: 50%; transform: translateY(-50%);
+    width: 42px; height: 58px; font-size: 20px; display: flex; align-items: center; justify-content: center;
+  }
+  .lightbox .lb-prev { left: 12px; }
+  .lightbox .lb-next { right: 12px; }
+  @media (max-width: 560px) { .lightbox { padding: 52px 8px 8px; }
+    .lightbox .lb-nav { width: 36px; height: 48px; } }
+  body.lb-open { overflow: hidden; }
+  .slot.filled img { cursor: zoom-in; }
+
   .totalrow { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
   .calc { font-size: 27px; font-weight: 600; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
   .calc small { font-size: 13px; color: var(--faint); font-weight: 400; font-family: var(--sans); }
@@ -565,6 +600,18 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     </section>
   </main>
 
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer">
+    <div class="lb-bar">
+      <span class="lb-title" id="lbTitle"></span>
+      <span class="lb-sub" id="lbSub"></span>
+      <span class="lb-grow"></span>
+      <button id="lbClose" title="Close (Esc)" aria-label="Close viewer">✕ Close</button>
+    </div>
+    <button class="lb-nav lb-prev" id="lbPrev" title="Previous photo" aria-label="Previous photo">‹</button>
+    <img id="lbImg" alt="">
+    <button class="lb-nav lb-next" id="lbNext" title="Next photo" aria-label="Next photo">›</button>
+  </div>
+
 <script>
 (function () {
   "use strict";
@@ -760,14 +807,83 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       e.preventDefault(); e.stopPropagation();
       const input = b.closest(".slot").querySelector("input"); input.value = ""; input.click();
     }));
+    // A filled slot must not reopen the file picker on a stray tap — only
+    // "retake" does that. A tap anywhere else on it opens the photo full size.
     $$(".slot.filled").forEach(s => s.addEventListener("click", e => {
-      if (!e.target.closest("[data-redo], [data-drop]")) e.preventDefault();
+      if (e.target.closest("[data-redo], [data-drop]")) return;
+      e.preventDefault();
+      const role = s.querySelector("input[data-role]").dataset.role;
+      openViewer(role);
     }));
     const sides = SIDE_ROLES.filter(d => draft.photos[d.role]).length;
     const flaps = FLAP_ROLES.filter(d => draft.photos[d.role]).length;
     $("#cSideState").textContent = `${sides} / 4`;
     $("#cFlapState").textContent = `${flaps} / 3`;
+    // Deleting or saving out from under an open viewer would leave it showing a
+    // photo that no longer exists; re-render it against the current draft.
+    if (lbRole) draft.photos[lbRole] ? showPhoto(lbRole) : closeViewer();
   }
+
+  /* ---- full-screen photo viewer ---------------------------------------
+     A 74px-tall slot preview is not enough to tell whether a flap's batch code
+     is actually legible or the top course is in frame. Tapping a photo opens it
+     full screen, and the arrows walk the pallet's other shots so all four sides
+     can be checked without closing and reopening. */
+  const ALL_SLOT_DEFS = [...SIDE_ROLES, ...FLAP_ROLES];
+  const lb = $("#lightbox");
+  let lbRole = null, lbReturnFocus = null;
+
+  const filledDefs = () => ALL_SLOT_DEFS.filter(d => draft.photos[d.role]);
+
+  function showPhoto(role) {
+    const p = draft.photos[role];
+    const def = ALL_SLOT_DEFS.find(d => d.role === role);
+    if (!p || !def) return closeViewer();
+    lbRole = role;
+    const shots = filledDefs();
+    const at = shots.findIndex(d => d.role === role);
+    $("#lbImg").src = p.dataUrl;
+    $("#lbImg").alt = `${def.label} of the pallet, full size`;
+    $("#lbTitle").textContent = def.label;
+    $("#lbSub").textContent = `${p.width}×${p.height} · ${Math.round(p.bytes/1024)} KB · ${at+1} of ${shots.length}`;
+    $("#lbPrev").disabled = at <= 0;
+    $("#lbNext").disabled = at >= shots.length - 1;
+  }
+  function openViewer(role) {
+    lbReturnFocus = document.activeElement;
+    lb.setAttribute("open", "");
+    document.body.classList.add("lb-open");
+    showPhoto(role);
+    $("#lbClose").focus();
+  }
+  function closeViewer() {
+    lb.removeAttribute("open");
+    document.body.classList.remove("lb-open");
+    // Release the data URL so a long collecting session does not pin every
+    // photo it has ever previewed in the decoded-image cache.
+    $("#lbImg").removeAttribute("src");
+    lbRole = null;
+    if (lbReturnFocus && lbReturnFocus.focus) lbReturnFocus.focus();
+    lbReturnFocus = null;
+  }
+  function stepViewer(delta) {
+    const shots = filledDefs();
+    const at = shots.findIndex(d => d.role === lbRole);
+    const next = shots[at + delta];
+    if (next) showPhoto(next.role);
+  }
+  $("#lbClose").addEventListener("click", closeViewer);
+  $("#lbPrev").addEventListener("click", e => { e.stopPropagation(); stepViewer(-1); });
+  $("#lbNext").addEventListener("click", e => { e.stopPropagation(); stepViewer(1); });
+  // Clicking the backdrop closes; clicking the photo itself must not.
+  lb.addEventListener("click", e => { if (e.target === lb) closeViewer(); });
+  $("#lbImg").addEventListener("click", e => e.stopPropagation());
+  window.addEventListener("keydown", e => {
+    if (!lb.hasAttribute("open")) return;
+    if (e.key === "Escape") { closeViewer(); e.preventDefault(); }
+    else if (e.key === "ArrowLeft") { stepViewer(-1); e.preventDefault(); }
+    else if (e.key === "ArrowRight") { stepViewer(1); e.preventDefault(); }
+  }, true);   // capture: the viewer owns these keys while it is open
 
   // A photo dropped slightly off a slot would otherwise make the browser navigate
   // to the file, throwing away a half-filled form. Swallow those misses. Both
