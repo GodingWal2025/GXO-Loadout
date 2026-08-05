@@ -2,6 +2,7 @@ export const shell: Record<string, string> = {
   // ---- Topbar / nav ----
   'nav.inspections': 'Inspecciones',
   'nav.inventory': 'Inventario',
+  'nav.ontology': 'Ontología',
   'nav.admin': 'Administración',
   'nav.back': '← Atrás',
   'shell.site': 'Sitio',
