@@ -1906,3 +1906,228 @@ kbd {
   color: var(--ink-soft);
 }
 
+/* ============================================================
+   Ontology Domain Explorer & Graph Viewer Styles
+   ============================================================ */
+.ontology-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-bottom: 32px;
+}
+
+.ontology-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--rule-soft);
+}
+
+.ontology-header-title h1 {
+  margin: 0 0 4px 0;
+  font-size: 24px;
+}
+
+.ontology-preset-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ontology-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  background: var(--surface);
+  padding: 10px 16px;
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+}
+
+.ontology-category-pills {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ontology-pill {
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.ontology-pill:hover {
+  border-color: var(--ink-soft);
+  color: var(--ink);
+}
+
+.ontology-pill.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+
+.ontology-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ontology-search-box .input {
+  width: 260px;
+  padding: 6px 12px;
+  font-size: 13px;
+}
+
+.ontology-viewer-container {
+  position: relative;
+  width: 100%;
+  height: 620px;
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+  background: #090d16;
+  overflow: hidden;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.4);
+}
+
+.ontology-viewer-controls {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+
+.ontology-viewer-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+.graph-bg {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.ontology-node-circle {
+  transition: r 0.2s ease, stroke-width 0.2s ease;
+}
+
+.ontology-node-group:hover .ontology-node-circle {
+  r: 27;
+}
+
+.ontology-badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  border: 1px solid;
+}
+
+/* Side Inspector Drawer */
+.ontology-inspector-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 380px;
+  height: 100%;
+  z-index: 20;
+  background: #0f172a;
+  border-left: 1px solid #334155;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+  animation: slideInRight 0.2s ease-out;
+}
+
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.ontology-inspector-header {
+  padding: 16px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.ontology-inspector-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.ontology-edge-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+}
+
+.ontology-edge-item {
+  background: #1e293b;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.ontology-edge-dir {
+  display: block;
+  font-size: 10px;
+  color: #38bdf8;
+  font-weight: 600;
+}
+
+.ontology-edge-item .highlight {
+  color: #f472b6;
+  font-weight: 600;
+}
+
+.ontology-json-viewer {
+  background: #020617;
+  color: #38bdf8;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-x: auto;
+  border: 1px solid #1e293b;
+  max-height: 280px;
+}
+
+.ontology-loading-state,
+.ontology-empty-state {
+  padding: 48px 24px;
+  text-align: center;
+  background: var(--surface);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius);
+}
+
+

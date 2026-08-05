@@ -22,6 +22,7 @@ const SetupRoute = lazy(() => import('./routes/SetupRoute').then((m) => ({ defau
 const InvestigationRoute = lazy(() => import('./routes/InvestigationRoute').then((m) => ({ default: m.InvestigationRoute })));
 const CaptureReturnsStagingRoute = lazy(() => import('./routes/CaptureReturnsStagingRoute').then((m) => ({ default: m.CaptureReturnsStagingRoute })));
 const InventoryRoute = lazy(() => import('./routes/InventoryRoute').then((m) => ({ default: m.InventoryRoute })));
+const OntologyRoute = lazy(() => import('./routes/OntologyRoute').then((m) => ({ default: m.OntologyRoute })));
 
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/" element={<HomeRoute />} />
             <Route path="/setup" element={<SetupRoute />} />
             <Route path="/inventory" element={<InventoryRoute />} />
+            <Route path="/ontology" element={<OntologyRoute />} />
   
             {/* New inspection by type - outbound/returns/retag */}
             <Route path="/inspection/new/:type" element={<NewInspectionRoute />} />
@@ -110,6 +112,9 @@ function Shell({ children }: { children: ReactNode }) {
             </Link>
             <Link to="/inventory" className={location.pathname === '/inventory' ? 'active' : ''}>
               {t('nav.inventory', 'Inventory')}
+            </Link>
+            <Link to="/ontology" className={location.pathname === '/ontology' ? 'active' : ''}>
+              {t('nav.ontology', 'Ontology')}
             </Link>
             <Link to="/admin" className={isAdminArea ? 'active' : ''}>
               {t('nav.admin', 'Admin')}
