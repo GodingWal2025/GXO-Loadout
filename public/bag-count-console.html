@@ -269,6 +269,13 @@
   }
   .slot:hover { border-color: var(--accent); }
   .slot.filled { border-style: solid; border-color: var(--ok); cursor: default; }
+  /* Drop target. Also applies to a filled slot, where dropping replaces the photo. */
+  .slot.hot { border-style: dashed; border-color: var(--accent); background: var(--accent-soft); }
+  .slot.hot::after {
+    content: "Drop to use"; position: absolute; inset: 0; display: flex; align-items: center;
+    justify-content: center; background: color-mix(in srgb, var(--accent-soft) 88%, transparent);
+    color: var(--accent-ink); font-family: var(--mono); font-size: 11px; letter-spacing: .04em;
+  }
   .slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .slot .name { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--muted); }
   .slot .plus { font-size: 21px; line-height: 1; color: var(--faint); }
@@ -330,7 +337,7 @@
               <span class="status" id="cSideState">0 / 4</span>
             </div>
             <div class="bd">
-              <p class="hint" style="margin:0 0 12px">Walk the pallet and shoot each face square-on, the whole stack in frame, top course to bottom. All four are required.</p>
+              <p class="hint" style="margin:0 0 12px">Walk the pallet and shoot each face square-on, the whole stack in frame, top course to bottom. All four are required. Tap a slot to use the camera, or drag a photo onto it.</p>
               <div class="slotgrid" id="cSideSlots"></div>
             </div>
           </div>
@@ -342,7 +349,7 @@
               <span class="status" id="cFlapState">0 / 3</span>
             </div>
             <div class="bd stack">
-              <p class="hint" style="margin:0">Close-up of the sewn flap showing the batch code and material description. One is enough; add up to three if the print wraps or is hard to read.</p>
+              <p class="hint" style="margin:0">Close-up of the sewn flap showing the batch code and material description. One is enough; add up to three if the print wraps or is hard to read. Tap or drag a photo onto a slot.</p>
               <div class="slotgrid flaps" id="cFlapSlots"></div>
               <label><span class="fld">Batch code <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">optional</span></span><input type="text" id="cBatch" class="mono" placeholder="Type it only if the flap photo is hard to read"></label>
             </div>
@@ -698,6 +705,38 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       <button class="drop-x" data-drop="${def.role}" title="Remove ${def.label}" aria-label="Remove ${def.label}">×</button>
       <span class="tagline"><span>${def.label}</span><span class="grow"></span><button class="redo" data-redo="${def.role}">retake</button></span>`;
   }
+  /**
+   * Makes one slot a drop target.
+   *
+   * Counted with a depth counter rather than a boolean: dragenter/dragleave also
+   * fire for the slot's own children (the img, the tagline), so a plain toggle
+   * flickers the highlight off the moment the pointer crosses onto the preview.
+   */
+  function wireDrop(el, role) {
+    let depth = 0;
+    const cool = () => { depth = 0; el.classList.remove("hot"); };
+    el.addEventListener("dragenter", e => { e.preventDefault(); depth++; el.classList.add("hot"); });
+    el.addEventListener("dragover", e => {
+      // Without preventDefault the browser refuses the drop and opens the file.
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+    });
+    el.addEventListener("dragleave", e => { e.preventDefault(); if (--depth <= 0) cool(); });
+    el.addEventListener("drop", e => {
+      e.preventDefault(); e.stopPropagation();
+      cool();
+      const dt = e.dataTransfer;
+      if (!dt) return;
+      // One slot holds one photo, so take the first image and ignore the rest
+      // rather than guessing which of a multi-file drop belongs where.
+      const file = Array.from(dt.files || []).find(f => f.type.startsWith("image/"));
+      if (file) { takePhoto(role, file); return; }
+      if (Array.from(dt.files || []).length) {
+        alert("That file is not an image. Drop a JPEG or PNG photo.");
+      }
+    });
+  }
+
   function renderSlots() {
     [["#cSideSlots", SIDE_ROLES], ["#cFlapSlots", FLAP_ROLES]].forEach(([sel, defs]) => {
       const host = $(sel); host.innerHTML = "";
@@ -706,6 +745,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         el.className = "slot" + (draft.photos[def.role] ? " filled" : "");
         el.innerHTML = slotMarkup(def) +
           `<input type="file" accept="image/*" capture="environment" hidden data-role="${def.role}">`;
+        wireDrop(el, def.role);
         host.appendChild(el);
       });
     });
@@ -728,6 +768,15 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     $("#cSideState").textContent = `${sides} / 4`;
     $("#cFlapState").textContent = `${flaps} / 3`;
   }
+
+  // A photo dropped slightly off a slot would otherwise make the browser navigate
+  // to the file, throwing away a half-filled form. Swallow those misses. Both
+  // events need it — cancelling dragover is what makes the drop cancellable.
+  ["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => {
+    const el = e.target instanceof Element ? e.target : null;
+    if (el && el.closest(".slot, .drop")) return;   // real drop zones handle themselves
+    e.preventDefault();
+  }));
 
   async function takePhoto(role, file) {
     if (!file || !file.type.startsWith("image/")) return;
