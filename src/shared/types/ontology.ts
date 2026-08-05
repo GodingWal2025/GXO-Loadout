@@ -276,6 +276,158 @@ export const OUTBOUND_INSPECTION_GRAPH: OntologyGraph = {
 };
 
 // ============================================================
+// Returns Workflow Ontology Graph
+// ============================================================
+
+export const RETURNS_INSPECTION_GRAPH: OntologyGraph = {
+  nodes: [
+    { id: 'ret-site', type: 'Site', category: 'Facility', label: 'Site Facility', properties: { active: true } },
+    { id: 'ret-lane', type: 'StagingLane', category: 'Facility', label: 'Returns Receiving Bay', properties: { status: 'STAGED' } },
+    {
+      id: 'ret-session',
+      type: 'Inspection',
+      category: 'Order',
+      label: 'Returns Inspection Session',
+      properties: {
+        type: 'returns',
+        returnsBrand: 'Dekalb | Channel',
+        status: 'IN_PROGRESS',
+      },
+    },
+    {
+      id: 'ret-bol',
+      type: 'BOLData',
+      category: 'Order',
+      label: 'Returns BOL Document',
+      properties: {
+        fields: [
+          'bolNumber',
+          'receivedDate',
+          'expectedPallets54x40',
+          'expectedPallets40x40',
+          'expectedEmptySeedPaks',
+          'expectedProductSeedPaks',
+          'expectedBaggedProduct',
+        ],
+      },
+    },
+    {
+      id: 'ret-pallet',
+      type: 'PalletInspection',
+      category: 'Asset',
+      label: 'Returned Pallet Unit',
+      properties: {
+        types: ['Full Bag Pallet', 'Partial Bag Pallet', 'Mixed Bag Pallet', 'Seedpak', 'Minibulk'],
+        condition: 'Good vs Damaged',
+      },
+    },
+    {
+      id: 'ret-damage',
+      type: 'QualityFlag',
+      category: 'Audit',
+      label: 'Damage & Condition Assessment',
+      properties: {
+        reasons: ['damaged_product', 'wrong_or_missing_label', 'quantity_discrepancy'],
+      },
+    },
+    {
+      id: 'ret-photo-bol',
+      type: 'InspectionPhoto',
+      category: 'Audit',
+      label: 'Returns BOL Photo',
+      properties: { category: 'Returns_BOL' },
+    },
+    {
+      id: 'ret-photo-damage',
+      type: 'InspectionPhoto',
+      category: 'Audit',
+      label: 'Damage Assessment Photo',
+      properties: { category: 'Returns_Damage_Assessment' },
+    },
+    {
+      id: 'ret-inventory',
+      type: 'InventoryItem',
+      category: 'Asset',
+      label: 'Restocked Inventory',
+      properties: {
+        action: 'Re-enter restockable bags into LoadOut Inventory',
+      },
+    },
+  ],
+  edges: [
+    { id: 'rete1', sourceId: 'ret-site', targetId: 'ret-lane', relation: 'HOSTS', label: 'hosts bay' },
+    { id: 'rete2', sourceId: 'ret-site', targetId: 'ret-session', relation: 'EXECUTES', label: 'processes returns' },
+    { id: 'rete3', sourceId: 'ret-lane', targetId: 'ret-session', relation: 'OCCUPIES', label: 'received at' },
+    { id: 'rete4', sourceId: 'ret-session', targetId: 'ret-bol', relation: 'CONTAINS', label: 'verifies returns BOL' },
+    { id: 'rete5', sourceId: 'ret-bol', targetId: 'ret-photo-bol', relation: 'CONTAINS', label: 'BOL photo proof' },
+    { id: 'rete6', sourceId: 'ret-session', targetId: 'ret-pallet', relation: 'VERIFIES', label: 'scans returned pallets' },
+    { id: 'rete7', sourceId: 'ret-pallet', targetId: 'ret-damage', relation: 'FLAGS', label: 'evaluates damage' },
+    { id: 'rete8', sourceId: 'ret-damage', targetId: 'ret-photo-damage', relation: 'CONTAINS', label: 'damage photos' },
+    { id: 'rete9', sourceId: 'ret-pallet', targetId: 'ret-inventory', relation: 'REFERENCES', label: 'restocks into inventory' },
+  ],
+};
+
+// ============================================================
+// Inbound Workflow Ontology Graph
+// ============================================================
+
+export const INBOUND_INSPECTION_GRAPH: OntologyGraph = {
+  nodes: [
+    { id: 'in-site', type: 'Site', category: 'Facility', label: 'Site Facility', properties: { active: true } },
+    { id: 'in-lane', type: 'StagingLane', category: 'Facility', label: 'Inbound Dock', properties: { status: 'RESERVED' } },
+    { id: 'in-session', type: 'Inspection', category: 'Order', label: 'Inbound Inspection Session', properties: { type: 'inbound', status: 'IN_PROGRESS' } },
+    { id: 'in-bol', type: 'BOLData', category: 'Order', label: 'Vendor Inbound BOL', properties: { fields: ['shipmentNumber', 'carrier', 'plantOrigin'] } },
+    { id: 'in-pallet', type: 'PalletInspection', category: 'Asset', label: 'Received Pallet Unit', properties: { fields: ['LPN', 'Seal', 'Batch'] } },
+    { id: 'in-photo', type: 'InspectionPhoto', category: 'Audit', label: 'Inbound Inspection Photo', properties: { category: 'Pallet_GateSeal' } },
+    { id: 'in-inventory', type: 'InventoryItem', category: 'Asset', label: 'LoadOut Inventory Check-In', properties: { action: 'Add new lot stock' } },
+  ],
+  edges: [
+    { id: 'ine1', sourceId: 'in-site', targetId: 'in-session', relation: 'EXECUTES', label: 'receives load' },
+    { id: 'ine2', sourceId: 'in-lane', targetId: 'in-session', relation: 'OCCUPIES', label: 'docked at' },
+    { id: 'ine3', sourceId: 'in-session', targetId: 'in-bol', relation: 'CONTAINS', label: 'inbound BOL' },
+    { id: 'ine4', sourceId: 'in-session', targetId: 'in-pallet', relation: 'VERIFIES', label: 'receives pallet' },
+    { id: 'ine5', sourceId: 'in-pallet', targetId: 'in-photo', relation: 'CONTAINS', label: 'seal photo proof' },
+    { id: 'ine6', sourceId: 'in-pallet', targetId: 'in-inventory', relation: 'REFERENCES', label: 'checks in stock' },
+  ],
+};
+
+// ============================================================
+// Retag Workflow Ontology Graph
+// ============================================================
+
+export const RETAG_INSPECTION_GRAPH: OntologyGraph = {
+  nodes: [
+    { id: 'rt-session', type: 'Inspection', category: 'Order', label: 'Retag Inspection Session', properties: { type: 'retag', status: 'IN_PROGRESS' } },
+    { id: 'rt-inventory', type: 'InventoryItem', category: 'Asset', label: 'Target LoadOut Inventory', properties: { fields: ['sku', 'batch'] } },
+    { id: 'rt-pallet', type: 'PalletInspection', category: 'Asset', label: 'Pallet LPN Unit', properties: { action: 'Re-label barcode tag' } },
+    { id: 'rt-photo', type: 'InspectionPhoto', category: 'Audit', label: 'New Label Photo Proof', properties: { category: 'Pallet_LPN' } },
+  ],
+  edges: [
+    { id: 'rte1', sourceId: 'rt-session', targetId: 'rt-inventory', relation: 'REFERENCES', label: 'targets stock' },
+    { id: 'rte2', sourceId: 'rt-session', targetId: 'rt-pallet', relation: 'VERIFIES', label: 're-labels unit' },
+    { id: 'rte3', sourceId: 'rt-pallet', targetId: 'rt-photo', relation: 'CONTAINS', label: 'verifies new tag' },
+  ],
+};
+
+// ============================================================
+// Discard Workflow Ontology Graph
+// ============================================================
+
+export const DISCARD_INSPECTION_GRAPH: OntologyGraph = {
+  nodes: [
+    { id: 'dc-session', type: 'Inspection', category: 'Order', label: 'Discard Session', properties: { type: 'discard', status: 'IN_PROGRESS' } },
+    { id: 'dc-inventory', type: 'InventoryItem', category: 'Asset', label: 'Damaged / Expired Stock', properties: { action: 'Remove from active inventory' } },
+    { id: 'dc-flag', type: 'QualityFlag', category: 'Audit', label: 'Scrap / Discard Rationale', properties: { reason: 'damaged_product' } },
+    { id: 'dc-photo', type: 'InspectionPhoto', category: 'Audit', label: 'Scrap Evidence Photo', properties: { category: 'Returns_Damage_Assessment' } },
+  ],
+  edges: [
+    { id: 'dce1', sourceId: 'dc-session', targetId: 'dc-inventory', relation: 'REFERENCES', label: 'writes off' },
+    { id: 'dce2', sourceId: 'dc-session', targetId: 'dc-flag', relation: 'FLAGS', label: 'scrap reason' },
+    { id: 'dce3', sourceId: 'dc-flag', targetId: 'dc-photo', relation: 'CONTAINS', label: 'scrap proof' },
+  ],
+};
+
+// ============================================================
 // Dynamic Live Graph Generator from Local Application State
 // ============================================================
 

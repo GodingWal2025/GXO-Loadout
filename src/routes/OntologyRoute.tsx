@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import {
   COMPLETE_DOMAIN_GRAPH,
   OUTBOUND_INSPECTION_GRAPH,
+  RETURNS_INSPECTION_GRAPH,
+  INBOUND_INSPECTION_GRAPH,
+  RETAG_INSPECTION_GRAPH,
+  DISCARD_INSPECTION_GRAPH,
   buildLiveOntologyGraph,
   type OntologyGraph,
 } from '../shared/types/ontology';
@@ -11,11 +15,20 @@ import { listAllStagingLocations } from '../services/stagingLocations';
 import { OntologyGraphViewer } from '../components/OntologyGraphViewer';
 import { getDeviceConfig } from '../lib/deviceConfig';
 
+export type OntologyPresetMode =
+  | 'COMPLETE'
+  | 'OUTBOUND'
+  | 'RETURNS'
+  | 'INBOUND'
+  | 'RETAG'
+  | 'DISCARD'
+  | 'LIVE';
+
 export const OntologyRoute: React.FC = () => {
   const config = getDeviceConfig();
 
-  // Layout preset mode: 'COMPLETE' | 'OUTBOUND' | 'LIVE'
-  const [layoutMode, setLayoutMode] = useState<'COMPLETE' | 'OUTBOUND' | 'LIVE'>('COMPLETE');
+  // Layout preset mode: 'COMPLETE' | 'OUTBOUND' | 'RETURNS' | 'INBOUND' | 'RETAG' | 'DISCARD' | 'LIVE'
+  const [layoutMode, setLayoutMode] = useState<OntologyPresetMode>('COMPLETE');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -56,9 +69,17 @@ export const OntologyRoute: React.FC = () => {
   const activeGraph: OntologyGraph =
     layoutMode === 'OUTBOUND'
       ? OUTBOUND_INSPECTION_GRAPH
-      : layoutMode === 'LIVE'
-        ? liveGraph || { nodes: [], edges: [] }
-        : COMPLETE_DOMAIN_GRAPH;
+      : layoutMode === 'RETURNS'
+        ? RETURNS_INSPECTION_GRAPH
+        : layoutMode === 'INBOUND'
+          ? INBOUND_INSPECTION_GRAPH
+          : layoutMode === 'RETAG'
+            ? RETAG_INSPECTION_GRAPH
+            : layoutMode === 'DISCARD'
+              ? DISCARD_INSPECTION_GRAPH
+              : layoutMode === 'LIVE'
+                ? liveGraph || { nodes: [], edges: [] }
+                : COMPLETE_DOMAIN_GRAPH;
 
   return (
     <main className="page ontology-page">
@@ -85,7 +106,35 @@ export const OntologyRoute: React.FC = () => {
             className={`btn ${layoutMode === 'OUTBOUND' ? 'btn--primary' : 'btn--secondary'}`}
             onClick={() => setLayoutMode('OUTBOUND')}
           >
-            📦 Outbound Inspection Flow
+            📦 Outbound Shipment
+          </button>
+          <button
+            type="button"
+            className={`btn ${layoutMode === 'RETURNS' ? 'btn--primary' : 'btn--secondary'}`}
+            onClick={() => setLayoutMode('RETURNS')}
+          >
+            🔄 Returns Product
+          </button>
+          <button
+            type="button"
+            className={`btn ${layoutMode === 'INBOUND' ? 'btn--primary' : 'btn--secondary'}`}
+            onClick={() => setLayoutMode('INBOUND')}
+          >
+            📥 Inbound Dock
+          </button>
+          <button
+            type="button"
+            className={`btn ${layoutMode === 'RETAG' ? 'btn--primary' : 'btn--secondary'}`}
+            onClick={() => setLayoutMode('RETAG')}
+          >
+            🏷️ Retag Labeling
+          </button>
+          <button
+            type="button"
+            className={`btn ${layoutMode === 'DISCARD' ? 'btn--primary' : 'btn--secondary'}`}
+            onClick={() => setLayoutMode('DISCARD')}
+          >
+            🗑️ Discard Scrap
           </button>
           <button
             type="button"
