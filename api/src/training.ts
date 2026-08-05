@@ -109,9 +109,6 @@ function validateSample(id: string, body: any): { sample: TrainingSample } | { e
   if (fullLayers === null || fullLayers < 1) return { error: 'fullLayers must be 1 or more' };
   if (partialBags === null) return { error: 'partialBags must be 0 or more' };
   if (totalBags === null || totalBags < 1) return { error: 'totalBags must be 1 or more' };
-  if (partialBags >= bagsPerLayer) {
-    return { error: 'partialBags must be smaller than bagsPerLayer (a full layer is a full layer)' };
-  }
 
   const photos = Array.isArray(body.photos) ? body.photos : [];
   const seenRoles = new Set<string>();

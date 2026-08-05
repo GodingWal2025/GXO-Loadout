@@ -443,7 +443,7 @@
             <div class="bd stack">
               <div class="tiles" style="grid-template-columns:1fr 1fr">
                 <div class="tile"><div class="v mono" id="cQueued">0</div><div class="l">waiting to upload</div></div>
-                <div class="tile"><div class="v mono" id="cSent">0</div><div class="l">uploaded</div></div>
+                <div class="tile"><div class="v mono" id="cSent">…</div><div class="l">uploaded (all)</div></div>
               </div>
               <button class="btn" id="cUploadBtn" disabled>Upload queue</button>
               <p class="hint" style="margin:0">Saved pallets live on this device until they upload, so you can keep shooting in a dead-signal aisle and send them all when you have wifi.</p>
@@ -693,7 +693,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   /* ---- form state ---- */
   const draft = { photos: {} };   // role -> { id, blob, dataUrl, width, height, bytes }
   let queue = [];                 // saved-but-not-yet-uploaded samples
-  let uploadedCount = Number(store.get("bcc-uploaded") || 0);
+  let uploadedCount = 0;  // fetched from the server so every device sees the same total
 
   // Nobody types a name or a pallet ID any more — the fewer fields between a
   // collector and the next pallet, the more pallets get collected. Submissions
@@ -1036,7 +1036,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
           if (!r.ok) throw new Error(await failText(r, "counts"));
 
           s.status = "sent"; s.error = null;
-          uploadedCount++; store.set("bcc-uploaded", String(uploadedCount));
+          uploadedCount++;
           await Promise.all(s.photos.map(p => idbDel("photos", `${s.id}/${p.id}`)));
           await idbDel("samples", s.id);
           queue = queue.filter(q => q.id !== s.id);
@@ -1075,6 +1075,12 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       $("#cStorageState").textContent = "server unreachable";
       $("#cStorageState").style.color = "var(--warn)";
     }
+    // Fetch the global uploaded count from the server so every device
+    // shows the same number, not just what this phone sent.
+    try {
+      const sr = await fetch("/api/training/samples").then(x => x.json());
+      if (sr && typeof sr.count === "number") { uploadedCount = sr.count; renderQueue(); }
+    } catch {}
     if (queue.some(s => s.status !== "sent")) uploadQueue();
   }
 
