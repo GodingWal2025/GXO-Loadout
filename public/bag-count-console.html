@@ -279,6 +279,7 @@
   .slot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
   .slot .name { font-family: var(--mono); font-size: 11px; letter-spacing: .05em; color: var(--muted); }
   .slot .plus { font-size: 21px; line-height: 1; color: var(--faint); }
+  .slot .cam-badge { font-family: var(--sans); font-size: 10px; font-weight: 600; color: var(--accent-ink); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; margin-top: 2px; }
   .slot .tagline { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center;
     gap: 6px; padding: 3px 6px; background: rgba(0,0,0,.62); color: #fff;
     font-family: var(--mono); font-size: 10px; letter-spacing: .04em; }
@@ -286,6 +287,53 @@
   .slot .redo { background: none; border: none; color: #fff; font-size: 10px; text-decoration: underline; padding: 0; }
   .slot .drop-x { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 6px;
     background: rgba(0,0,0,.6); color: #fff; border: none; font-size: 12px; line-height: 1; }
+
+  /* live camera viewfinder modal */
+  .cam-modal {
+    position: fixed; inset: 0; z-index: 120; display: none;
+    background: rgba(8,10,14,.96); color: #fff; flex-direction: column;
+  }
+  .cam-modal[open] { display: flex; }
+  .cam-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 18px; background: rgba(0,0,0,.5); backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(255,255,255,.1);
+  }
+  .cam-title { font-family: var(--mono); font-size: 13.5px; font-weight: 600; letter-spacing: .03em; }
+  .cam-viewport {
+    flex: 1; position: relative; display: flex; align-items: center; justify-content: center;
+    background: #000; overflow: hidden;
+  }
+  .cam-viewport video {
+    width: 100%; height: 100%; object-fit: contain;
+  }
+  .cam-viewport canvas { display: none; }
+  .cam-overlay-guideline {
+    position: absolute; inset: 16px; border: 2px dashed rgba(255,255,255,.45);
+    border-radius: 12px; pointer-events: none; display: flex; align-items: flex-end;
+    justify-content: center; padding-bottom: 16px;
+  }
+  .cam-overlay-guideline span {
+    background: rgba(0,0,0,.65); color: #fff; font-family: var(--mono); font-size: 11px;
+    padding: 4px 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,.2);
+  }
+  .cam-controls {
+    display: flex; align-items: center; justify-content: space-around;
+    padding: 16px 24px; background: rgba(0,0,0,.75); gap: 16px; border-top: 1px solid rgba(255,255,255,.1);
+  }
+  .cam-btn-shutter {
+    width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff;
+    background: var(--accent); color: #fff; cursor: pointer;
+    box-shadow: 0 0 0 4px rgba(255,255,255,.25); transition: transform 0.1s ease, background 0.15s ease;
+    display: flex; align-items: center; justify-content: center; font-size: 26px;
+  }
+  .cam-btn-shutter:active { transform: scale(0.92); background: var(--accent-ink); }
+  .cam-btn-secondary {
+    background: rgba(255,255,255,.14); border: 1px solid rgba(255,255,255,.28); color: #fff;
+    border-radius: 8px; padding: 10px 16px; font-size: 13px; font-family: var(--sans);
+    cursor: pointer; display: flex; align-items: center; gap: 6px; font-weight: 500;
+  }
+  .cam-btn-secondary:hover { background: rgba(255,255,255,.25); }
 
   /* full-screen photo viewer */
   .lightbox {
@@ -380,6 +428,7 @@
             <div class="hd">
               <span class="eyebrow">1 · Four sides</span>
               <div class="grow"></div>
+              <button class="iconbtn" id="cSideCamBtn" type="button" style="background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent);font-weight:600" title="Open camera to take photo">📷 Take Picture</button>
               <span class="status" id="cSideState">0 / 4</span>
             </div>
             <div class="bd">
@@ -392,6 +441,7 @@
             <div class="hd">
               <span class="eyebrow">2 · Bag flap</span>
               <div class="grow"></div>
+              <button class="iconbtn" id="cFlapCamBtn" type="button" style="background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent);font-weight:600" title="Open camera to take photo">📷 Take Picture</button>
               <span class="status" id="cFlapState">0 / 3</span>
             </div>
             <div class="bd stack">
@@ -578,6 +628,25 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     <button class="lb-nav lb-next" id="lbNext" title="Next photo" aria-label="Next photo">›</button>
   </div>
 
+  <div class="cam-modal" id="camModal" role="dialog" aria-modal="true" aria-label="Camera viewfinder">
+    <div class="cam-header">
+      <span class="cam-title" id="camSlotTitle">📷 Take Picture</span>
+      <button class="iconbtn" id="camCloseBtn" style="background:rgba(255,255,255,0.15);color:#fff;border-color:rgba(255,255,255,0.3)">✕ Close</button>
+    </div>
+    <div class="cam-viewport">
+      <video id="camVideo" autoplay playsinline muted></video>
+      <canvas id="camCanvas"></canvas>
+      <div class="cam-overlay-guideline">
+        <span id="camGuidelineText">Align pallet face or bag flap in frame</span>
+      </div>
+    </div>
+    <div class="cam-controls">
+      <button class="cam-btn-secondary" id="camFileBtn" title="Choose file from device">📁 Choose File</button>
+      <button class="cam-btn-shutter" id="camSnapBtn" title="Take photo">📷</button>
+      <button class="cam-btn-secondary" id="camFlipBtn" title="Switch front/rear camera">🔄 Flip</button>
+    </div>
+  </div>
+
 <script>
 (function () {
   "use strict";
@@ -704,7 +773,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
 
   function slotMarkup(def) {
     const p = draft.photos[def.role];
-    if (!p) return `<span class="plus" aria-hidden="true">+</span><span class="name">${def.label}</span>`;
+    if (!p) return `<span class="plus" aria-hidden="true">📷</span><span class="name">${def.label}</span><span class="cam-badge">Take picture</span>`;
     return `<img src="${p.dataUrl}" alt="${def.label} of the pallet">
       <button class="drop-x" data-drop="${def.role}" title="Remove ${def.label}" aria-label="Remove ${def.label}">×</button>
       <span class="tagline"><span>${def.label}</span><span class="grow"></span><button class="redo" data-redo="${def.role}">retake</button></span>`;
@@ -741,6 +810,82 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     });
   }
 
+  /* ---- Live Camera Viewfinder ---- */
+  let currentCamStream = null;
+  let currentCamRole = null;
+  let currentFacingMode = "environment";
+
+  async function openCamera(role) {
+    currentCamRole = role;
+    const def = ALL_SLOT_DEFS.find(d => d.role === role);
+    $("#camSlotTitle").textContent = def ? `📷 Take Picture: ${def.label}` : "📷 Take Picture";
+    $("#camModal").setAttribute("open", "");
+    document.body.classList.add("lb-open");
+    await startCamStream();
+  }
+
+  async function startCamStream() {
+    if (currentCamStream) {
+      currentCamStream.getTracks().forEach(t => t.stop());
+      currentCamStream = null;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: currentFacingMode }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+        audio: false
+      });
+      currentCamStream = stream;
+      const video = $("#camVideo");
+      video.srcObject = stream;
+      await video.play();
+    } catch (err) {
+      console.warn("Live camera unavailable or permission denied, using file picker fallback:", err);
+      closeCamera();
+      triggerFileInput(currentCamRole);
+    }
+  }
+
+  function closeCamera() {
+    if (currentCamStream) {
+      currentCamStream.getTracks().forEach(t => t.stop());
+      currentCamStream = null;
+    }
+    $("#camModal").removeAttribute("open");
+    document.body.classList.remove("lb-open");
+    $("#camVideo").srcObject = null;
+  }
+
+  function triggerFileInput(role) {
+    const input = $(`input[data-role="${role}"]`);
+    if (input) {
+      input.value = "";
+      input.click();
+    }
+  }
+
+  function snapCamPhoto() {
+    const video = $("#camVideo");
+    if (!video || !video.videoWidth || !currentCamRole) return;
+    const canvas = $("#camCanvas");
+    const maxEdge = 1600;
+    let w = video.videoWidth, h = video.videoHeight;
+    const scale = Math.min(1, maxEdge / Math.max(w, h));
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0, w, h);
+
+    canvas.toBlob(async (blob) => {
+      if (blob) {
+        const file = new File([blob], `${currentCamRole.toLowerCase()}_${Date.now()}.jpg`, { type: "image/jpeg" });
+        await takePhoto(currentCamRole, file);
+        closeCamera();
+      }
+    }, "image/jpeg", 0.85);
+  }
+
   function renderSlots() {
     [["#cSideSlots", SIDE_ROLES], ["#cFlapSlots", FLAP_ROLES]].forEach(([sel, defs]) => {
       const host = $(sel); host.innerHTML = "";
@@ -759,13 +904,16 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       e.preventDefault(); e.stopPropagation();
       delete draft.photos[b.dataset.drop]; renderSlots(); validateDraft();
     }));
-    // A filled slot must not reopen the picker on a stray tap — only "retake" does.
     $$("[data-redo]").forEach(b => b.addEventListener("click", e => {
       e.preventDefault(); e.stopPropagation();
-      const input = b.closest(".slot").querySelector("input"); input.value = ""; input.click();
+      const role = b.dataset.redo;
+      openCamera(role);
     }));
-    // A filled slot must not reopen the file picker on a stray tap — only
-    // "retake" does that. A tap anywhere else on it opens the photo full size.
+    $$(".slot:not(.filled)").forEach(s => s.addEventListener("click", e => {
+      e.preventDefault();
+      const role = s.querySelector("input[data-role]").dataset.role;
+      openCamera(role);
+    }));
     $$(".slot.filled").forEach(s => s.addEventListener("click", e => {
       if (e.target.closest("[data-redo], [data-drop]")) return;
       e.preventDefault();
@@ -776,10 +924,29 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     const flaps = FLAP_ROLES.filter(d => draft.photos[d.role]).length;
     $("#cSideState").textContent = `${sides} / 4`;
     $("#cFlapState").textContent = `${flaps} / 3`;
-    // Deleting or saving out from under an open viewer would leave it showing a
-    // photo that no longer exists; re-render it against the current draft.
     if (lbRole) draft.photos[lbRole] ? showPhoto(lbRole) : closeViewer();
   }
+
+  $("#cSideCamBtn").addEventListener("click", () => {
+    const nextUncaptured = SIDE_ROLES.find(d => !draft.photos[d.role]) || SIDE_ROLES[0];
+    openCamera(nextUncaptured.role);
+  });
+  $("#cFlapCamBtn").addEventListener("click", () => {
+    const nextUncaptured = FLAP_ROLES.find(d => !draft.photos[d.role]) || FLAP_ROLES[0];
+    openCamera(nextUncaptured.role);
+  });
+
+  $("#camCloseBtn").addEventListener("click", closeCamera);
+  $("#camSnapBtn").addEventListener("click", snapCamPhoto);
+  $("#camFileBtn").addEventListener("click", () => {
+    const role = currentCamRole;
+    closeCamera();
+    if (role) triggerFileInput(role);
+  });
+  $("#camFlipBtn").addEventListener("click", () => {
+    currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+    startCamStream();
+  });
 
   /* ---- full-screen photo viewer ---------------------------------------
      A 74px-tall slot preview is not enough to tell whether a flap's batch code
