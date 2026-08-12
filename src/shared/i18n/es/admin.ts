@@ -24,6 +24,7 @@ export const admin: Record<string, string> = {
   'admin.tabInspectors': 'Inspectores',
   'admin.tabSites': 'Sitios',
   'admin.tabStaging': 'Ubicaciones de preparación',
+  'admin.tabArchive': 'Archivo',
   'admin.tabReports': 'Informes y panel',
   'admin.tabSecurity': 'Seguridad',
   'admin.assignSiteFirst': 'Asigne primero este dispositivo a un sitio',
@@ -37,6 +38,8 @@ export const admin: Record<string, string> = {
   'admin.colAddress': 'Dirección',
   'admin.colLocation': 'Ubicación',
   'admin.colId': 'ID',
+  'admin.colOrder': 'Orden / Carga',
+  'admin.colDate': 'Fecha',
   'admin.colType': 'Tipo',
   'admin.colState': 'Situación',
   'admin.statusActive': 'Activo',
@@ -45,6 +48,16 @@ export const admin: Record<string, string> = {
   'admin.deactivate': 'Desactivar',
   'admin.reactivate': 'Reactivar',
   'admin.delete': 'Eliminar',
+  'admin.unarchive': 'Desarchivar',
+  'admin.archive': 'Archivar',
+  'admin.view': 'Ver',
+  'admin.filterAll': 'Todas',
+  'admin.filterArchived': 'Archivadas',
+  'admin.filterActive': 'Activas',
+  'admin.filterCompleted': 'Completadas',
+  'admin.searchPlaceholder': 'Buscar por ID, n.º orden, BOL, lote…',
+  'admin.archiveTitle': 'Archivo de',
+  'admin.archiveTitleEm': 'inspecciones',
   'admin.activeCount': '{count} activos',
 
   // ---- Inspectors tab ----
@@ -132,9 +145,7 @@ export const admin: Record<string, string> = {
     'Ingrese la contraseña de administración para confirmar el borrado:',
   'admin.resetWrongPassword': 'Contraseña de administración incorrecta. Borrado cancelado.',
 
-  // ---- Inspection management ----
-  'admin.inspectionMgmt': 'Gestión de',
-  'admin.inspectionMgmtEm': 'inspecciones',
+  // ---- Inspection management & archive ----
   'admin.totalInspections': '{count} inspecciones en total',
   'admin.loadingInspections': 'Cargando inspecciones...',
   'admin.noInspectionsFound': 'No se encontraron inspecciones.',

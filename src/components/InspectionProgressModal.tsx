@@ -167,6 +167,24 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   const totalBags = allBatches.reduce((s, r) => s + r.bagCount, 0);
   const uniqueBatches = new Set(allBatches.map((r) => r.batchCode).filter(Boolean));
 
+  const picklistBatchCodes = useMemo(() => {
+    return new Set(
+      (inspection.picklist?.lineItems ?? [])
+        .map((li) => (li.batchCode.value || '').trim().toUpperCase())
+        .filter(Boolean)
+    );
+  }, [inspection.picklist?.lineItems]);
+
+  const unlistedBatchesCount = useMemo(() => {
+    let count = 0;
+    for (const code of uniqueBatches) {
+      if (!picklistBatchCodes.has(code.trim().toUpperCase())) {
+        count++;
+      }
+    }
+    return count;
+  }, [uniqueBatches, picklistBatchCodes]);
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div
@@ -205,6 +223,11 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
           <div className="pill pill--info">
             {t('progress.uniqueBatches', '{count} unique batches', { count: uniqueBatches.size })}
           </div>
+          {unlistedBatchesCount > 0 && (
+            <div className="pill pill--warn">
+              ⚠ {t('progress.unlistedCount', '{count} unlisted batch(es)', { count: unlistedBatchesCount })}
+            </div>
+          )}
           {inspection.flaggedItemsCount > 0 && (
             <div className="pill pill--warn">
               {t('progress.flagged', '⚑ {count} flagged', { count: inspection.flaggedItemsCount })}
@@ -297,19 +320,29 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((r, i) => (
-                    <tr key={i}>
-                      <td className="mono fw-500">#{r.palletNumber}</td>
-                      <td className="mono small">{r.deliveryNumber}</td>
-                      {inspection.type !== 'returns' && <td className="num small">{r.stopNumber ?? '—'}</td>}
-                      <td className="small soft">{r.palletType}</td>
-                      <td className="mono" style={{ textTransform: 'uppercase' }}>{r.batchCode || '—'}</td>
-                      <td className="mono small">{r.sku || '—'}</td>
-                      <td className="small soft">{r.description || '—'}</td>
-                      <td className="right num fw-500">{r.bagCount}</td>
-                      <td className="small soft">{r.scannedBy || '—'}</td>
-                    </tr>
-                  ))}
+                  {filtered.map((r, i) => {
+                    const isUnlisted = Boolean(r.batchCode) && !picklistBatchCodes.has(r.batchCode.trim().toUpperCase());
+                    return (
+                      <tr key={i}>
+                        <td className="mono fw-500">#{r.palletNumber}</td>
+                        <td className="mono small">{r.deliveryNumber}</td>
+                        {inspection.type !== 'returns' && <td className="num small">{r.stopNumber ?? '—'}</td>}
+                        <td className="small soft">{r.palletType}</td>
+                        <td className="mono" style={{ textTransform: 'uppercase' }}>
+                          {r.batchCode || '—'}
+                          {isUnlisted && (
+                            <span className="pill pill--danger" style={{ fontSize: 10, marginLeft: 6 }}>
+                              ⚠ {t('progress.notOnPicklist', 'Not on picklist')}
+                            </span>
+                          )}
+                        </td>
+                        <td className="mono small">{r.sku || '—'}</td>
+                        <td className="small soft">{r.description || '—'}</td>
+                        <td className="right num fw-500">{r.bagCount}</td>
+                        <td className="small soft">{r.scannedBy || '—'}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

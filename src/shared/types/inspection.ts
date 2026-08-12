@@ -211,6 +211,12 @@ export interface PalletInspection {
 
   photos: InspectionPhoto[];
   qualityFlag?: QualityFlag;
+  /**
+   * AI model training categorization for this pallet:
+   * 'good': used to train the AI model on how to count bags accurately.
+   * 'bad': used to train the AI model on bad quality pictures, blur, or poor stacks.
+   */
+  trainingQuality?: 'good' | 'bad';
   completedAt?: string;
 
   // Handoff tracking: which inspector scanned this specific pallet

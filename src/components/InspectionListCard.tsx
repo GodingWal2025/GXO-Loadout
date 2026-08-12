@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Inspection } from '../shared';
+import { expectedBags } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT, type TranslateFn } from '../shared/i18n/LanguageContext';
 
@@ -17,11 +18,21 @@ export function InspectionListCard({ inspection }: Props) {
     discard: t('listCard.typeDiscard', 'Discard'),
   };
   const totalExpected = inspection.picklist.lineItems.reduce(
-    (sum, li) => sum + (li.expectedQuantity.value || 0),
+    (sum, li) => sum + expectedBags(li.uom, li.expectedQuantity.value, li.description.value),
     0
   );
   const totalActual = inspection.picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
   const pct = totalExpected > 0 ? Math.round((totalActual / totalExpected) * 100) : 0;
+
+  const hasUnlistedBatch = inspection.pallets.some((p) =>
+    p.batchSections.some((bs) => {
+      const code = bs.batchCode?.value?.trim().toUpperCase();
+      if (!code) return false;
+      return !inspection.picklist.lineItems.some(
+        (li) => (li.batchCode?.value || '').trim().toUpperCase() === code
+      );
+    })
+  );
 
   const loadNum = inspection.picklist.loadNumber.value || inspection.bol.loadNumber.value || inspection.id.slice(0, 8);
   const startedBy = inspection.startedBy || t('listCard.unknownInspector', 'Unknown');
@@ -38,6 +49,11 @@ export function InspectionListCard({ inspection }: Props) {
           <div className="flex gap-8">
             <span className="pill pill--neutral">{typeLabels[inspection.type]}</span>
             <div className="card__title mono">#{loadNum}</div>
+            {hasUnlistedBatch && (
+              <span className="pill pill--warn" style={{ fontSize: 11 }}>
+                ⚠ {t('listCard.unlistedBatch', 'Unlisted batch')}
+              </span>
+            )}
           </div>
           <div className="card__sub">
             {t('listCard.startedBy', 'Started by {name}', { name: startedBy })} · {lastEdited}
@@ -84,7 +100,7 @@ export function InspectionListCard({ inspection }: Props) {
             </span>
           </div>
           <div className="progress progress--thin">
-            <div className="progress__bar" style={{ width: `${pct}%` }} />
+            <div className="progress__bar" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
           </div>
         </>
       )}
@@ -95,7 +111,7 @@ export function InspectionListCard({ inspection }: Props) {
             <span key={li.id}>
               <span className="mono">{li.batchCode.value || '—'}</span>{' '}
               <strong style={{ color: li.fulfilled ? 'var(--success)' : 'var(--ink)' }}>
-                {li.actualQuantity} / {li.expectedQuantity.value || 0}
+                {li.actualQuantity} / {expectedBags(li.uom, li.expectedQuantity.value, li.description.value)}
               </strong>
             </span>
           ))}

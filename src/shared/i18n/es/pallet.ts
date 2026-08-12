@@ -16,6 +16,14 @@ export const pallet: Record<string, string> = {
   'pallet.typeSeedpak': 'Seedpak',
   'pallet.typeMinibulk': 'Minibulk',
 
+  // ---- AI Training Quality ----
+  'pallet.trainingQualityTitle': 'Calidad de fotos / tarima (Entrenamiento de IA)',
+  'pallet.trainingQualityLabel': 'Calidad para entrenamiento de IA (Bueno vs Malo)',
+  'pallet.qualityGood': 'Buena',
+  'pallet.qualityBad': 'Mala',
+  'pallet.qualityGoodHint': 'Se usa para entrenar el modelo de IA en el conteo preciso de bolsas.',
+  'pallet.qualityBadHint': 'Se usa para entrenar el modelo de IA en fotos borrosas, mala iluminación o estibas deficientes.',
+
   // ---- Returns warnings ----
   'pallet.warnFullUnder60':
     'Las tarimas completas de bolsas deben contener exactamente 60 bolsas. Como esta tarima tiene menos de 60 bolsas ({count}), debe marcarse como tarima parcial de bolsas.',
@@ -39,6 +47,10 @@ export const pallet: Record<string, string> = {
   'pallet.mismatchPre': 'Discrepancia de conteo: esperado',
   'pallet.mismatchMid': ', se ingresó',
   'pallet.mismatchDiff': 'diferencia {diff}',
+  'pallet.notOnPicklist': 'No está en la lista de surtido',
+  'pallet.unlistedBatchWarn':
+    'Advertencia: El lote "{code}" no estaba listado en la lista de surtido tras el OCR. Notifique al supervisor/verificador.',
+
 
   // ---- Layer counter ----
   'pallet.fullLayer': 'Capa completa',

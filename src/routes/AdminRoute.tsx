@@ -13,6 +13,7 @@ import {
   listAllInspectorsForSite,
   updateInspector,
   dbListAllInspections,
+  dbSaveInspection,
   dbHardDeleteInspection,
 } from '../shared';
 import {
@@ -32,7 +33,7 @@ import { wipeAllData } from '../services/appReset';
 import { useT } from '../shared/i18n/LanguageContext';
 import type { Inspector, Site } from '../shared';
 
-type Tab = 'inspectors' | 'sites' | 'staging' | 'security' | 'reports';
+type Tab = 'inspectors' | 'sites' | 'staging' | 'archive' | 'reports' | 'security';
 
 export function AdminRoute() {
   const t = useT();
@@ -131,6 +132,12 @@ export function AdminRoute() {
           {t('admin.tabStaging', 'Staging locations')}
         </button>
         <button
+          className={`admin-tab ${tab === 'archive' ? 'active' : ''}`}
+          onClick={() => setTab('archive')}
+        >
+          {t('admin.tabArchive', 'Archive')}
+        </button>
+        <button
           className={`admin-tab ${tab === 'reports' ? 'active' : ''}`}
           onClick={() => setTab('reports')}
         >
@@ -148,6 +155,7 @@ export function AdminRoute() {
       {tab === 'inspectors' && config && <InspectorsPanel siteId={config.siteId} />}
       {tab === 'sites' && <SitesPanel currentSiteId={config?.siteId || ''} />}
       {tab === 'staging' && config && <StagingPanel siteId={config.siteId} />}
+      {tab === 'archive' && <ArchivePanel />}
       {tab === 'reports' && <ReportsPanel />}
 
       {tab === 'security' && <SecurityPanel />}
@@ -760,8 +768,6 @@ function SecurityPanel() {
         </button>
       </section>
 
-      <InspectionManagementPanel />
-
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
@@ -795,24 +801,37 @@ function SecurityPanel() {
   );
 }
 
-function InspectionManagementPanel() {
+function ArchivePanel() {
   const t = useT();
-  const [inspections, setInspections] = useState<any[]>([]);
+  const [allInspections, setAllInspections] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<'all' | 'archived' | 'active' | 'completed'>('all');
+  const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(0);
-  const pageSize = 25;
+  const pageSize = 20;
+
+  const loadData = async () => {
+    setLoading(true);
+    const data = await dbListAllInspections();
+    setAllInspections(data);
+    setLoading(false);
+  };
 
   useEffect(() => {
-    loadInspections(page);
-  }, [page]);
+    loadData();
+    const handleUpdate = () => loadData();
+    window.addEventListener('loadout-data-updated', handleUpdate);
+    return () => window.removeEventListener('loadout-data-updated', handleUpdate);
+  }, []);
 
-  const loadInspections = async (p: number) => {
-    setLoading(true);
-    const all = await dbListAllInspections();
-    setInspections(all.slice((p - 1) * pageSize, p * pageSize));
-    setTotal(all.length);
-    setLoading(false);
+  const handleToggleArchive = async (inspection: any) => {
+    const isCurrentlyArchived = !!inspection.archived;
+    await dbSaveInspection({
+      ...inspection,
+      archived: !isCurrentlyArchived,
+      lastEditedAt: new Date().toISOString(),
+    });
+    await loadData();
   };
 
   const handleDelete = async (id: string) => {
@@ -820,29 +839,101 @@ function InspectionManagementPanel() {
       !window.confirm(
         t('admin.confirmDeleteInspection', 'Permanently delete this inspection? This cannot be undone.')
       )
-    )
+    ) {
       return;
-
+    }
     await dbHardDeleteInspection(id);
-    loadInspections(page);
+    await loadData();
   };
 
+  const q = search.trim().toLowerCase();
+  const filtered = allInspections.filter((item) => {
+    if (filter === 'archived' && !item.archived) return false;
+    if (filter === 'active' && item.archived) return false;
+    if (filter === 'completed' && item.status !== 'COMPLETED' && item.status !== 'FLAGGED') return false;
+
+    if (!q) return true;
+    const orderNum = item.picklist?.orderNumber?.value || item.picklist?.loadNumber?.value || '';
+    const bolNum = item.bol?.bolNumber?.value || item.returnsBol?.bolNumber?.value || '';
+    const id = item.id || '';
+    const inspector = item.currentInspector || item.pickerName || '';
+    const batches = (item.pallets || [])
+      .flatMap((p: any) => (p.batchSections || []).map((b: any) => b.batchCode?.value || ''))
+      .join(' ');
+
+    return (
+      id.toLowerCase().includes(q) ||
+      orderNum.toLowerCase().includes(q) ||
+      bolNum.toLowerCase().includes(q) ||
+      inspector.toLowerCase().includes(q) ||
+      batches.toLowerCase().includes(q)
+    );
+  });
+
+  const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
 
   return (
     <section className="section">
       <div className="section__head">
-        <h2 className="section__title">
-          {t('admin.inspectionMgmt', 'Inspection')} <em>{t('admin.inspectionMgmtEm', 'management')}</em>
-        </h2>
-        <span className="section__meta">
+        <div>
+          <h2 className="section__title">
+            {t('admin.archiveTitle', 'Archive of')} <em>{t('admin.archiveTitleEm', 'inspections')}</em>
+          </h2>
+        </div>
+        <div className="section__meta">
           {t('admin.totalInspections', '{count} total inspections', { count: total })}
-        </span>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            className={`btn btn--sm ${filter === 'all' ? 'btn--accent' : 'btn--ghost'}`}
+            onClick={() => { setFilter('all'); setPage(1); }}
+          >
+            {t('admin.filterAll', 'All')} ({allInspections.length})
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${filter === 'archived' ? 'btn--accent' : 'btn--ghost'}`}
+            onClick={() => { setFilter('archived'); setPage(1); }}
+          >
+            {t('admin.filterArchived', 'Archived')} ({allInspections.filter((i) => i.archived).length})
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${filter === 'active' ? 'btn--accent' : 'btn--ghost'}`}
+            onClick={() => { setFilter('active'); setPage(1); }}
+          >
+            {t('admin.filterActive', 'Active')} ({allInspections.filter((i) => !i.archived).length})
+          </button>
+          <button
+            type="button"
+            className={`btn btn--sm ${filter === 'completed' ? 'btn--accent' : 'btn--ghost'}`}
+            onClick={() => { setFilter('completed'); setPage(1); }}
+          >
+            {t('admin.filterCompleted', 'Completed')} ({allInspections.filter((i) => i.status === 'COMPLETED' || i.status === 'FLAGGED').length})
+          </button>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <input
+            type="text"
+            className="input"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            placeholder={t('admin.searchPlaceholder', 'Search by ID, order #, BOL, lot…')}
+            style={{ width: '100%' }}
+          />
+        </div>
       </div>
 
       {loading ? (
         <div className="soft">{t('admin.loadingInspections', 'Loading inspections...')}</div>
-      ) : inspections.length === 0 ? (
+      ) : paged.length === 0 ? (
         <div className="soft">{t('admin.noInspectionsFound', 'No inspections found.')}</div>
       ) : (
         <>
@@ -851,36 +942,82 @@ function InspectionManagementPanel() {
               <thead>
                 <tr>
                   <th>{t('admin.colId', 'ID')}</th>
+                  <th>{t('admin.colOrder', 'Order / Load')}</th>
                   <th>{t('admin.colType', 'Type')}</th>
                   <th>{t('admin.colStatus', 'Status')}</th>
+                  <th>{t('admin.colDate', 'Date')}</th>
                   <th>{t('admin.colState', 'State')}</th>
                   <th className="right">{t('admin.colActions', 'Actions')}</th>
                 </tr>
               </thead>
               <tbody>
-                {inspections.map((i: any) => (
-                  <tr key={i.id}>
-                    <td className="mono">{i.id.slice(0, 8)}</td>
-                    <td>{i.type}</td>
-                    <td>{i.status}</td>
-                    <td>{i.archived ? <span className="pill pill--warn">{t('admin.stateArchived', 'Archived')}</span> : <span className="pill pill--success">{t('admin.statusActive', 'Active')}</span>}</td>
-                    <td className="right">
-                      <button className="btn btn--sm btn--danger" onClick={() => handleDelete(i.id)}>{t('admin.delete', 'Delete')}</button>
-                    </td>
-                  </tr>
-                ))}
+                {paged.map((i: any) => {
+                  const orderNum = i.picklist?.orderNumber?.value || i.picklist?.loadNumber?.value || i.bol?.bolNumber?.value || '—';
+                  const dateStr = i.completedAt || i.startedAt || i.createdAt || '';
+                  const formattedDate = dateStr ? new Date(dateStr).toLocaleDateString() : '—';
+                  return (
+                    <tr key={i.id}>
+                      <td className="mono">{i.id.slice(0, 8)}</td>
+                      <td><strong>{orderNum}</strong></td>
+                      <td>{i.mode || i.type || 'outbound'}</td>
+                      <td>
+                        <span className={`pill ${i.status === 'COMPLETED' ? 'pill--success' : i.status === 'FLAGGED' ? 'pill--danger' : 'pill--warn'}`}>
+                          {i.status || 'IN_PROGRESS'}
+                        </span>
+                      </td>
+                      <td className="small soft">{formattedDate}</td>
+                      <td>
+                        {i.archived ? (
+                          <span className="pill pill--warn">{t('admin.stateArchived', 'Archived')}</span>
+                        ) : (
+                          <span className="pill pill--success">{t('admin.statusActive', 'Active')}</span>
+                        )}
+                      </td>
+                      <td className="right" style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                        <Link to={`/inspection/${i.id}`} className="btn btn--sm btn--ghost">
+                          {t('admin.view', 'View')}
+                        </Link>
+                        <button
+                          type="button"
+                          className="btn btn--sm btn--ghost"
+                          onClick={() => handleToggleArchive(i)}
+                          title={i.archived ? 'Restore to active list' : 'Hide from active list'}
+                        >
+                          {i.archived ? t('admin.unarchive', 'Unarchive') : t('admin.archive', 'Archive')}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--sm btn--danger"
+                          onClick={() => handleDelete(i.id)}
+                        >
+                          {t('admin.delete', 'Delete')}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
           {totalPages > 1 && (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16 }}>
-              <button className="btn btn--sm" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+              >
                 {t('admin.previous', '← Previous')}
               </button>
               <span className="small soft">
                 {t('admin.pageOf', 'Page {page} of {total}', { page, total: totalPages })}
               </span>
-              <button className="btn btn--sm" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages}>
+              <button
+                type="button"
+                className="btn btn--sm"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages}
+              >
                 {t('admin.next', 'Next →')}
               </button>
             </div>

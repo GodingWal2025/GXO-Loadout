@@ -142,6 +142,8 @@ export const shell: Record<string, string> = {
   'listCard.completed': 'Completada',
   'listCard.inProgress': 'En curso',
   'listCard.palletsBags': '{pallets} tarimas · {actual} de {expected} bolsas',
+  'listCard.unlistedBatch': 'Lote no listado',
+
 
   // ---- Investigation ----
   'investigation.title': 'Investigación',

@@ -467,7 +467,12 @@
                 </div>
                 <label style="width:150px"><span class="fld">Actual total</span><input type="number" id="cTotal" min="1" max="20000" inputmode="numeric" placeholder="counted"></label>
               </div>
-              <div id="cTotalNote"></div>
+              <label><span class="fld">Training Model Target / Quality</span>
+                <div class="seg" id="cQualSeg" style="display:flex;gap:4px">
+                  <button type="button" id="cQualGood" aria-pressed="true" style="flex:1">✓ Good (Bag Count Model)</button>
+                  <button type="button" id="cQualBad" aria-pressed="false" style="flex:1">⚠ Bad (Bad Photo Model)</button>
+                </div>
+              </label>
               <label><span class="fld">Notes</span><input type="text" id="cNotes" placeholder="Anything odd — leaning, damaged wrap, mixed bag types…"></label>
             </div>
           </div>
@@ -1095,6 +1100,15 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       : `<div class="banner ok"><b>Ready.</b> Save it to the queue and start the next pallet.</div>`;
   }
 
+  let draftQuality = "good";
+  function setDraftQuality(q) {
+    draftQuality = q === "bad" ? "bad" : "good";
+    $("#cQualGood").setAttribute("aria-pressed", String(draftQuality === "good"));
+    $("#cQualBad").setAttribute("aria-pressed", String(draftQuality === "bad"));
+  }
+  $("#cQualGood").addEventListener("click", () => setDraftQuality("good"));
+  $("#cQualBad").addEventListener("click", () => setDraftQuality("bad"));
+
   /* ---- save / queue / upload ---- */
   $("#cSaveBtn").addEventListener("click", async () => {
     if (draftProblems().length) return;
@@ -1109,6 +1123,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       id,
       batchCode: $("#cBatch").value.trim() || null,
       collector: deviceTag,
+      quality: draftQuality,
       bagsPerLayer: per, fullLayers: layers, partialBags: partial, totalBags: total,
       notes: $("#cNotes").value.trim() || null,
       photos,
@@ -1135,12 +1150,11 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   function resetDraft() {
     draft.photos = {};
     delete draft.editId;
+    setDraftQuality("good");
     ["#cBatch","#cNotes"].forEach(s => $(s).value = "");
     ["#cPerLayer","#cLayers","#cTotal"].forEach(s => { $(s).value = ""; $(s).dataset.auto = "1"; });
     $("#cPartial").value = "0";
     renderSlots(); recalc(); validateDraft();
-    // No focus grab: the next action is raising the phone to the next pallet,
-    // and popping a keyboard open over the slot grid gets in the way of that.
   }
   $("#cResetBtn").addEventListener("click", resetDraft);
 
@@ -1316,10 +1330,11 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     card.className = "card";
     card.style.marginTop = "14px";
     const flags = [
+      chip(s.quality === "bad" ? "bad photo model" : "good count model", s.quality === "bad" ? "warn" : "ok"),
       a.missingSides.length ? chip("missing " + a.missingSides.join(", ").toLowerCase(), "crit") : "",
       !a.flaps ? chip("no flap photo", "crit") : "",
       !a.countsAgree ? chip(`total ${s.totalBags} ≠ layers ${a.computed}`, "warn") : "",
-    ].filter(Boolean).join("") || chip("complete", "ok");
+    ].filter(Boolean).join("");
 
     const when = String(s.capturedAt || "").slice(0, 16).replace("T", " ");
     card.innerHTML = `
@@ -1368,6 +1383,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         $$(".panel").forEach(p => p.classList.toggle("active", p.id === "panel-collect"));
         
         draft.editId = s.id;
+        setDraftQuality(s.quality || "good");
         $("#cBatch").value = s.batchCode || "";
         $("#cPerLayer").value = s.bagsPerLayer || "";
         $("#cLayers").value = s.fullLayers || "";

@@ -490,27 +490,70 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         </div>
       )}
 
-      {/* Pallet type / change */}
+      {/* Pallet type / change & Training Quality toggle */}
       <section className="section">
-        <div className="field">
-          <div className="field__label">{t('pallet.typeLabel', 'Pallet type')}</div>
-          <select
-            value={pallet.palletType}
-            onChange={(e) =>
-              dispatch({
-                type: 'UPDATE_PALLET',
-                index: palletIndex,
-                patch: { palletType: e.target.value as any },
-              })
-            }
-          >
-            {(inspection.type === 'returns'
-              ? PALLET_TYPES.filter(pt => pt !== 'Mixed Bag Pallet' && pt !== 'Minibulk')
-              : PALLET_TYPES
-            ).map((pt) => (
-              <option key={pt} value={pt}>{palletTypeLabel(pt)}</option>
-            ))}
-          </select>
+        <div className="field-row">
+          <div className="field">
+            <div className="field__label">{t('pallet.typeLabel', 'Pallet type')}</div>
+            <select
+              value={pallet.palletType}
+              onChange={(e) =>
+                dispatch({
+                  type: 'UPDATE_PALLET',
+                  index: palletIndex,
+                  patch: { palletType: e.target.value as any },
+                })
+              }
+            >
+              {(inspection.type === 'returns'
+                ? PALLET_TYPES.filter(pt => pt !== 'Mixed Bag Pallet' && pt !== 'Minibulk')
+                : PALLET_TYPES
+              ).map((pt) => (
+                <option key={pt} value={pt}>{palletTypeLabel(pt)}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field">
+            <div className="field__label" title={t('pallet.trainingQualityTitle', 'Photo / Pallet Quality (AI Training)')}>
+              {t('pallet.trainingQualityLabel', 'AI Training Quality (Good vs Bad)')}
+            </div>
+            <div className="toggle-group" style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                className={`btn btn--sm flex-1 ${pallet.trainingQuality !== 'bad' ? 'active' : ''}`}
+                style={pallet.trainingQuality !== 'bad' ? { backgroundColor: 'var(--success)', color: '#fff' } : {}}
+                onClick={() =>
+                  dispatch({
+                    type: 'UPDATE_PALLET',
+                    index: palletIndex,
+                    patch: { trainingQuality: 'good' },
+                  })
+                }
+              >
+                ✓ {t('pallet.qualityGood', 'Good')}
+              </button>
+              <button
+                type="button"
+                className={`btn btn--sm flex-1 ${pallet.trainingQuality === 'bad' ? 'active danger' : ''}`}
+                style={pallet.trainingQuality === 'bad' ? { backgroundColor: 'var(--danger)', color: '#fff' } : {}}
+                onClick={() =>
+                  dispatch({
+                    type: 'UPDATE_PALLET',
+                    index: palletIndex,
+                    patch: { trainingQuality: 'bad' },
+                  })
+                }
+              >
+                ⚠ {t('pallet.qualityBad', 'Bad')}
+              </button>
+            </div>
+            <div className="field__hint" style={{ marginTop: 4 }}>
+              {pallet.trainingQuality === 'bad'
+                ? t('pallet.qualityBadHint', 'Used to train model on bad/blurry pictures or poor quality stacks.')
+                : t('pallet.qualityGoodHint', 'Used to train model on accurate bag counting.')}
+            </div>
+          </div>
         </div>
       </section>
       </fieldset>
@@ -967,6 +1010,15 @@ function BatchSectionRow({
   const expected = section.expectedBagCount;
   const mismatch = expected > 0 && actual !== null && actual !== expected;
 
+  const isUnlistedOnPicklist = useMemo(() => {
+    const code = (section.batchCode.value || '').trim().toUpperCase();
+    if (!code || isReturns) return false;
+    if (!picklistLineItems || picklistLineItems.length === 0) return false;
+    return !picklistLineItems.some(
+      (li) => (li.batchCode.value || '').trim().toUpperCase() === code
+    );
+  }, [picklistLineItems, section.batchCode.value, isReturns]);
+
   const sectionUom = useMemo(() => {
     if (!section.batchCode.value) return undefined;
     const li = picklistLineItems.find((item) => item.batchCode.value === section.batchCode.value);
@@ -981,14 +1033,21 @@ function BatchSectionRow({
 
   return (
     <div className="card">
-      {isMultiple && (
-        <div
-          className="xs soft fw-500"
-          style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 8 }}
-        >
-          {t('pallet.batchNumber', 'Batch {number}', { number: sectionNumber })}
-        </div>
-      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        {isMultiple ? (
+          <div
+            className="xs soft fw-500"
+            style={{ textTransform: 'uppercase', letterSpacing: '0.08em' }}
+          >
+            {t('pallet.batchNumber', 'Batch {number}', { number: sectionNumber })}
+          </div>
+        ) : <span />}
+        {isUnlistedOnPicklist && (
+          <span className="pill pill--danger" style={{ fontSize: 11 }}>
+            ⚠ {t('pallet.notOnPicklist', 'Not on Picklist')}
+          </span>
+        )}
+      </div>
       <div className="field-row">
         <SuggestableField
           label={t('pallet.batchCodeLabel', 'Batch code')}
@@ -1030,6 +1089,19 @@ function BatchSectionRow({
       </div>
 
       {isBagProduct && <LayerCountHelper section={section} onUpdate={onUpdate} />}
+
+      {isUnlistedOnPicklist && (
+        <div className="banner banner--danger" style={{ marginTop: 8, marginBottom: 0 }}>
+          <span className="banner__icon">⚠</span>
+          <div className="banner__body">
+            {t(
+              'pallet.unlistedBatchWarn',
+              'Warning: Batch "{code}" was not listed on the picklist after OCR verification. Please notify supervisor/verifier.',
+              { code: section.batchCode.value || '' }
+            )}
+          </div>
+        </div>
+      )}
 
       {remainingAvailable !== null && remainingAvailable > 0 && (
         <div className="small soft mt-8">

@@ -46,6 +46,8 @@ type TrainingSample = {
   site: string;
   /** Anonymous per-device tag from the console, or 'unknown'. */
   collector: string;
+  /** 'good' (bag counting model) vs 'bad' (bad picture / anomaly model) */
+  quality?: 'good' | 'bad';
   batchCode: string | null;
   materialDescription: string | null;
   sku: string | null;
@@ -137,12 +139,15 @@ function validateSample(id: string, body: any): { sample: TrainingSample } | { e
     return { error: 'At least one bag-flap photo is required' };
   }
 
+  const quality: 'good' | 'bad' = body.quality === 'bad' ? 'bad' : 'good';
+
   return {
     sample: {
       id,
       palletId: str(body.palletId, 64) || '',
       site: str(body.site, 64) || 'unspecified',
       collector: str(body.collector, 64) || 'unknown',
+      quality,
       batchCode: str(body.batchCode, 64),
       materialDescription: str(body.materialDescription, 256),
       sku: str(body.sku, 64),

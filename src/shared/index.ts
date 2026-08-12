@@ -23,6 +23,7 @@ export {
   dbArchiveInspection,
   dbSavePhotoBlob,
   dbGetPhotoBlob,
+  dbListInventoryItems,
 } from './services/db';
 
 export { analyzePicklistPhoto, analyzeBolPhoto } from './services/ocr';

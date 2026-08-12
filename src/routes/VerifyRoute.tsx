@@ -1,9 +1,10 @@
-import { generateId, emptySuggestable, PICKLIST_UOM_OPTIONS, parsePackInfo } from '../shared';
+import { generateId, emptySuggestable, PICKLIST_UOM_OPTIONS, parsePackInfo, dbListInventoryItems } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection } from '../shared';
 import { useInspection } from '../shared';
-import type { Inspection, Suggestable, PicklistLineItemEntry, Delivery } from '../shared';
+import type { Inspection, Suggestable, PicklistLineItemEntry, Delivery, PalletInspection } from '../shared';
+import type { InventoryItem } from '../shared/types/inventory';
 import { SuggestableField } from '../shared';
 import { StepBackLink } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
@@ -35,12 +36,18 @@ function VerifyInner({
 }) {
   const { inspection, dispatch } = useInspection(initial);
   const t = useT();
+  const [inventory, setInventory] = useState<InventoryItem[]>([]);
+
+  useEffect(() => {
+    dbListInventoryItems()
+      .then(setInventory)
+      .catch(() => {});
+  }, []);
 
   const confirm = () => {
     dispatch({ type: 'VERIFY_PICKLIST', verifiedBy: inspection.startedBy || 'unknown' });
     onVerified();
   };
-
 
   const addDelivery = () => {
     dispatch({
@@ -147,7 +154,9 @@ function VerifyInner({
       {/* ===== Picklist line items ===== */}
       <PicklistLineItems
         lineItems={inspection.picklist.lineItems}
+        pallets={inspection.pallets}
         deliveries={inspection.bol.deliveries}
+        inventory={inventory}
         onAdd={() =>
           dispatch({
             type: 'ADD_PICKLIST_LINE',
@@ -322,13 +331,17 @@ function VerifyInner({
 
 function PicklistLineItems({
   lineItems,
+  pallets = [],
   deliveries,
+  inventory = [],
   onAdd,
   onUpdate,
   onRemove,
 }: {
   lineItems: PicklistLineItemEntry[];
+  pallets?: PalletInspection[];
   deliveries: Delivery[];
+  inventory?: InventoryItem[];
   onAdd: () => void;
   onUpdate: (index: number, patch: Partial<PicklistLineItemEntry>) => void;
   onRemove: (index: number) => void;
@@ -337,6 +350,23 @@ function PicklistLineItems({
   const totalExpected = lineItems.reduce(
     (sum, li) => sum + (li.expectedQuantity.value || 0),
     0
+  );
+
+  const inventoryBatches = new Set(
+    inventory.map((item) => (item.batch || '').trim().toUpperCase()).filter(Boolean)
+  );
+
+  const unlistedScannedBatches = Array.from(
+    new Set(
+      pallets
+        .flatMap((p) => p.batchSections)
+        .map((bs) => (bs.batchCode?.value || '').trim().toUpperCase())
+        .filter(
+          (code): code is string =>
+            Boolean(code) &&
+            !lineItems.some((li) => (li.batchCode?.value || '').trim().toUpperCase() === code)
+        )
+    )
   );
 
   return (
@@ -361,6 +391,19 @@ function PicklistLineItems({
         </div>
       </div>
 
+      {unlistedScannedBatches.length > 0 && (
+        <div className="banner banner--warn">
+          <span className="banner__icon">⚠</span>
+          <div className="banner__body">
+            {t(
+              'verify.unlistedScannedWarn',
+              'Warning: Scanned batch(es) ({batches}) were not listed on the picklist after OCR.',
+              { batches: unlistedScannedBatches.join(', ') }
+            )}
+          </div>
+        </div>
+      )}
+
       {lineItems.length === 0 ? (
         <div className="empty">
           <div className="empty__title">{t('verify.noLineItems', 'No line items yet')}</div>
@@ -370,111 +413,126 @@ function PicklistLineItems({
         </div>
       ) : (
         <div className="delivery-list">
-          {lineItems.map((li, index) => (
-            <div key={li.id} className="card">
-              <div className="field-row">
-                <SuggestableField
-                  label={t('verify.batchCode', 'Batch code')}
-                  field={li.batchCode}
-                  mono
-                  uppercase
-                  placeholder="H18MYD9JX"
-                  onChange={(field) => onUpdate(index, { batchCode: field })}
-                />
-                <SuggestableField
-                  label={t('verify.sku', 'SKU / Material')}
-                  field={li.sku}
-                  mono
-                  hideCamera
-                  placeholder="91007244"
-                  onChange={(field) => onUpdate(index, { sku: field })}
-                />
-              </div>
-              <div className="field-row">
-                <SuggestableField
-                  label={t('verify.description', 'Material description')}
-                  field={li.description}
-                  hideCamera
-                  placeholder={t('verify.descriptionPlaceholder', 'Material description')}
-                  onChange={(field) => onUpdate(index, { description: field })}
-                />
-              </div>
-              <div className="field-row">
-                <SuggestableField
-                  label={t('verify.expectedQty', 'Expected qty')}
-                  field={li.expectedQuantity}
-                  type="number"
-                  hideCamera
-                  placeholder="0"
-                  onChange={(field) => onUpdate(index, { expectedQuantity: field })}
-                />
-                <div className="field">
-                  <div className="field__label">{t('verify.unit', 'Unit')}</div>
-                  <select
-                    value={li.uom}
-                    onChange={(e) =>
-                      onUpdate(index, {
-                        uom: e.target.value as PicklistLineItemEntry['uom'],
-                      })
-                    }
-                  >
-                    {/* Legacy codes (BAG/PCE) only appear if an old record still
-                        carries one, so it stays visible instead of resetting. */}
-                    {(PICKLIST_UOM_OPTIONS.includes(li.uom)
-                      ? PICKLIST_UOM_OPTIONS
-                      : [li.uom, ...PICKLIST_UOM_OPTIONS]
-                    ).map((code) => (
-                      <option key={code} value={code}>
-                        {code}
-                      </option>
-                    ))}
-                  </select>
-                  {(() => {
-                    if (li.uom !== 'SP' && li.uom !== 'MB') return null;
-                    const pack = parsePackInfo(li.description.value);
-                    if (!pack) return null;
-                    return (
-                      <div className="small soft" style={{ marginTop: 4 }}>
-                        {pack.kind === 'MB'
-                          ? t('verify.mbSize', 'Minibulk · {ssu}', { ssu: pack.ssu })
-                          : t('verify.spSize', 'SeedPak · {ssu}', { ssu: pack.ssu })}
-                      </div>
-                    );
-                  })()}
+          {lineItems.map((li, index) => {
+            const batchCode = (li.batchCode.value || '').trim().toUpperCase();
+            const notInInventory =
+              Boolean(batchCode) &&
+              inventoryBatches.size > 0 &&
+              !inventoryBatches.has(batchCode);
+
+            return (
+              <div key={li.id} className="card">
+                {notInInventory && (
+                  <div className="mb-8">
+                    <span className="pill pill--warn" style={{ fontSize: 11 }}>
+                      ⚠ {t('verify.notInInventory', 'Not found in master inventory')}
+                    </span>
+                  </div>
+                )}
+                <div className="field-row">
+                  <SuggestableField
+                    label={t('verify.batchCode', 'Batch code')}
+                    field={li.batchCode}
+                    mono
+                    uppercase
+                    placeholder="H18MYD9JX"
+                    onChange={(field) => onUpdate(index, { batchCode: field })}
+                  />
+                  <SuggestableField
+                    label={t('verify.sku', 'SKU / Material')}
+                    field={li.sku}
+                    mono
+                    hideCamera
+                    placeholder="91007244"
+                    onChange={(field) => onUpdate(index, { sku: field })}
+                  />
                 </div>
-                {/* Which delivery this product is picked for. Read off the
-                    picklist's delivery heading — shown here so the inspector
-                    confirms (or corrects) the placement before scanning. */}
-                {deliveries.length > 1 && (
+                <div className="field-row">
+                  <SuggestableField
+                    label={t('verify.description', 'Material description')}
+                    field={li.description}
+                    hideCamera
+                    placeholder={t('verify.descriptionPlaceholder', 'Material description')}
+                    onChange={(field) => onUpdate(index, { description: field })}
+                  />
+                </div>
+                <div className="field-row">
+                  <SuggestableField
+                    label={t('verify.expectedQty', 'Expected qty')}
+                    field={li.expectedQuantity}
+                    type="number"
+                    hideCamera
+                    placeholder="0"
+                    onChange={(field) => onUpdate(index, { expectedQuantity: field })}
+                  />
                   <div className="field">
-                    <div className="field__label">{t('verify.lineDelivery', 'Delivery')}</div>
+                    <div className="field__label">{t('verify.unit', 'Unit')}</div>
                     <select
-                      value={li.deliveryId ?? ''}
+                      value={li.uom}
                       onChange={(e) =>
-                        onUpdate(index, { deliveryId: e.target.value || undefined })
+                        onUpdate(index, {
+                          uom: e.target.value as PicklistLineItemEntry['uom'],
+                        })
                       }
                     >
-                      <option value="">{t('verify.lineDeliveryNone', 'Unassigned')}</option>
-                      {deliveries.map((d, i) => (
-                        <option key={d.id} value={d.id}>
-                          {d.deliveryNumber ||
-                            t('verify.lineDeliveryFallback', 'Delivery {n}', { n: i + 1 })}
+                      {/* Legacy codes (BAG/PCE) only appear if an old record still
+                          carries one, so it stays visible instead of resetting. */}
+                      {(PICKLIST_UOM_OPTIONS.includes(li.uom)
+                        ? PICKLIST_UOM_OPTIONS
+                        : [li.uom, ...PICKLIST_UOM_OPTIONS]
+                      ).map((code) => (
+                        <option key={code} value={code}>
+                          {code}
                         </option>
                       ))}
                     </select>
+                    {(() => {
+                      if (li.uom !== 'SP' && li.uom !== 'MB') return null;
+                      const pack = parsePackInfo(li.description.value);
+                      if (!pack) return null;
+                      return (
+                        <div className="small soft" style={{ marginTop: 4 }}>
+                          {pack.kind === 'MB'
+                            ? t('verify.mbSize', 'Minibulk · {ssu}', { ssu: pack.ssu })
+                            : t('verify.spSize', 'SeedPak · {ssu}', { ssu: pack.ssu })}
+                        </div>
+                      );
+                    })()}
                   </div>
-                )}
-                <div className="field" style={{ alignSelf: 'flex-end' }}>
-                  <button
-                    className="btn btn--sm btn--ghost"
-                    onClick={() => onRemove(index)}
-                  >
-                    {t('verify.removeLine', 'Remove line')}
-                  </button>
+                  {/* Which delivery this product is picked for. Read off the
+                      picklist's delivery heading — shown here so the inspector
+                      confirms (or corrects) the placement before scanning. */}
+                  {deliveries.length > 1 && (
+                    <div className="field">
+                      <div className="field__label">{t('verify.lineDelivery', 'Delivery')}</div>
+                      <select
+                        value={li.deliveryId ?? ''}
+                        onChange={(e) =>
+                          onUpdate(index, { deliveryId: e.target.value || undefined })
+                        }
+                      >
+                        <option value="">{t('verify.lineDeliveryNone', 'Unassigned')}</option>
+                        {deliveries.map((d, i) => (
+                          <option key={d.id} value={d.id}>
+                            {d.deliveryNumber ||
+                              t('verify.lineDeliveryFallback', 'Delivery {n}', { n: i + 1 })}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <div className="field" style={{ alignSelf: 'flex-end' }}>
+                    <button
+                      className="btn btn--sm btn--ghost"
+                      onClick={() => onRemove(index)}
+                    >
+                      {t('verify.removeLine', 'Remove line')}
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <div className="small soft" style={{ textAlign: 'right', marginTop: 8 }}>
             {t('verify.totalExpectedLabel', 'Total expected:')} <strong>{totalExpected}</strong>{' '}

@@ -40,6 +40,12 @@ export const verify: Record<string, string> = {
   'verify.totalExpectedLabel': 'Total esperado:',
   'verify.acrossLine': 'en {count} línea',
   'verify.acrossLines': 'en {count} líneas',
+  'verify.unlistedScannedWarn':
+    'Advertencia: Los lotes escaneados ({batches}) no estaban listados en la lista de surtido tras el OCR.',
+  'verify.notInInventory': 'No se encontró en el inventario principal',
+  'progress.unlistedCount': '{count} lote(s) no listado(s)',
+  'progress.notOnPicklist': 'No está en lista de surtido',
+
 
   // ---- VerifyRoute: deliveries ----
   'verify.deliveries': 'Entregas',
