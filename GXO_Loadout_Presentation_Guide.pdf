@@ -1,0 +1,679 @@
+%PDF-1.3
+%ºß¬à
+3 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 612. 792.]
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 5432
+>>
+stream
+0.200025 w
+0 G
+0.08 0.09 0.12 rg
+0. 792. 612. -80. re
+f
+BT
+/F2 22 Tf
+25.2999999999999972 TL
+1. g
+40. 750. Td
+(GXO LOADOUT) Tj
+ET
+BT
+/F1 11 Tf
+12.6499999999999986 TL
+0.059 0.616 0.58 rg
+40. 732. Td
+(SIMPLE DEMO & TALKING POINTS GUIDE \(NON-TECHNICAL\)) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.059 0.616 0.58 rg
+40. 687. Td
+(1. The 30-Second Dock Pitch \(How to Start Your Demo\)) Tj
+ET
+0.06 0.62 0.58 RG
+1. w
+40. 681. m
+260. 681. l
+S
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 663. Td
+(Start your presentation with this straightforward explanation of what GXO Loadout does for dock teams.) Tj
+ET
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 641. Td
+(Script to Read Out Loud:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 626. Td
+("Welcome team. Today I am showing you GXO Loadout—our new mobile app built to make load inspections fast, easy,) Tj
+T* (and 100% paperless. Instead of writing long order numbers on clipboards, you just snap a photo with your device) Tj
+T* (camera. The app reads the paper, counts bags on pallets with a smart camera assistant, and catches common dock) Tj
+T* (mistakes before the trailer door shuts. It even works if your Wi-Fi drops out on the dock.") Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.059 0.616 0.58 rg
+40. 562. Td
+(2. The "Digital Twin" Concept Made Simple) Tj
+ET
+0.06 0.62 0.58 RG
+1. w
+40. 556. m
+260. 556. l
+S
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 538. Td
+(Explain the Digital Twin concept using a simple warehouse mirror analogy:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 516. Td
+("Think of GXO Loadout as a live digital mirror of our physical dock. Whatever is physically happening to the pallets and) Tj
+T* (bags in front of you is mirrored instantly on your screen. But more than just keeping score, the app acts like a helpful) Tj
+T* (co-pilot: it knows our warehouse rules and alerts you on the spot if something looks wrong.") Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.059 0.616 0.58 rg
+40. 466. Td
+(3. Smart Dock Rules Built Into the App) Tj
+ET
+0.06 0.62 0.58 RG
+1. w
+40. 460. m
+260. 460. l
+S
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 442. Td
+(Here are the real-world dock rules the app enforces automatically:) Tj
+ET
+BT
+/F2 10 Tf
+11.5 TL
+0.078 0.094 0.122 rg
+45. 420. Td
+(• The 1-Partial Rule for Returns:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+197. 420. Td
+(On return loads, a single product lot can only have 1 partial pallet. If an operator) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+55. 406. Td
+(accidentally scans a 2nd partial pallet for the same lot, the app pops up an alert right away: "Combine these two) Tj
+T* (partial pallets into one full pallet." This keeps our dock tidy and prevents shipping half-empty pallets back.) Tj
+ET
+BT
+/F2 10 Tf
+11.5 TL
+0.078 0.094 0.122 rg
+45. 374. Td
+(• The 60-Bag Full Pallet Guard:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+192.0999999999999943 374. Td
+(A full bag pallet is always exactly 60 bags. If an operator enters fewer than 60 bags) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+55. 360. Td
+(on a full pallet label, the app flags it and automatically changes the label to a Partial Pallet.) Tj
+ET
+BT
+/F2 10 Tf
+11.5 TL
+0.078 0.094 0.122 rg
+45. 342. Td
+(• The Partial Pallet Limit Guard:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+195.4999999999999716 342. Td
+(Partial pallets must contain fewer than 60 bags. If an operator enters 60 or more) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+55. 328. Td
+(bags, the app prompts them to mark it as a Full Pallet.) Tj
+ET
+BT
+/F2 10 Tf
+11.5 TL
+0.078 0.094 0.122 rg
+45. 310. Td
+(• Automatic Bag & Box Math:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+185.2999999999999829 310. Td
+(Inspectors never need to do manual mental math. The app automatically calculates) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+55. 296. Td
+(Seedpaks, Cases, and Bag totals as you scan.) Tj
+ET
+BT
+/F2 10 Tf
+11.5 TL
+0.078 0.094 0.122 rg
+45. 278. Td
+(• 5-Second Shift Handoff:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+167.4000000000000057 278. Td
+(If your shift ends mid-load, you can hand off the load to the incoming inspector in 5) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+55. 264. Td
+(seconds. The app keeps track of who scanned which specific pallets so nobody gets blamed for someone else's) Tj
+T* (work.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.059 0.616 0.58 rg
+40. 232. Td
+(4. Step-by-Step Presentation Script) Tj
+ET
+0.06 0.62 0.58 RG
+1. w
+40. 226. m
+260. 226. l
+S
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 208. Td
+(Step 1: Opening the App & Choosing English or Spanish) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 193. Td
+(Show the top bar. Tap the EN / ES button to show how the whole app instantly switches language. Mention: "Everyone) Tj
+T* (on our dock can use the app in whichever language they prefer.") Tj
+ET
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 157. Td
+(Step 2: Starting a Load with the Smart Camera) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 142. Td
+(Tap "+ New Load". Take a quick photo of the Picklist and Bill of Lading \(BOL\). Point out how Order #, Load #, and) Tj
+T* (product names fill in on the screen automatically. Say: "No more typing long 10-digit numbers by hand.") Tj
+ET
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 106. Td
+(Step 3: Pallet Photo & Smart Bag Counter) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 91. Td
+(Open a pallet. Take photos of the pallet sides. Show the Smart Bag Counter box on screen that suggests the exact bag) Tj
+T* (count. Point out how fast it is to check off pallet sides.) Tj
+ET
+endstream
+endobj
+5 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 612. 792.]
+/Contents 6 0 R
+>>
+endobj
+6 0 obj
+<<
+/Length 3123
+>>
+stream
+1. w
+0.06 0.62 0.58 RG
+0.86 G
+0.5 w
+40. 767. m
+572. 767. l
+S
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 752. Td
+(Step 4: Demonstrating a Dock Mistake Catch) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 737. Td
+(Show what happens when scanning a 2nd partial pallet on a return load. Point to the bright warning banner that tells the) Tj
+T* (operator to combine the pallets. Say: "The app catches errors live while you stand in front of the pallet.") Tj
+ET
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 701. Td
+(Step 5: Handing Off to Next Shift) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 686. Td
+(Tap "Hand off to another inspector". Pick a team member's name. Show the updated handoff list. Say: "Your work is) Tj
+T* (saved safely, and the next inspector takes over right where you stopped.") Tj
+ET
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 650. Td
+(Step 6: Finishing & Printing the PDF Summary) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 635. Td
+(Tap "Complete Inspection". Show the final summary matching expected bags versus actual scanned bags. Tap) Tj
+T* ("Download PDF" to open the clean, printable report for shipping manifests.) Tj
+ET
+BT
+/F2 11 Tf
+12.6499999999999986 TL
+0.078 0.094 0.122 rg
+40. 599. Td
+(Step 7: Manager Console & Easy Search) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.196 g
+40. 584. Td
+(Go to the Manager Admin screen. Show how managers can search past loads by Lot Number, Order Number, or) Tj
+T* (Inspector Name in 2 seconds.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.059 0.616 0.58 rg
+40. 548. Td
+(5. Simple Answers to Team Questions) Tj
+ET
+0.06 0.62 0.58 RG
+1. w
+40. 542. m
+260. 542. l
+S
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.078 0.094 0.122 rg
+45. 524. Td
+(• What if Wi-Fi goes down out on the dock?:) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+337.8799999999999955 524. Td
+(The app keeps working 100%) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+55. 510. Td
+(offline. All photos and counts save on your device immediately and sync up to the) Tj
+T* (cloud as soon as connection returns.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.078 0.094 0.122 rg
+45. 478. Td
+(• Do I have to type long order numbers?:) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+318.4199999999999591 478. Td
+(No! The smart camera reads paper) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+55. 464. Td
+(picklists and BOLs for you.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.078 0.094 0.122 rg
+45. 446. Td
+(• Can we switch between English and Spanish?:) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+367.839999999999975 446. Td
+(Yes! Just tap EN or ES at the) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+55. 432. Td
+(top of the screen anytime.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.078 0.094 0.122 rg
+45. 414. Td
+(• How do managers look up an old load from last week?:) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+423.2800000000000296 414. Td
+(Managers can search) Tj
+ET
+BT
+/F1 14 Tf
+16.0999999999999979 TL
+0.196 g
+55. 400. Td
+(the Archive tab by Lot Number or Order Number and pull up the full inspection and) Tj
+T* (PDF report instantly.) Tj
+ET
+endstream
+endobj
+1 0 obj
+<</Type /Pages
+/Kids [3 0 R 5 0 R ]
+/Count 2
+>>
+endobj
+7 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+8 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+9 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+10 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+11 0 obj
+<<
+/Type /Font
+/BaseFont /Courier
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+12 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+13 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+14 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+15 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Roman
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+16 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+17 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Italic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+18 0 obj
+<<
+/Type /Font
+/BaseFont /Times-BoldItalic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+19 0 obj
+<<
+/Type /Font
+/BaseFont /ZapfDingbats
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+20 0 obj
+<<
+/Type /Font
+/BaseFont /Symbol
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+2 0 obj
+<<
+/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 7 0 R
+/F2 8 0 R
+/F3 9 0 R
+/F4 10 0 R
+/F5 11 0 R
+/F6 12 0 R
+/F7 13 0 R
+/F8 14 0 R
+/F9 15 0 R
+/F10 16 0 R
+/F11 17 0 R
+/F12 18 0 R
+/F13 19 0 R
+/F14 20 0 R
+>>
+/XObject <<
+>>
+>>
+endobj
+21 0 obj
+<<
+/Producer (jsPDF 4.2.1)
+/CreationDate (D:20260813095744-05'00')
+>>
+endobj
+22 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/OpenAction [3 0 R /FitH null]
+/PageLayout /OneColumn
+>>
+endobj
+xref
+0 23
+0000000000 65535 f 
+0000008884 00000 n 
+0000010709 00000 n 
+0000000015 00000 n 
+0000000120 00000 n 
+0000005604 00000 n 
+0000005709 00000 n 
+0000008947 00000 n 
+0000009072 00000 n 
+0000009202 00000 n 
+0000009335 00000 n 
+0000009473 00000 n 
+0000009597 00000 n 
+0000009726 00000 n 
+0000009858 00000 n 
+0000009994 00000 n 
+0000010122 00000 n 
+0000010249 00000 n 
+0000010378 00000 n 
+0000010511 00000 n 
+0000010613 00000 n 
+0000010959 00000 n 
+0000011045 00000 n 
+trailer
+<<
+/Size 23
+/Root 22 0 R
+/Info 21 0 R
+/ID [ <69F01280C5AA0F5582C15B6E67CD3BFA> <69F01280C5AA0F5582C15B6E67CD3BFA> ]
+>>
+startxref
+11149
+%%EOF
