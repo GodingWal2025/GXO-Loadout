@@ -21,11 +21,12 @@ const TABLE = (process.env.TRAINING_TABLE_NAME || 'TrainingSamples').trim();
 const CONTAINER = (process.env.TRAINING_PHOTO_CONTAINER || 'training-photos').trim();
 const PARTITION = 'sample';
 
-/** Four sides first, then up to three flap close-ups. Order matters: the
+/** Four sides first, then up to three flap close-ups, optional top view. Order matters: the
  *  console requires all four sides before it will let a sample be submitted. */
 export const SIDE_ROLES = ['FRONT', 'RIGHT', 'BACK', 'LEFT'] as const;
 export const FLAP_ROLES = ['FLAP_1', 'FLAP_2', 'FLAP_3'] as const;
-const ALL_ROLES = new Set<string>([...SIDE_ROLES, ...FLAP_ROLES]);
+export const TOP_ROLES = ['TOP'] as const;
+const ALL_ROLES = new Set<string>([...SIDE_ROLES, ...FLAP_ROLES, ...TOP_ROLES]);
 
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;

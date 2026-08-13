@@ -33,9 +33,10 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-# Order matters for the CSV and for eyeballing a folder — sides then flaps.
+# Order matters for the CSV and for eyeballing a folder — sides then flaps, optional top.
 SIDE_ROLES = ("FRONT", "RIGHT", "BACK", "LEFT")
 FLAP_ROLES = ("FLAP_1", "FLAP_2", "FLAP_3")
+TOP_ROLES = ("TOP",)
 
 CSV_COLUMNS = [
     "sample_id",

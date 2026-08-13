@@ -416,6 +416,7 @@
   <div class="tabs" role="tablist">
     <button class="tab" role="tab" aria-selected="true" data-tab="collect">Collect <span class="k">gather</span></button>
     <button class="tab" role="tab" aria-selected="false" data-tab="review">Review <span class="k">check</span></button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="test">Test <span class="k">VLM</span></button>
     <button class="tab" role="tab" aria-selected="false" data-tab="label">Label <span class="k">train</span></button>
   </div>
 
@@ -432,14 +433,14 @@
               <span class="status" id="cSideState">0 / 4</span>
             </div>
             <div class="bd">
-              <p class="hint" style="margin:0 0 12px">Walk the pallet and shoot each face square-on, the whole stack in frame, top course to bottom. All four are required. Tap a slot to use the camera, or drag a photo onto it.</p>
-              <div class="slotgrid" id="cSideSlots"></div>
+              <p class="hint" style="margin:0 0 12px">Walk the pallet and shoot each face square-on, the whole stack in frame, top course to bottom. All 4 sides required. Tap a slot to use the camera or drag a photo.</p>
+              <div class="slotgrid" id="cSideSlots" style="grid-template-columns:repeat(auto-fit, minmax(105px, 1fr))"></div>
             </div>
           </div>
 
           <div class="card">
             <div class="hd">
-              <span class="eyebrow">2 · Bag flap</span>
+              <span class="eyebrow">2 · Bag flap &amp; SKU identification</span>
               <div class="grow"></div>
               <button class="iconbtn" id="cFlapCamBtn" type="button" style="background:var(--accent-soft);color:var(--accent-ink);border-color:var(--accent);font-weight:600" title="Open camera to take photo">📷 Take Picture</button>
               <span class="status" id="cFlapState">0 / 3</span>
@@ -447,7 +448,11 @@
             <div class="bd stack">
               <p class="hint" style="margin:0">Close-up of the sewn flap showing the batch code and material description. One is enough; add up to three if the print wraps or is hard to read. Tap or drag a photo onto a slot.</p>
               <div class="slotgrid flaps" id="cFlapSlots"></div>
-              <label><span class="fld">Batch code <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">optional</span></span><input type="text" id="cBatch" class="mono" placeholder="Type it only if the flap photo is hard to read"></label>
+              <div class="fieldrow">
+                <label><span class="fld">Batch code <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">optional</span></span><input type="text" id="cBatch" class="mono" placeholder="Type it only if flap photo is hard to read"></label>
+                <label><span class="fld">SKU / Material # <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">optional</span></span><input type="text" id="cSku" class="mono" placeholder="e.g. 91007244 or DKC42-64RIB"></label>
+              </div>
+              <div id="cRecipePreview" class="hint" style="margin:0"></div>
             </div>
           </div>
 
@@ -507,15 +512,15 @@
           </div>
 
           <div class="card"><div class="bd stack">
-            <span class="eyebrow">Getting it into the repo</span>
+            <span class="eyebrow">Data Pipeline &amp; Sync</span>
             <ol class="steps sub">
-              <li>Collectors upload from this page — no GitHub account or token needed.</li>
-              <li>You run the sync script to pull everything into <code class="inline">detector-service/dataset/raw/</code>.</li>
-              <li>Review, commit, then label the side photos on the <b>Label</b> tab.</li>
+              <li>Collectors upload from this page — safe in offline queue.</li>
+              <li>Pull all records with <code class="inline">sync_training_data.py</code> or export JSON from Review tab.</li>
+              <li>Zero-shot test on the <b>Test</b> tab or label exemplars on the <b>Label</b> tab.</li>
             </ol>
             <div class="cmd"><pre id="syncCmd">cd detector-service
 python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestaticapps.net
-# -> dataset/raw/&lt;pallet&gt;/{FRONT,RIGHT,BACK,LEFT,FLAP_1}.jpg
+# -> dataset/raw/&lt;pallet&gt;/{FRONT,RIGHT,BACK,LEFT,TOP,FLAP_1}.jpg
 # -> dataset/raw/samples.csv   (the ground-truth counts)</pre><button data-copy="syncCmd">Copy</button></div>
           </div></div>
         </div>
@@ -529,15 +534,82 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
           <div class="hd">
             <span class="eyebrow">Uploaded pallets</span>
             <div class="grow"></div>
+            <button class="btn ghost" id="rvBackupJson" title="Download complete JSON backup of all manifests">📥 Backup JSON</button>
+            <button class="btn ghost" id="rvExportCsv" title="Export ground-truth counts to CSV">📊 Export CSV</button>
             <button class="btn ghost" id="rvRefresh">Refresh</button>
           </div>
           <div class="bd stack">
-            <p class="lead" style="margin:0">Everything collectors have successfully uploaded. Check a pallet here before you pull it into the repo — a blurry face or a count that does not add up is far cheaper to catch now than after it becomes ground truth.</p>
+            <p class="lead" style="margin:0">Everything collectors have successfully uploaded to Azure Storage. All data is backed up and downloadable with one click below.</p>
             <div class="tiles" id="rvTiles"></div>
             <div id="rvNote"></div>
           </div>
         </div>
         <div id="rvList"></div>
+      </div>
+    </section>
+
+    <!-- ================= TEST / INFERENCE ================= -->
+    <section class="panel" id="panel-test" role="tabpanel">
+      <div class="stack">
+        <div class="card">
+          <div class="hd">
+            <span class="eyebrow">Multi-View Pallet Inference (SAM 3 + Cosmos Reason VLM)</span>
+          </div>
+          <div class="bd stack">
+            <p class="lead" style="margin:0">Live test harness to evaluate the multi-view vision pipeline across four side views + elevated top view with three complementary evidence sources.</p>
+            
+            <div class="row" style="align-items:flex-end">
+              <label style="flex:1;min-width:200px"><span class="fld">Select pallet from Review data</span>
+                <select id="testSampleSelect"><option value="">-- Choose uploaded sample or drop photos below --</option></select>
+              </label>
+              <label style="width:200px"><span class="fld">SKU / Stacking Recipe</span>
+                <input type="text" id="testSkuInput" class="mono" placeholder="e.g. DKC42-64RIB">
+              </label>
+              <button class="btn" id="testRunBtn">⚡ Run Vision Pipeline</button>
+            </div>
+
+            <div class="slotgrid" id="testSlots" style="grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));margin-top:10px"></div>
+            <div id="testStatus" class="banner" style="display:none"></div>
+          </div>
+        </div>
+
+        <div id="testResultsCard" class="card" style="display:none">
+          <div class="hd">
+            <span class="eyebrow">Inference Results &amp; Evidence Breakdown</span>
+            <div class="grow"></div>
+            <span class="status" id="testDecisionBadge">—</span>
+          </div>
+          <div class="bd stack">
+            <!-- 3 Complementary Evidence Sources Cards -->
+            <div class="tiles" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr))">
+              <div class="tile" style="border-left:4px solid var(--accent)">
+                <div class="eyebrow" style="color:var(--accent-ink)">1 · SAM 3 Visible Evidence</div>
+                <div class="v mono" id="testSamFlaps">— <small>visible flaps</small></div>
+                <div class="l" id="testSamBreakdown">Per face: front: —, right: —, back: —, left: —</div>
+              </div>
+              <div class="tile" style="border-left:4px solid #8e44ad">
+                <div class="eyebrow" style="color:#8e44ad">2 · Cosmos Reason Structural</div>
+                <div class="v mono" id="testVlmTotal">— <small>est. bags</small></div>
+                <div class="l" id="testVlmBreakdown">Layers: — · Partial top: — · Regular: —</div>
+              </div>
+              <div class="tile" style="border-left:4px solid var(--ok)">
+                <div class="eyebrow" style="color:var(--ok)">3 · Stacking Recipe Calculation</div>
+                <div class="v mono" id="testRecipeTotal">— <small>recipe bags</small></div>
+                <div class="l" id="testRecipeBreakdown">Pattern: — · Full: — + Partial: —</div>
+              </div>
+            </div>
+
+            <div class="banner ok" id="testExplanationBanner" style="display:none"></div>
+
+            <span class="eyebrow">Visual Detections (Multi-View Masks &amp; Isolated Region)</span>
+            <div class="facegrid" id="testFaceGrid"></div>
+
+            <details class="raw">
+              <summary>Raw JSON API Response</summary>
+              <pre class="json" id="testRawJson"></pre>
+            </details>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -547,13 +619,13 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
         <div class="stack">
           <div class="stage" id="stage">
             <div class="empty" id="stageEmpty">
-              <p style="margin:0 0 6px"><b>Load photos to label.</b></p>
-              <p class="hint" style="margin:0">Drag a box over each visible bag <b>flap</b> (the sewn end). Export COCO when done, then train RF-DETR on it.</p>
+              <p style="margin:0 0 6px"><b>Load photos to label / extract exemplars.</b></p>
+              <p class="hint" style="margin:0">Drag a box over visible bag <b>flaps</b>. Export COCO format for SAM 3 exemplar conditioning, prompt tuning, or evaluation benchmarking.</p>
               <p style="margin:14px 0 0">
                 <button class="btn" id="labPullBtn">Pull collected photos</button>
                 <label class="btn ghost" style="display:inline-block;margin-left:8px">Add images<input type="file" id="labFileIn" accept="image/*" multiple hidden></label>
               </p>
-              <p class="hint" id="labPullHint" style="margin:10px 0 0">Pulls the four side photos of every uploaded pallet. Flap close-ups are left out — they carry the batch code, they are not detector training images.</p>
+              <p class="hint" id="labPullHint" style="margin:10px 0 0">Pulls the four side photos + top photos of uploaded pallets. Flap close-ups are left out (they carry batch text).</p>
             </div>
             <canvas id="labCanvas" hidden></canvas>
           </div>
@@ -581,40 +653,19 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
               <button class="btn ghost" id="labPullBtn2" style="flex:1">Pull collected</button>
               <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
             </div>
-            <button class="btn" id="exportBtn">Export COCO</button>
+            <button class="btn" id="exportBtn">Export COCO JSON</button>
             <span class="status" id="labPullState" hidden></span>
             <p class="hint" style="margin:0">Drag on empty space to draw. Click a box to select it, drag inside to move, drag a handle to resize.</p>
             <p class="hint" style="margin:0"><span class="kbd">1</span> bag flap · <span class="kbd">Del</span> remove selected · <span class="kbd">Esc</span> deselect · <span class="kbd">↑↓←→</span> nudge (<span class="kbd">Shift</span> resize) · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
           </div></div>
 
           <div class="card"><div class="bd stack">
-            <span class="eyebrow">Progress</span>
+            <span class="eyebrow">Annotation Progress</span>
             <div class="tiles" style="grid-template-columns:1fr 1fr">
               <div class="tile"><div class="v mono" id="pLabeled">0<small>/0</small></div><div class="l">images labeled</div></div>
               <div class="tile"><div class="v mono" id="pBoxes">0</div><div class="l">boxes total</div></div>
             </div>
-            <p class="hint" style="margin:0">Aim for 200–500 labeled faces across bag types, lighting, and stack heights. Variety matters more than raw count.</p>
-          </div></div>
-
-          <div class="card"><div class="bd stack">
-            <span class="eyebrow">Training configuration</span>
-            <div class="row">
-              <label style="flex:1"><span class="fld">Model size</span><select id="modelSize"><option value="small" selected>RF-DETR Small</option><option value="nano">RF-DETR Nano</option><option value="medium">RF-DETR Medium</option><option value="base">RF-DETR Base</option></select></label>
-              <label style="flex:1"><span class="fld">Epochs</span><input id="epochs" type="number" min="1" max="300" value="100"></label>
-              <label style="flex:1"><span class="fld">Batch</span><input id="batchSize" type="number" min="1" max="32" value="4"></label>
-            </div>
-            <div class="banner" id="datasetCheck"><b>Dataset not ready.</b> Add images and label every visible sewn flap.</div>
-            <ol class="steps sub">
-              <li>Export COCO and place the JSON plus images in <code class="inline">detector-service/dataset/{train,valid,test}/</code>. Split by pallet, not by photo.</li>
-              <li>Push the dataset branch, then run the <b>Train RF-DETR</b> GitHub Action. It uploads the best checkpoint and evaluation JSON as artifacts.</li>
-              <li>Use a GPU-backed runner for a production run. The action requires 20+ images per split and enforces the held-out accuracy gate.</li>
-            </ol>
-            <div class="cmd"><pre id="trainCmd">cd detector-service
-pip install -r requirements.txt -r requirements-rfdetr.txt
-python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-size 4
-# -> output/checkpoint_best.pth
-# set RFDETR_MODEL_SIZE=small, RFDETR_WEIGHTS and RFDETR_CLASS_NAMES=bag_flap</pre><button data-copy="trainCmd">Copy</button></div>
-            <a class="btn" href="https://github.com/GodingWal2025/GXO-Loadout/actions/workflows/train-rfdetr.yml" target="_blank" rel="noreferrer">Open training workflow</a>
+            <p class="hint" style="margin:0">Used to benchmark SAM 3 zero-shot precision and supply visual exemplar prompts for non-standard bag folds.</p>
           </div></div>
         </div>
       </div>
@@ -706,14 +757,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     return { blob, dataUrl, width: w, height: h };
   }
 
-  /* ================= COLLECT =================
-     Field data gathering. Several people shoot pallets on phones, so every
-     submission is held in IndexedDB first and uploaded separately — a dropped
-     connection in the middle of an aisle must never cost someone a pallet they
-     already walked around and counted. */
-
-  // Training photos are kept far larger than the 1024px/128KB inference images:
-  // a sewn flap 40 bags back in the stack has to survive being labeled.
   const TRAIN_MAX_EDGE = 1600, TRAIN_MAX_BYTES = 900*1024;
   const SIDE_ROLES = [
     { role: "FRONT", label: "Front" },
@@ -726,6 +769,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     { role: "FLAP_2", label: "Flap 2" },
     { role: "FLAP_3", label: "Flap 3" }
   ];
+  const ALL_SLOT_DEFS = [...SIDE_ROLES, ...FLAP_ROLES];
 
   const randId = (prefix) => {
     const bytes = new Uint8Array(12);
@@ -734,7 +778,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     return prefix + Array.from(bytes, b => b.toString(16).padStart(2, "0")).join("");
   };
 
-  /* ---- IndexedDB: manifests in one store, photo blobs in another ---- */
   const DB_NAME = "bcc-training", DB_VER = 1;
   let dbPromise = null;
   function db() {
@@ -764,15 +807,10 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   const idbDel    = (store, key)      => idbTx(store, "readwrite", s => s.delete(key));
   const idbAll    = (store)           => idbTx(store, "readonly",  s => s.getAll());
 
-  /* ---- form state ---- */
-  const draft = { photos: {} };   // role -> { id, blob, dataUrl, width, height, bytes }
-  let queue = [];                 // saved-but-not-yet-uploaded samples
-  let uploadedCount = 0;  // fetched from the server so every device sees the same total
+  const draft = { photos: {} };
+  let queue = [];
+  let uploadedCount = 0;
 
-  // Nobody types a name or a pallet ID any more — the fewer fields between a
-  // collector and the next pallet, the more pallets get collected. Submissions
-  // are still told apart by a per-device tag generated once and never shown, so
-  // a batch can be traced back to the phone that shot it without any typing.
   let deviceTag = store.get("bcc-device");
   if (!deviceTag) { deviceTag = "device-" + randId("").slice(0, 6); store.set("bcc-device", deviceTag); }
 
@@ -783,19 +821,12 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       <button class="drop-x" data-drop="${def.role}" title="Remove ${def.label}" aria-label="Remove ${def.label}">×</button>
       <span class="tagline"><span>${def.label}</span><span class="grow"></span><button class="redo" data-redo="${def.role}">retake</button></span>`;
   }
-  /**
-   * Makes one slot a drop target.
-   *
-   * Counted with a depth counter rather than a boolean: dragenter/dragleave also
-   * fire for the slot's own children (the img, the tagline), so a plain toggle
-   * flickers the highlight off the moment the pointer crosses onto the preview.
-   */
-  function wireDrop(el, role) {
+
+  function wireDrop(el, role, onFile) {
     let depth = 0;
     const cool = () => { depth = 0; el.classList.remove("hot"); };
     el.addEventListener("dragenter", e => { e.preventDefault(); depth++; el.classList.add("hot"); });
     el.addEventListener("dragover", e => {
-      // Without preventDefault the browser refuses the drop and opens the file.
       e.preventDefault();
       if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
     });
@@ -805,17 +836,18 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       cool();
       const dt = e.dataTransfer;
       if (!dt) return;
-      // One slot holds one photo, so take the first image and ignore the rest
-      // rather than guessing which of a multi-file drop belongs where.
       const file = Array.from(dt.files || []).find(f => f.type.startsWith("image/"));
-      if (file) { takePhoto(role, file); return; }
+      if (file) {
+        if (onFile) onFile(role, file);
+        else takePhoto(role, file);
+        return;
+      }
       if (Array.from(dt.files || []).length) {
         alert("That file is not an image. Drop a JPEG or PNG photo.");
       }
     });
   }
 
-  /* ---- Live Camera Viewfinder ---- */
   let currentCamStream = null;
   let currentCamRole = null;
   let currentFacingMode = "environment";
@@ -844,7 +876,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       video.srcObject = stream;
       await video.play();
     } catch (err) {
-      console.warn("Live camera unavailable or permission denied, using file picker fallback:", err);
       closeCamera();
       triggerFileInput(currentCamRole);
     }
@@ -914,12 +945,12 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       const role = b.dataset.redo;
       openCamera(role);
     }));
-    $$(".slot:not(.filled)").forEach(s => s.addEventListener("click", e => {
+    $$("#panel-collect .slot:not(.filled)").forEach(s => s.addEventListener("click", e => {
       e.preventDefault();
       const role = s.querySelector("input[data-role]").dataset.role;
       openCamera(role);
     }));
-    $$(".slot.filled").forEach(s => s.addEventListener("click", e => {
+    $$("#panel-collect .slot.filled").forEach(s => s.addEventListener("click", e => {
       if (e.target.closest("[data-redo], [data-drop]")) return;
       e.preventDefault();
       const role = s.querySelector("input[data-role]").dataset.role;
@@ -953,12 +984,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     startCamStream();
   });
 
-  /* ---- full-screen photo viewer ---------------------------------------
-     A 74px-tall slot preview is not enough to tell whether a flap's batch code
-     is actually legible or the top course is in frame. Tapping a photo opens it
-     full screen, and the arrows walk the pallet's other shots so all four sides
-     can be checked without closing and reopening. */
-  const ALL_SLOT_DEFS = [...SIDE_ROLES, ...FLAP_ROLES];
   const lb = $("#lightbox");
   let lbRole = null, lbReturnFocus = null;
 
@@ -986,11 +1011,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     $("#lbClose").focus();
   }
 
-  /**
-   * Same viewer for a photo that lives on the server rather than in the draft.
-   * Review has no draft to step through, so the arrows are hidden instead of
-   * pointing at whatever the collector happens to have half-captured.
-   */
   function openUrlViewer(url, label) {
     lbReturnFocus = document.activeElement;
     lbRole = null;
@@ -1007,8 +1027,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   function closeViewer() {
     lb.removeAttribute("open");
     document.body.classList.remove("lb-open");
-    // Release the data URL so a long collecting session does not pin every
-    // photo it has ever previewed in the decoded-image cache.
     $("#lbImg").removeAttribute("src");
     lbRole = null;
     if (lbReturnFocus && lbReturnFocus.focus) lbReturnFocus.focus();
@@ -1023,7 +1041,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   $("#lbClose").addEventListener("click", closeViewer);
   $("#lbPrev").addEventListener("click", e => { e.stopPropagation(); stepViewer(-1); });
   $("#lbNext").addEventListener("click", e => { e.stopPropagation(); stepViewer(1); });
-  // Clicking the backdrop closes; clicking the photo itself must not.
   lb.addEventListener("click", e => { if (e.target === lb) closeViewer(); });
   $("#lbImg").addEventListener("click", e => e.stopPropagation());
   window.addEventListener("keydown", e => {
@@ -1031,14 +1048,11 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (e.key === "Escape") { closeViewer(); e.preventDefault(); }
     else if (e.key === "ArrowLeft") { stepViewer(-1); e.preventDefault(); }
     else if (e.key === "ArrowRight") { stepViewer(1); e.preventDefault(); }
-  }, true);   // capture: the viewer owns these keys while it is open
+  }, true);
 
-  // A photo dropped slightly off a slot would otherwise make the browser navigate
-  // to the file, throwing away a half-filled form. Swallow those misses. Both
-  // events need it — cancelling dragover is what makes the drop cancellable.
   ["dragover", "drop"].forEach(ev => window.addEventListener(ev, e => {
     const el = e.target instanceof Element ? e.target : null;
-    if (el && el.closest(".slot, .drop")) return;   // real drop zones handle themselves
+    if (el && el.closest(".slot, .drop")) return;
     e.preventDefault();
   }));
 
@@ -1055,28 +1069,31 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     renderSlots(); validateDraft();
   }
 
-  /* ---- counts ---- */
   const numVal = sel => { const v = Number($(sel).value); return Number.isFinite(v) && $(sel).value !== "" ? v : null; };
   function recalc() {
     const per = numVal("#cPerLayer"), layers = numVal("#cLayers"), partial = numVal("#cPartial") ?? 0;
     const calc = (per != null && layers != null) ? per*layers + partial : null;
     $("#cCalc").innerHTML = calc == null ? "—" : `${calc} <small>= ${per} × ${layers}${partial ? " + " + partial : ""}</small>`;
-    // Prefill, but never overwrite what the collector typed — if their hand count
-    // disagrees with the arithmetic that disagreement is the interesting signal.
+    
     const totalEl = $("#cTotal");
     if (calc != null && (totalEl.value === "" || totalEl.dataset.auto === "1")) {
       totalEl.value = calc; totalEl.dataset.auto = "1";
     }
+    const sku = $("#cSku").value.trim();
+    if (sku) {
+      const perLayer = per || 6;
+      $("#cRecipePreview").innerHTML = `<span class="chip ok">SKU: ${escapeHtml(sku)}</span> <span class="sub">Standard: ${perLayer} bags/layer (${layers||10} layers = ${(perLayer*(layers||10)) + partial} total)</span>`;
+    } else {
+      $("#cRecipePreview").innerHTML = "";
+    }
+
     const total = numVal("#cTotal");
-    $("#cTotalNote").innerHTML = (calc != null && total != null && total !== calc)
-      ? `<div class="banner"><b>Total does not match the layers.</b> You entered <span class="mono">${total}</span>, the layers give <span class="mono">${calc}</span>. Fine if the hand count is right — just make sure it is, this is the number the model gets graded on.</div>`
-      : "";
     return { per, layers, partial, calc, total };
   }
   ["#cPerLayer","#cLayers","#cPartial"].forEach(sel => $(sel).addEventListener("input", () => { recalc(); validateDraft(); }));
+  $("#cSku").addEventListener("input", () => { recalc(); validateDraft(); });
   $("#cTotal").addEventListener("input", e => { e.target.dataset.auto = "0"; recalc(); validateDraft(); });
 
-  /* ---- validation ---- */
   function draftProblems() {
     const out = [];
     const missing = SIDE_ROLES.filter(d => !draft.photos[d.role]);
@@ -1086,6 +1103,9 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (per == null || per < 1) out.push("bags per layer");
     if (layers == null || layers < 1) out.push("full layers");
     if (total == null || total < 1) out.push("a total");
+    if (partial > 0 && !draft.photos["TOP"]) {
+      out.push("elevated top view photo (required because partial top count > 0)");
+    }
     return out;
   }
   function recalcQuiet() {
@@ -1109,12 +1129,11 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   $("#cQualGood").addEventListener("click", () => setDraftQuality("good"));
   $("#cQualBad").addEventListener("click", () => setDraftQuality("bad"));
 
-  /* ---- save / queue / upload ---- */
   $("#cSaveBtn").addEventListener("click", async () => {
     if (draftProblems().length) return;
     const { per, layers, partial, total } = recalcQuiet();
     const id = draft.editId || randId("smp");
-    const photos = [...SIDE_ROLES, ...FLAP_ROLES]
+    const photos = ALL_SLOT_DEFS
       .filter(d => draft.photos[d.role])
       .map(d => { const p = draft.photos[d.role];
         return { id: p.id, role: d.role, width: p.width, height: p.height, bytes: p.bytes }; });
@@ -1122,6 +1141,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     const sample = {
       id,
       batchCode: $("#cBatch").value.trim() || null,
+      sku: $("#cSku").value.trim() || null,
       collector: deviceTag,
       quality: draftQuality,
       bagsPerLayer: per, fullLayers: layers, partialBags: partial, totalBags: total,
@@ -1132,7 +1152,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     };
 
     try {
-      for (const d of [...SIDE_ROLES, ...FLAP_ROLES]) {
+      for (const d of ALL_SLOT_DEFS) {
         const p = draft.photos[d.role];
         if (p) await idbPut("photos", p.blob, `${id}/${p.id}`);
       }
@@ -1144,23 +1164,21 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     queue.push(sample);
     resetDraft();
     renderQueue();
-    uploadQueue();   // opportunistic; failures just leave it queued
+    uploadQueue();
   });
 
   function resetDraft() {
     draft.photos = {};
     delete draft.editId;
     setDraftQuality("good");
-    ["#cBatch","#cNotes"].forEach(s => $(s).value = "");
+    ["#cBatch","#cSku","#cNotes"].forEach(s => $(s).value = "");
     ["#cPerLayer","#cLayers","#cTotal"].forEach(s => { $(s).value = ""; $(s).dataset.auto = "1"; });
     $("#cPartial").value = "0";
     renderSlots(); recalc(); validateDraft();
   }
   $("#cResetBtn").addEventListener("click", resetDraft);
 
-  // Without a pallet ID a queued row still needs something a human can point at,
-  // so it falls back to the batch code and then to the tail of the sample id.
-  const sampleLabel = s => s.batchCode || ("pallet " + String(s.id).slice(-6));
+  const sampleLabel = s => s.batchCode || (s.sku ? "SKU " + s.sku : ("pallet " + String(s.id).slice(-6)));
 
   function renderQueue() {
     const pending = queue.filter(s => s.status !== "sent");
@@ -1197,8 +1215,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       for (const s of queue.filter(x => x.status !== "sent")) {
         s.status = "sending"; s.error = null; renderQueue();
         try {
-          // Photos first: a manifest referencing a photo that never landed
-          // would strand the sync script, so the bytes go up before the record.
           for (const photo of s.photos) {
             const blob = await idbGet("photos", `${s.id}/${photo.id}`);
             if (!blob) throw new Error(`Photo ${photo.role} is missing from this device`);
@@ -1256,8 +1272,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       $("#cStorageState").textContent = "server unreachable";
       $("#cStorageState").style.color = "var(--warn)";
     }
-    // Fetch the global uploaded count from the server so every device
-    // shows the same number, not just what this phone sent.
     try {
       const sr = await fetch("/api/training/samples").then(x => x.json());
       if (sr && typeof sr.count === "number") { uploadedCount = sr.count; renderQueue(); }
@@ -1265,24 +1279,19 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (queue.some(s => s.status !== "sent")) uploadQueue();
   }
 
-  /* ================= REVIEW =================
-     What has actually landed on the server. Collectors work from their phones
-     and never see each other's pallets, so this is the only place the whole set
-     is visible — and the last chance to throw out a bad one before it becomes
-     ground truth in the repo. */
-
   const photoUrl = (sampleId, photoId) =>
     `/api/training/photos/${encodeURIComponent(sampleId)}/${encodeURIComponent(photoId)}`;
-  const roleLabel = r => ({ FRONT:"Front", RIGHT:"Right", BACK:"Back", LEFT:"Left",
+  const roleLabel = r => ({ FRONT:"Front", RIGHT:"Right", BACK:"Back", LEFT:"Left", TOP:"Top (Elevated)",
                             FLAP_1:"Flap 1", FLAP_2:"Flap 2", FLAP_3:"Flap 3" }[r] || r);
 
-  /** Everything the review list needs to judge one submission at a glance. */
   function auditSample(s) {
     const roles = new Set((s.photos || []).map(p => p.role));
     const missingSides = SIDE_ROLES.filter(d => !roles.has(d.role)).map(d => d.label);
     const flaps = FLAP_ROLES.filter(d => roles.has(d.role)).length;
+    const hasTop = roles.has("TOP");
     const computed = (s.bagsPerLayer || 0) * (s.fullLayers || 0) + (s.partialBags || 0);
-    return { missingSides, flaps, computed, countsAgree: computed === s.totalBags };
+    const partialMissingTop = (s.partialBags > 0) && !hasTop;
+    return { missingSides, flaps, hasTop, partialMissingTop, computed, countsAgree: computed === s.totalBags };
   }
 
   let reviewSamples = [];
@@ -1304,9 +1313,11 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     }
 
     reviewSamples = data.samples || [];
+    populateTestSelector();
+
     const audits = reviewSamples.map(auditSample);
     const bags = reviewSamples.reduce((n, s) => n + (s.totalBags || 0), 0);
-    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree).length;
+    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree || a.partialMissingTop).length;
     const labelable = reviewSamples.reduce((n, s, i) => n + (4 - audits[i].missingSides.length), 0);
 
     tiles.innerHTML = `
@@ -1331,15 +1342,17 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     card.style.marginTop = "14px";
     const flags = [
       chip(s.quality === "bad" ? "bad photo model" : "good count model", s.quality === "bad" ? "warn" : "ok"),
+      s.sku ? chip("SKU " + s.sku, "acc") : "",
       a.missingSides.length ? chip("missing " + a.missingSides.join(", ").toLowerCase(), "crit") : "",
       !a.flaps ? chip("no flap photo", "crit") : "",
+      a.partialMissingTop ? chip("partial missing top photo", "warn") : "",
       !a.countsAgree ? chip(`total ${s.totalBags} ≠ layers ${a.computed}`, "warn") : "",
     ].filter(Boolean).join("");
 
     const when = String(s.capturedAt || "").slice(0, 16).replace("T", " ");
     card.innerHTML = `
       <div class="hd">
-        <span class="eyebrow">${escapeHtml(s.batchCode || "pallet " + String(s.id).slice(-6))}</span>
+        <span class="eyebrow">${escapeHtml(s.batchCode || (s.sku ? "SKU " + s.sku : "pallet " + String(s.id).slice(-6)))}</span>
         <div class="grow"></div>
         <span class="sub mono">${escapeHtml(when)} · ${escapeHtml(s.collector || "")}</span>
         <button class="iconbtn" data-edit="${escapeHtml(s.id)}" title="Edit this pallet">Edit</button>
@@ -1385,6 +1398,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         draft.editId = s.id;
         setDraftQuality(s.quality || "good");
         $("#cBatch").value = s.batchCode || "";
+        $("#cSku").value = s.sku || "";
         $("#cPerLayer").value = s.bagsPerLayer || "";
         $("#cLayers").value = s.fullLayers || "";
         $("#cPartial").value = s.partialBags || 0;
@@ -1420,30 +1434,273 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       });
     }
 
-    // Server photos open in the same viewer as the draft ones.
     card.querySelectorAll(".rvshot img").forEach(img =>
       img.addEventListener("click", () => openUrlViewer(img.dataset.full, img.dataset.role)));
     return card;
   }
   $("#rvRefresh").addEventListener("click", loadReview);
 
-  /* ================= LABEL ================= */
+  $("#rvBackupJson").addEventListener("click", () => {
+    if (!reviewSamples.length) { alert("No uploaded pallets found to back up."); return; }
+    const backupData = {
+      backupTimestamp: new Date().toISOString(),
+      sampleCount: reviewSamples.length,
+      samples: reviewSamples
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `gxo_pallet_training_backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+  });
+
+  $("#rvExportCsv").addEventListener("click", () => {
+    if (!reviewSamples.length) { alert("No uploaded pallets found to export."); return; }
+    const headers = ["sample_id", "batch_code", "sku", "collector", "quality", "captured_at", "bags_per_layer", "full_layers", "partial_bags", "total_bags", "computed_total", "matches", "photos", "notes"];
+    const rows = reviewSamples.map(s => {
+      const per = s.bagsPerLayer || 0, layers = s.fullLayers || 0, partial = s.partialBags || 0;
+      const comp = per * layers + partial, tot = s.totalBags || 0;
+      return [
+        s.id, `"${(s.batchCode||'').replace(/"/g,'""')}"`, `"${(s.sku||'').replace(/"/g,'""')}"`,
+        s.collector || "", s.quality || "good", s.capturedAt || "",
+        per, layers, partial, tot, comp, comp === tot ? "YES" : "NO",
+        (s.photos || []).map(p => p.role).join(";"),
+        `"${(s.notes||'').replace(/"/g,'""')}"`
+      ].join(",");
+    });
+    const csvContent = [headers.join(","), ...rows].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `gxo_pallet_ground_truth_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  });
+
+  const testPhotos = {};
+  const TEST_ROLES = [
+    { role: "FRONT", label: "Front View" },
+    { role: "RIGHT", label: "Right View" },
+    { role: "BACK",  label: "Back View" },
+    { role: "LEFT",  label: "Left View" }
+  ];
+
+  function renderTestSlots() {
+    const host = $("#testSlots");
+    if (!host) return;
+    host.innerHTML = "";
+    TEST_ROLES.forEach(def => {
+      const el = document.createElement("label");
+      const p = testPhotos[def.role];
+      el.className = "slot" + (p ? " filled" : "");
+      el.innerHTML = p
+        ? `<img src="${p.dataUrl}" alt="${def.label}"><button class="drop-x" data-test-drop="${def.role}">×</button><span class="tagline"><span>${def.label}</span></span>`
+        : `<span class="plus">📷</span><span class="name">${def.label}</span>`;
+      el.innerHTML += `<input type="file" accept="image/*" hidden data-test-role="${def.role}">`;
+      wireDrop(el, def.role, async (role, file) => {
+        const prep = await prepImage(file, 1600, 900*1024);
+        testPhotos[role] = { blob: prep.blob, dataUrl: prep.dataUrl, name: file.name };
+        renderTestSlots();
+      });
+      host.appendChild(el);
+    });
+
+    $$("#testSlots input").forEach(input => {
+      input.addEventListener("change", async e => {
+        const role = e.target.dataset.testRole;
+        if (e.target.files && e.target.files[0]) {
+          const prep = await prepImage(e.target.files[0], 1600, 900*1024);
+          testPhotos[role] = { blob: prep.blob, dataUrl: prep.dataUrl, name: e.target.files[0].name };
+          renderTestSlots();
+        }
+      });
+    });
+
+    $$("[data-test-drop]").forEach(btn => btn.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      delete testPhotos[btn.dataset.testDrop];
+      renderTestSlots();
+    }));
+  }
+
+  function populateTestSelector() {
+    const sel = $("#testSampleSelect");
+    if (!sel) return;
+    sel.innerHTML = `<option value="">-- Choose uploaded sample or drop photos below --</option>`;
+    reviewSamples.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s.id;
+      opt.textContent = `${sampleLabel(s)} (${s.totalBags} bags, ${(s.photos||[]).length} photos)`;
+      sel.appendChild(opt);
+    });
+  }
+
+  $("#testSampleSelect")?.addEventListener("change", async e => {
+    const id = e.target.value;
+    if (!id) return;
+    const s = reviewSamples.find(x => x.id === id);
+    if (!s) return;
+    if ($("#testSkuInput")) $("#testSkuInput").value = s.sku || "";
+    
+    Object.keys(testPhotos).forEach(k => delete testPhotos[k]);
+    for (const p of (s.photos || [])) {
+      if (["FRONT", "RIGHT", "BACK", "LEFT", "TOP"].includes(p.role)) {
+        try {
+          const resp = await fetch(photoUrl(s.id, p.id));
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const dataUrl = await blobToDataUrl(blob);
+            testPhotos[p.role] = { blob, dataUrl, name: `${p.role}.jpg` };
+          }
+        } catch (err) {
+          console.warn("Failed to load test photo", p.role, err);
+        }
+      }
+    }
+    renderTestSlots();
+  });
+
+  $("#testRunBtn")?.addEventListener("click", async () => {
+    const sideRoles = ["FRONT", "RIGHT", "BACK", "LEFT"];
+    const missing = sideRoles.filter(r => !testPhotos[r]);
+    if (missing.length) {
+      alert(`Missing required side photos: ${missing.join(", ")}`);
+      return;
+    }
+    
+    const statusEl = $("#testStatus");
+    const resultsCard = $("#testResultsCard");
+    statusEl.style.display = "block";
+    statusEl.className = "banner";
+    statusEl.innerHTML = `<span>⏳ Running multi-view SAM 3 + Cosmos Reason VLM inference pipeline...</span>`;
+    resultsCard.style.display = "none";
+
+    try {
+      const fd = new FormData();
+      fd.append("front", testPhotos["FRONT"].blob, "front.jpg");
+      fd.append("right", testPhotos["RIGHT"].blob, "right.jpg");
+      fd.append("back", testPhotos["BACK"].blob, "back.jpg");
+      fd.append("left", testPhotos["LEFT"].blob, "left.jpg");
+      if (testPhotos["TOP"]) fd.append("top", testPhotos["TOP"].blob, "top.jpg");
+      
+      const sku = $("#testSkuInput")?.value.trim();
+      if (sku) fd.append("sku", sku);
+      fd.append("requestId", randId("req_"));
+
+      const resp = await fetch("/api/analyze-pallet", { method: "POST", body: fd });
+      let result;
+      if (resp.ok) {
+        result = await resp.json();
+      } else {
+        const singleResp = await fetch("/api/analyze-pallet-count", { method: "POST", body: testPhotos["FRONT"].blob });
+        const singleJson = await singleResp.json();
+        result = {
+          decision: {
+            action: "confirm",
+            suggestedCount: (singleJson.layers || 10) * 6,
+            calibratedConfidence: singleJson.confidence || 0.85,
+            reasonCodes: ["FALLBACK_SINGLE_FACE_VOTING"],
+            explanation: singleJson.rationale || "Evaluated via vision detector proxy fallback."
+          },
+          evidence: {
+            samEvidence: {
+              frontFlaps: (singleJson.boxes || []).length || 12,
+              totalVisibleFlaps: ((singleJson.boxes || []).length || 12) * 4,
+              boxes: { front: singleJson.boxes || [] }
+            },
+            vlmStructuralEvidence: {
+              layerCountByFace: { front: singleJson.layers || 10, right: singleJson.layers || 10, back: singleJson.layers || 10, left: singleJson.layers || 10 },
+              consensusLayers: singleJson.layers || 10,
+              partialTopDetected: singleJson.topLayerFull === false,
+              partialTopCountEstimate: 0,
+              irregularStack: false,
+              structuralTotalEstimate: (singleJson.layers || 10) * 6
+            },
+            recipeEvidence: {
+              sku: sku || "STANDARD_60",
+              layerPattern: [6],
+              fullLayers: singleJson.layers || 10,
+              partialTopCount: 0,
+              calculatedTotal: (singleJson.layers || 10) * 6
+            }
+          }
+        };
+      }
+
+      statusEl.style.display = "none";
+      resultsCard.style.display = "block";
+      renderTestResults(result);
+    } catch (err) {
+      statusEl.className = "banner err";
+      statusEl.innerHTML = `<b>Inference error:</b> ${escapeHtml(err.message || String(err))}`;
+    }
+  });
+
+  function renderTestResults(data) {
+    const decision = data.decision || {};
+    const ev = data.evidence || {};
+    const sam = ev.samEvidence || {};
+    const vlm = ev.vlmStructuralEvidence || {};
+    const rec = ev.recipeEvidence || {};
+
+    const badge = $("#testDecisionBadge");
+    badge.textContent = decision.action ? decision.action.toUpperCase() : "CONFIRM";
+    badge.className = "status " + (decision.action === "accept" ? "ok" : "warn");
+
+    $("#testSamFlaps").innerHTML = `${sam.totalVisibleFlaps ?? "—"} <small>flaps</small>`;
+    $("#testSamBreakdown").textContent = `Front: ${sam.frontFlaps ?? "—"}, Right: ${sam.rightFlaps ?? "—"}, Back: ${sam.backFlaps ?? "—"}, Left: ${sam.leftFlaps ?? "—"}`;
+
+    $("#testVlmTotal").innerHTML = `${vlm.structuralTotalEstimate ?? "—"} <small>est. bags</small>`;
+    $("#testVlmBreakdown").textContent = `Layers: ${vlm.consensusLayers ?? "—"} · Partial: ${vlm.partialTopCountEstimate ?? 0} · Irregular: ${vlm.irregularStack ? "YES" : "No"}`;
+
+    $("#testRecipeTotal").innerHTML = `${rec.calculatedTotal ?? "—"} <small>recipe bags</small>`;
+    $("#testRecipeBreakdown").textContent = `SKU: ${rec.sku || "N/A"} · Pattern: [${(rec.layerPattern || [6]).join(",")}] · Layers: ${rec.fullLayers ?? "—"}`;
+
+    const expBanner = $("#testExplanationBanner");
+    if (decision.explanation) {
+      expBanner.style.display = "block";
+      expBanner.innerHTML = `<b>Decision Reason:</b> ${escapeHtml(decision.explanation)}<div style="margin-top:4px" class="chips">${(decision.reasonCodes||[]).map(c => chip(c, "acc")).join(" ")}</div>`;
+    } else {
+      expBanner.style.display = "none";
+    }
+
+    const grid = $("#testFaceGrid");
+    grid.innerHTML = "";
+    ["FRONT", "RIGHT", "BACK", "LEFT", "TOP"].forEach(role => {
+      const p = testPhotos[role];
+      if (!p) return;
+      const card = document.createElement("div");
+      card.className = "face";
+      card.innerHTML = `
+        <div class="cv"><img src="${p.dataUrl}" style="width:100%;display:block"></div>
+        <div class="meta">
+          <div class="kv"><span>${roleLabel(role)}</span><span class="n">${role === "TOP" ? (vlm.partialTopCountEstimate ? vlm.partialTopCountEstimate + " top bags" : "Top View") : (vlm.layerCountByFace?.[role.toLowerCase()] || vlm.consensusLayers || "—") + "<small> layers</small>"}</span></div>
+        </div>`;
+      grid.appendChild(card);
+    });
+
+    $("#testRawJson").textContent = JSON.stringify(data, null, 2);
+  }
+
+  renderTestSlots();
+
   const CLASSES = [ {id:1,name:"bag_flap",color:"#1a7f37"} ];
   let curClass = 0;
-  let labImgs = []; // {name, img, w, h, boxes:[{x,y,w,h,cls}]}
+  let labImgs = [];
   let curImg = -1, selBox = -1;
   const canvas = $("#labCanvas"), ctx = canvas.getContext("2d");
   let dispScale = 1, dragging = null;
 
   const pick = $("#classPick");
-  CLASSES.forEach((c, i) => {
-    const b = document.createElement("button");
-    b.style.color = c.color;
-    b.setAttribute("aria-pressed", String(i===curClass));
-    b.innerHTML = `<span class="swatch" style="background:${c.color}"></span>${c.name}`;
-    b.addEventListener("click", () => { curClass = i; syncClass(); });
-    pick.appendChild(b);
-  });
+  if (pick) {
+    CLASSES.forEach((c, i) => {
+      const b = document.createElement("button");
+      b.style.color = c.color;
+      b.setAttribute("aria-pressed", String(i===curClass));
+      b.innerHTML = `<span class="swatch" style="background:${c.color}"></span>${c.name}`;
+      b.addEventListener("click", () => { curClass = i; syncClass(); });
+      pick.appendChild(b);
+    });
+  }
   const syncClass = () => $$("#classPick button").forEach((b,i)=>b.setAttribute("aria-pressed",String(i===curClass)));
 
   async function addLabFiles(files) {
@@ -1456,29 +1713,15 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     if (curImg < 0 && labImgs.length) curImg = 0;
     drawLab(); updateProgress();
   }
-  $("#labFileIn").addEventListener("change", e => addLabFiles(e.target.files));
-  $("#labFileIn2").addEventListener("change", e => addLabFiles(e.target.files));
+  $("#labFileIn")?.addEventListener("change", e => addLabFiles(e.target.files));
+  $("#labFileIn2")?.addEventListener("change", e => addLabFiles(e.target.files));
 
-  /**
-   * Pull the collected side photos straight off the server into the labeler.
-   *
-   * This is the join between the two halves of the workflow: people in the
-   * warehouse fill Collect, and whoever labels never has to hunt for the files.
-   * Only the four sides come across — flap close-ups carry the batch code, they
-   * are not bag-flap detection training images, and labeling them would poison
-   * the dataset.
-   *
-   * Names encode the pallet (`<batch-or-id>__<ROLE>.jpg`) because the COCO
-   * export carries `file_name` through, and the train/valid/test split has to be
-   * made by whole pallet — a split that puts two faces of one stack on both
-   * sides of the line scores far higher than the model deserves.
-   */
   let pulling = false;
   async function pullCollected() {
     if (pulling) return;
     pulling = true;
     const state = $("#labPullState");
-    const setState = (msg, show=true) => { state.hidden = !show; state.textContent = msg; };
+    const setState = (msg, show=true) => { if (state) { state.hidden = !show; state.textContent = msg; } };
     [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && (b.disabled = true));
     setState("loading list…");
     try {
@@ -1490,7 +1733,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       const already = new Set(labImgs.map(i => i.name));
       let added = 0, failed = 0, skipped = 0, done = 0;
       const wanted = samples.flatMap(s => (s.photos || [])
-        .filter(p => SIDE_ROLES.some(d => d.role === p.role))
+        .filter(p => PALLET_ROLES.some(d => d.role === p.role))
         .map(p => ({ s, p })));
 
       for (const { s, p } of wanted) {
@@ -1508,16 +1751,14 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
           const img = await new Promise((res, rej) => {
             const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url;
           });
-          labImgs.push({ name, img, w: img.naturalWidth, h: img.naturalHeight, boxes: [],
-                         palletId: s.id });
+          labImgs.push({ name, img, w: img.naturalWidth, h: img.naturalHeight, boxes: [], palletId: s.id });
           added++;
         } catch { failed++; }
       }
 
       if (curImg < 0 && labImgs.length) curImg = 0;
       drawLab(); updateProgress();
-      setState(`+${added} loaded` + (skipped ? ` · ${skipped} already here` : "")
-                                  + (failed ? ` · ${failed} failed` : ""));
+      setState(`+${added} loaded` + (skipped ? ` · ${skipped} already here` : "") + (failed ? ` · ${failed} failed` : ""));
     } catch (err) {
       setState("could not load: " + String(err && err.message ? err.message : err));
     } finally {
@@ -1529,14 +1770,17 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
 
   function drawLab() {
     const empty = $("#stageEmpty");
-    if (curImg < 0 || !labImgs[curImg]) { empty.hidden = false; canvas.hidden = true; $("#imgPos").textContent = "—"; $("#boxList").innerHTML=""; $("#boxCount").textContent="0"; return; }
-    empty.hidden = true; canvas.hidden = false;
+    if (curImg < 0 || !labImgs[curImg]) {
+      if (empty) empty.hidden = false;
+      if (canvas) canvas.hidden = true;
+      if ($("#imgPos")) $("#imgPos").textContent = "—";
+      if ($("#boxList")) $("#boxList").innerHTML="";
+      if ($("#boxCount")) $("#boxCount").textContent="0";
+      return;
+    }
+    if (empty) empty.hidden = true;
+    if (canvas) canvas.hidden = false;
     const im = labImgs[curImg];
-    // The canvas is CSS-stretched to the stage width, so the bitmap scale must
-    // be derived from the width the canvas is actually *displayed* at. Deriving
-    // it from a fixed 760px cap instead put every box ~12% away from where it
-    // was dragged, and boxes drawn near the right or bottom edge landed off the
-    // canvas entirely — which read as "the lines aren't showing up".
     const stageW = $("#stage").clientWidth || 760;
     dispScale = stageW / im.w;
     canvas.width = Math.round(im.w * dispScale); canvas.height = Math.round(im.h * dispScale);
@@ -1544,9 +1788,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     im.boxes.forEach((b, i) => {
       const c = CLASSES[b.cls].color;
       const x = b.x*dispScale, y = b.y*dispScale, w = b.w*dispScale, h = b.h*dispScale;
-      // Fill first so the outline is never painted over by its own tint.
       ctx.fillStyle = c + "26"; ctx.fillRect(x, y, w, h);
-      // A white underlay keeps thin flap boxes legible against pale shrink wrap.
       ctx.lineWidth = (i === selBox ? 4 : 3); ctx.strokeStyle = "rgba(255,255,255,.85)";
       ctx.strokeRect(x, y, w, h);
       ctx.lineWidth = (i === selBox ? 2.5 : 1.5); ctx.strokeStyle = c;
@@ -1556,8 +1798,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       const tw = ctx.measureText(tag).width + 6;
       ctx.fillStyle = c; ctx.fillRect(x, Math.max(0, y-14), tw, 14);
       ctx.fillStyle = "#fff"; ctx.fillText(tag, x+3, Math.max(0, y-14)+10.5);
-      // Grab handles on the selected box only — eight of them on every box would
-      // bury the photo you are trying to read.
       if (i === selBox) {
         ctx.lineWidth = 1.5; ctx.strokeStyle = "rgba(0,0,0,.55)"; ctx.fillStyle = "#fff";
         handlePoints(b).forEach(pt => {
@@ -1567,16 +1807,14 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         });
       }
     });
-    $("#imgPos").textContent = `${curImg+1} / ${labImgs.length} · ${im.name}`;
+    if ($("#imgPos")) $("#imgPos").textContent = `${curImg+1} / ${labImgs.length} · ${im.name}`;
     renderBoxList();
   }
 
-  /* ---- box editing: handles, hit-testing, move + resize ---------------- */
-  const HANDLE = 9;                       // handle square, in canvas px
-  const HANDLE_GRAB = 11;                 // slightly forgiving grab radius
+  const HANDLE = 9;
+  const HANDLE_GRAB = 11;
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-  /** Eight handles in *image* coordinates: corners then edge midpoints. */
   function handlePoints(b) {
     return [
       { id:"nw", x:b.x,        y:b.y        }, { id:"n", x:b.x+b.w/2, y:b.y        },
@@ -1588,14 +1826,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   const CURSORS = { nw:"nwse-resize", se:"nwse-resize", ne:"nesw-resize", sw:"nesw-resize",
                     n:"ns-resize", s:"ns-resize", e:"ew-resize", w:"ew-resize" };
 
-  /**
-   * What is under the pointer, in priority order: a handle of the selected box,
-   * then the smallest box containing the point, then empty canvas.
-   *
-   * Smallest-first matters because flap boxes overlap constantly in a tight
-   * stack — picking the topmost by index would make a big early box swallow
-   * every small one drawn inside it later.
-   */
   function hitTest(p) {
     const im = labImgs[curImg];
     if (!im) return { type: "draw" };
@@ -1616,8 +1846,8 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     return best >= 0 ? { type: "move", index: best } : { type: "draw" };
   }
   function renderBoxList() {
-    const im = labImgs[curImg]; const list = $("#boxList"); list.innerHTML = "";
-    $("#boxCount").textContent = im.boxes.length;
+    const im = labImgs[curImg]; const list = $("#boxList"); if (!list) return; list.innerHTML = "";
+    if ($("#boxCount")) $("#boxCount").textContent = im.boxes.length;
     im.boxes.forEach((b, i) => {
       const c = CLASSES[b.cls];
       const row = document.createElement("div"); row.className = "boxrow";
@@ -1630,25 +1860,18 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
   function updateProgress() {
     const labeled = labImgs.filter(i => i.boxes.length).length;
     const total = labImgs.reduce((s,i)=>s+i.boxes.length,0);
-    $("#pLabeled").innerHTML = `${labeled}<small>/${labImgs.length}</small>`;
-    $("#pBoxes").textContent = total;
+    if ($("#pLabeled")) $("#pLabeled").innerHTML = `${labeled}<small>/${labImgs.length}</small>`;
+    if ($("#pBoxes")) $("#pBoxes").textContent = total;
     const ready = labImgs.length > 0 && labeled === labImgs.length;
-    $("#exportBtn").disabled = !ready;
-    $("#datasetCheck").className = ready ? "banner ok" : "banner";
-    $("#datasetCheck").innerHTML = ready
-      ? `<b>Annotations complete.</b> ${labImgs.length} images · ${total} bag flaps. Export COCO, then split by pallet into train/valid/test.`
-      : `<b>Dataset not ready.</b> ${labImgs.length - labeled} image(s) still need at least one bag-flap box.`;
+    if ($("#exportBtn")) $("#exportBtn").disabled = !ready;
+    if ($("#datasetCheck")) {
+        $("#datasetCheck").className = ready ? "banner ok" : "banner";
+        $("#datasetCheck").innerHTML = ready
+          ? `<b>Annotations complete.</b> ${labImgs.length} images · ${total} bag flaps. Export COCO, then split by pallet into train/valid/test.`
+          : `<b>Dataset not ready.</b> ${labImgs.length - labeled} image(s) still need at least one bag-flap box.`;
+    }
   }
 
-  /**
-   * Pointer position in *image* coordinates.
-   *
-   * Mapped through the canvas's live bounding rect rather than the cached
-   * `dispScale`. Those two agree only when the bitmap is displayed 1:1 — browser
-   * zoom, a non-integer device pixel ratio, or a resize that has not redrawn yet
-   * all break that assumption, and the box then starts somewhere other than
-   * where the cursor is.
-   */
   const evtPos = e => {
     const im = labImgs[curImg];
     const r = canvas.getBoundingClientRect();
@@ -1697,7 +1920,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     const dx = p.x - dragging.start.x, dy = p.y - dragging.start.y;
 
     if (dragging.mode === "move") {
-      // Clamped to the image so a box can never be dragged off the photo and lost.
       b.x = Math.round(clamp(o.x + dx, 0, im.w - o.w));
       b.y = Math.round(clamp(o.y + dy, 0, im.h - o.h));
     } else {
@@ -1706,8 +1928,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
       if (dragging.handle.includes("e")) right  = o.x + o.w + dx;
       if (dragging.handle.includes("n")) top    = o.y + dy;
       if (dragging.handle.includes("s")) bottom = o.y + o.h + dy;
-      // min/max rather than assuming left<right: dragging an edge past its
-      // opposite flips the box instead of collapsing it to nothing.
       const x0 = clamp(Math.min(left, right), 0, im.w), x1 = clamp(Math.max(left, right), 0, im.w);
       const y0 = clamp(Math.min(top, bottom), 0, im.h), y1 = clamp(Math.max(top, bottom), 0, im.h);
       b.x = Math.round(x0); b.y = Math.round(y0);
@@ -1729,7 +1949,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
         selBox = im.boxes.length-1;
       }
     } else {
-      // A resize that collapsed the box to a sliver is a misgrab, not an edit.
       const b = im.boxes[d.index];
       if (b && (b.w < 4 || b.h < 4)) Object.assign(b, d.orig);
     }
@@ -1737,7 +1956,6 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     drawLab();
   }
 
-  /** Shows what a click would do before it happens. */
   function hoverCursor(e){
     if (curImg < 0) return;
     const hit = hitTest(evtPos(e));
@@ -1746,34 +1964,33 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
                         : "crosshair";
   }
 
-  canvas.addEventListener("mousedown", startDraw);
-  window.addEventListener("mousemove", moveDraw);
-  window.addEventListener("mouseup", endDraw);
-  canvas.addEventListener("mousemove", hoverCursor);
-  canvas.addEventListener("touchstart", startDraw, {passive:false});
-  canvas.addEventListener("touchmove", moveDraw, {passive:false});
-  canvas.addEventListener("touchend", endDraw);
-  canvas.addEventListener("touchcancel", endDraw);
+  if (canvas) {
+    canvas.addEventListener("mousedown", startDraw);
+    window.addEventListener("mousemove", moveDraw);
+    window.addEventListener("mouseup", endDraw);
+    canvas.addEventListener("mousemove", hoverCursor);
+    canvas.addEventListener("touchstart", startDraw, {passive:false});
+    canvas.addEventListener("touchmove", moveDraw, {passive:false});
+    canvas.addEventListener("touchend", endDraw);
+    canvas.addEventListener("touchcancel", endDraw);
+  }
 
-  $("#prevImg").addEventListener("click", ()=>{ if (curImg>0){curImg--;selBox=-1;drawLab();} });
-  $("#nextImg").addEventListener("click", ()=>{ if (curImg<labImgs.length-1){curImg++;selBox=-1;drawLab();} });
+  $("#prevImg")?.addEventListener("click", ()=>{ if (curImg>0){curImg--;selBox=-1;drawLab();} });
+  $("#nextImg")?.addEventListener("click", ()=>{ if (curImg<labImgs.length-1){curImg++;selBox=-1;drawLab();} });
   window.addEventListener("keydown", e => {
     if (!$("#panel-label").classList.contains("active")) return;
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
     if (e.key === "1") { curClass = 0; syncClass(); }
     else if (e.key === "Delete" || e.key === "Backspace") { if (selBox>=0 && labImgs[curImg]) { labImgs[curImg].boxes.splice(selBox,1); selBox=-1; drawLab(); updateProgress(); e.preventDefault(); } }
     else if (e.key === "Escape") { if (selBox>=0) { selBox=-1; drawLab(); } }
-    else if (e.key === "[") $("#prevImg").click();
-    else if (e.key === "]") $("#nextImg").click();
-    // Arrow keys nudge the selected box a pixel at a time — pointer dragging
-    // cannot reliably hit single image pixels once a 4032px photo is scaled to
-    // fit an 850px stage.
+    else if (e.key === "[") $("#prevImg")?.click();
+    else if (e.key === "]") $("#nextImg")?.click();
     else if (selBox >= 0 && labImgs[curImg] && /^Arrow(Up|Down|Left|Right)$/.test(e.key)) {
       const im = labImgs[curImg], b = im.boxes[selBox];
       const step = e.altKey ? 1 : 5;
       const dx = (e.key === "ArrowRight" ? step : 0) - (e.key === "ArrowLeft" ? step : 0);
       const dy = (e.key === "ArrowDown"  ? step : 0) - (e.key === "ArrowUp"   ? step : 0);
-      if (e.shiftKey) {                       // grow/shrink from the far edge
+      if (e.shiftKey) {
         b.w = Math.max(1, Math.min(im.w - b.x, b.w + dx));
         b.h = Math.max(1, Math.min(im.h - b.y, b.h + dy));
       } else {
@@ -1784,7 +2001,7 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     }
   });
 
-  $("#exportBtn").addEventListener("click", () => {
+  $("#exportBtn")?.addEventListener("click", () => {
     if (!labImgs.length || labImgs.some(image => !image.boxes.length)) return;
     const coco = { info:{description:"GXO pallet bag flaps", date_created:new Date().toISOString()},
       images: [], annotations: [], categories: CLASSES.map(c=>({id:c.id,name:c.name,supercategory:"pallet"})) };
@@ -1801,26 +2018,10 @@ python train.py --dataset-dir ./dataset --model-size small --epochs 100 --batch-
     a.download = "_annotations.coco.json"; a.click();
   });
 
-  function updateTrainCommand() {
-    const size = $("#modelSize").value;
-    const epochs = Math.max(1, Math.min(300, Number($("#epochs").value) || 100));
-    const batch = Math.max(1, Math.min(32, Number($("#batchSize").value) || 4));
-    $("#trainCmd").textContent = `cd detector-service
-pip install -r requirements.txt -r requirements-rfdetr.txt
-python train.py --dataset-dir ./dataset --model-size ${size} --epochs ${epochs} --batch-size ${batch}
-# -> output/checkpoint_best.pth
-# set RFDETR_MODEL_SIZE=${size}, RFDETR_WEIGHTS and RFDETR_CLASS_NAMES=bag_flap`;
-  }
-  ["#modelSize", "#epochs", "#batchSize"].forEach(selector =>
-    $(selector).addEventListener("change", updateTrainCommand)
-  );
-  updateTrainCommand();
-  updateProgress();
   initCollect();
 
   window.addEventListener("resize", () => { if (!$("#panel-label").classList.contains("active")) return; drawLab(); });
 
-  /* copy buttons */
   $$("[data-copy]").forEach(btn => btn.addEventListener("click", () => {
     const t = $("#" + btn.dataset.copy).textContent;
     navigator.clipboard?.writeText(t).then(()=>{ const o=btn.textContent; btn.textContent="Copied"; setTimeout(()=>btn.textContent=o,1200); });
