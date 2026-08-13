@@ -2,6 +2,29 @@
 
 A React-based single-page application built with Vite and TypeScript for capturing and verifying inspection, returns, and shipment data at GXO facilities.
 
+---
+
+## 🎯 Bag Counting Vision System (SAM 3 + NVIDIA Cosmos Reason)
+
+> **Current Phase**: **Phase 0 (Feasibility Spike Scripts Ready — VPS Benchmarking Next)**  
+> **Architecture Plan & Roadmap**: See [**BAG_COUNT_PLAN.md**](BAG_COUNT_PLAN.md) for full architectural design, phase status, and live progress.  
+> **Target VPS**: vast.ai (2× NVIDIA RTX 4090 24GB GPUs)  
+> **Model Stack**: Meta SAM 3 (Zero-shot Bag Flap Segmentation) + NVIDIA Cosmos Reason (`cosmos-reason2-8b` Physical Multi-View Reasoning).
+
+### Active Progress & Phase Status
+
+- **Phase 0: Feasibility Spikes & Console Modernization** (`IN PROGRESS`):
+  - ✔️ **Data Protection & Backup**: [`detector-service/backup_training_data.py`](detector-service/backup_training_data.py) & Browser JSON/CSV 1-click export in Console.
+  - ✔️ **Console Upgrades**: [`public/bag-count-console.html`](public/bag-count-console.html) with Test/VLM inspection tab, SKU stacking recipe calculator, and 4-side capture protocol.
+  - ✔️ **Feasibility Benchmark Harnesses**: [`detector-service/spike/`](detector-service/spike/) (`test_cosmos_reason_multiview.py`, `test_sam3_seedbags.py`, `test_target_isolation.py`).
+  - ⏳ **Next**: Spin up vast.ai 2× RTX 4090 instance and execute Phase 0 spike tests.
+- **Phase 1: Backend Purge & vast.ai Containerization** (`PENDING PHASE 0 RUN`)
+- **Phase 2: Core Two-Model Service Implementation** (`PENDING`)
+- **Phase 3: Inspection UI Integration & Discrepancy UI** (`PENDING`)
+- **Phase 4: Calibration, Shadow Mode & Validation** (`PENDING`)
+
+---
+
 ## Features
 - **Load Inspections**: Scan and document outgoing loads with detailed pallet-by-pallet photographic evidence.
 - **Returns Workflow**: Process incoming returns, verifying expected quantities against BOL data and photographing pallet condition.
