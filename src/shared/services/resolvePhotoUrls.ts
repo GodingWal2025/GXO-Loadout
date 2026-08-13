@@ -46,10 +46,13 @@ export async function resolvePhotoUrl(photo: InspectionPhoto): Promise<string | 
   // Cloud URL — works on any device once the photo has been uploaded
   if (photo.sharePointUrl) return normalizeCloudPhotoUrl(photo.sharePointUrl, photo.id);
 
-  // Last resort: the object URL from this page session (fresh capture)
-  if (photo.localBlobUrl) return photo.localBlobUrl;
+  // On other devices (or after session restart), fetch the uploaded photo from the server API endpoint.
+  if (photo.id) {
+    return `/api/photos/${encodeURIComponent(photo.id)}`;
+  }
 
-  return `/api/photos/${encodeURIComponent(photo.id)}`;
+  // Fallback to localBlobUrl only if photo.id is missing
+  return photo.localBlobUrl;
 }
 
 /**

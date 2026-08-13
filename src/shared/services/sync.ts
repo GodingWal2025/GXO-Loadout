@@ -209,11 +209,18 @@ export function syncNow(): Promise<void> {
 
 export function startSharedStorageSync(): () => void {
   void syncNow();
+  const handleVisibility = () => {
+    if (document.visibilityState === 'visible') void syncNow();
+  };
   window.addEventListener('online', syncNow);
+  window.addEventListener('focus', syncNow);
+  window.addEventListener('visibilitychange', handleVisibility);
   window.addEventListener('loadout-sync-request', syncNow);
-  timer = window.setInterval(() => void syncNow(), 15_000);
+  timer = window.setInterval(() => void syncNow(), 5_000);
   return () => {
     window.removeEventListener('online', syncNow);
+    window.removeEventListener('focus', syncNow);
+    window.removeEventListener('visibilitychange', handleVisibility);
     window.removeEventListener('loadout-sync-request', syncNow);
     if (timer) window.clearInterval(timer);
   };
