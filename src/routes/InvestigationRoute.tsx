@@ -296,8 +296,31 @@ export function InvestigationRoute() {
                     </div>
                   </div>
 
-                  {/* Expanded Detail view */}
-                  {isExpanded && (
+                  {/* Expanded Detail view — when searching by batch, only show matching items */}
+                  {isExpanded && (() => {
+                    const q = query.trim().toLowerCase();
+                    // Detect whether the match was specifically on a batch code
+                    const isBatchSearch = item.pallets?.some((p: any) =>
+                      p.batchSections?.some((b: any) => b.batchCode?.value?.toLowerCase().includes(q))
+                    );
+                    // Filter line items: only matching batch/delivery/sku when searching by batch
+                    const filteredLineItems = isBatchSearch
+                      ? (item.lineItems || []).filter((li: any) => {
+                          const del = item.deliveries?.find((d: any) => d.id === li.deliveryId);
+                          return (
+                            li.batchCode?.value?.toLowerCase().includes(q) ||
+                            del?.deliveryNumber?.toLowerCase().includes(q) ||
+                            li.sku?.value?.toLowerCase().includes(q)
+                          );
+                        })
+                      : item.lineItems || [];
+                    // Filter pallets: only those containing a matching batch section
+                    const filteredPallets = isBatchSearch
+                      ? (item.pallets || []).filter((p: any) =>
+                          p.batchSections?.some((bs: any) => bs.batchCode?.value?.toLowerCase().includes(q))
+                        )
+                      : item.pallets || [];
+                    return (
                     <div style={{ padding: '20px', background: 'var(--surface)' }}>
                       {/* Section 1: Overview */}
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
@@ -323,7 +346,8 @@ export function InvestigationRoute() {
                         </div>
                       </div>
 
-                      {/* Section 2: Tallies / Deliveries */}
+                      {/* Section 2: Tallies / Deliveries — filtered to matching items */}
+                      {filteredLineItems.length > 0 && (
                       <div style={{ marginBottom: '20px' }}>
                         <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
                           {t('investigation.deliveriesAndItems', 'Deliveries & Picklist Items')}
@@ -341,7 +365,7 @@ export function InvestigationRoute() {
                               </tr>
                             </thead>
                             <tbody>
-                              {item.lineItems?.map((li: any) => {
+                              {filteredLineItems.map((li: any) => {
                                 const del = item.deliveries?.find((d: any) => d.id === li.deliveryId);
                                 return (
                                   <tr key={li.id}>
@@ -358,14 +382,16 @@ export function InvestigationRoute() {
                           </table>
                         </div>
                       </div>
+                      )}
 
-                      {/* Section 3: Pallet details */}
+                      {/* Section 3: Pallet details — filtered to matching pallets */}
+                      {filteredPallets.length > 0 && (
                       <div style={{ marginBottom: '20px' }}>
                         <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
                           {t('investigation.scannedPallets', 'Scanned Pallets')}
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                          {item.pallets?.map((p: any) => (
+                          {filteredPallets.map((p: any) => (
                             <div 
                               key={p.id} 
                               className="card" 
@@ -441,72 +467,12 @@ export function InvestigationRoute() {
                           ))}
                         </div>
                       </div>
-
-                      {/* Section 4: Packaging used & Final Lane photos */}
-                      {item.type !== 'returns' && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <div className="xs soft" style={{ textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px' }}>
-                            {t('investigation.packagingUsed', 'Packaging Used & Final Staging Lane')}
-                          </div>
-                          <div className="card" style={{ padding: '12px', background: 'var(--surface-tint)' }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px', marginBottom: '8px' }}>
-                              <div>
-                                <span className="xs soft">{t('investigation.pallets40', '40×40 Pallets:')}</span>{' '}
-                                <strong className="small">{item.staging?.pallets40x40Used ?? 0}</strong>
-                              </div>
-                              <div>
-                                <span className="xs soft">{t('investigation.pallets48', '48×40 Pallets:')}</span>{' '}
-                                <strong className="small">{item.staging?.pallets48x40Used ?? 0}</strong>
-                              </div>
-                              <div>
-                                <span className="xs soft">{t('investigation.seedpaks', 'Seedpaks:')}</span>{' '}
-                                <strong className="small">{item.staging?.seedpaksUsed ?? 0}</strong>
-                              </div>
-                            </div>
-                            {item.staging?.otherPackagingNotes && (
-                              <div className="xs soft" style={{ borderTop: '1px solid var(--rule-soft)', paddingTop: '6px' }}>
-                                <strong>{t('investigation.notesLabel', 'Notes:')}</strong> {item.staging.otherPackagingNotes}
-                              </div>
-                            )}
-
-                            {/* Final staging lane photos */}
-                            {item.photos?.filter((ph: any) => ph.category === 'Staging_Final_Lane').length > 0 && (
-                              <div style={{ marginTop: '12px' }}>
-                                <div className="xs soft" style={{ marginBottom: '6px' }}>
-                                  {t('investigation.finalLanePhotos', 'Final Staging Lane Photos:')}
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(80px, 1fr))', gap: '8px' }}>
-                                  {item.photos
-                                    .filter((ph: any) => ph.category === 'Staging_Final_Lane')
-                                    .map((ph: any) => {
-                                      const photoSrc = photoUrls.get(ph.id) || ph.sharePointUrl || ph.localBlobUrl;
-                                      return (
-                                      <div key={ph.id}>
-                                        {photoSrc ? (
-                                          <a href={photoSrc} target="_blank" rel="noopener noreferrer">
-                                            <img
-                                              src={photoSrc}
-                                              alt={t('investigation.stagingLaneAlt', 'Staging lane')}
-                                              style={{ width: '100%', aspectRatio: '1.33', objectFit: 'cover', borderRadius: '4px', border: '1px solid var(--rule-soft)', transform: `rotate(${getPhotoRotation(ph)}deg)` }}
-                                            />
-                                          </a>
-                                        ) : (
-                                          <div style={{ width: '100%', aspectRatio: '1.33', background: 'var(--rule-soft)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', color: 'var(--ink-soft)' }}>
-                                            {t('investigation.noPhoto', 'No Photo')}
-                                          </div>
-                                        )}
-                                      </div>
-                                      );
-                                    })}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
                       )}
                     </div>
-                  )}
+                    );
+                  })()}
                 </div>
+
               );
             })}
           </div>
