@@ -61,6 +61,7 @@ export default function App() {
             <Route path="/inspection/:id" element={<InspectionWorkspaceRoute />} />
             <Route path="/inspection/:id/pallet/:palletIndex" element={<ScanPalletRoute />} />
             <Route path="/inspection/:id/review" element={<ReviewAndCompleteRoute />} />
+            <Route path="/inspection/:id/complete" element={<ReviewAndCompleteRoute />} />
             <Route path="/investigation" element={<InvestigationRoute />} />
   
             {/* Admin area - password gated, dashboard lives inside */}

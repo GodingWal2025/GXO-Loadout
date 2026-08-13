@@ -490,7 +490,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         </div>
       )}
 
-      {/* Pallet type / change & Training Quality toggle */}
+      {/* Pallet type selection */}
       <section className="section">
         <div className="field-row">
           <div className="field">
@@ -512,47 +512,6 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
                 <option key={pt} value={pt}>{palletTypeLabel(pt)}</option>
               ))}
             </select>
-          </div>
-
-          <div className="field">
-            <div className="field__label" title={t('pallet.trainingQualityTitle', 'Photo / Pallet Quality (AI Training)')}>
-              {t('pallet.trainingQualityLabel', 'AI Training Quality (Good vs Bad)')}
-            </div>
-            <div className="toggle-group" style={{ display: 'flex', gap: 6 }}>
-              <button
-                type="button"
-                className={`btn btn--sm flex-1 ${pallet.trainingQuality !== 'bad' ? 'active' : ''}`}
-                style={pallet.trainingQuality !== 'bad' ? { backgroundColor: 'var(--success)', color: '#fff' } : {}}
-                onClick={() =>
-                  dispatch({
-                    type: 'UPDATE_PALLET',
-                    index: palletIndex,
-                    patch: { trainingQuality: 'good' },
-                  })
-                }
-              >
-                ✓ {t('pallet.qualityGood', 'Good')}
-              </button>
-              <button
-                type="button"
-                className={`btn btn--sm flex-1 ${pallet.trainingQuality === 'bad' ? 'active danger' : ''}`}
-                style={pallet.trainingQuality === 'bad' ? { backgroundColor: 'var(--danger)', color: '#fff' } : {}}
-                onClick={() =>
-                  dispatch({
-                    type: 'UPDATE_PALLET',
-                    index: palletIndex,
-                    patch: { trainingQuality: 'bad' },
-                  })
-                }
-              >
-                ⚠ {t('pallet.qualityBad', 'Bad')}
-              </button>
-            </div>
-            <div className="field__hint" style={{ marginTop: 4 }}>
-              {pallet.trainingQuality === 'bad'
-                ? t('pallet.qualityBadHint', 'Used to train model on bad/blurry pictures or poor quality stacks.')
-                : t('pallet.qualityGoodHint', 'Used to train model on accurate bag counting.')}
-            </div>
           </div>
         </div>
       </section>

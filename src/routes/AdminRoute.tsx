@@ -810,28 +810,36 @@ function ArchivePanel() {
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
-  const loadData = async () => {
-    setLoading(true);
-    const data = await dbListAllInspections();
-    setAllInspections(data);
-    setLoading(false);
+  const loadData = async (showLoading = false) => {
+    if (showLoading) setLoading(true);
+    try {
+      const data = await dbListAllInspections();
+      setAllInspections(data);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    loadData();
-    const handleUpdate = () => loadData();
+    loadData(true);
+    const handleUpdate = () => loadData(false);
     window.addEventListener('loadout-data-updated', handleUpdate);
     return () => window.removeEventListener('loadout-data-updated', handleUpdate);
   }, []);
 
   const handleToggleArchive = async (inspection: any) => {
     const isCurrentlyArchived = !!inspection.archived;
+    const nextArchived = !isCurrentlyArchived;
+    setAllInspections((prev) =>
+      prev.map((item) =>
+        item.id === inspection.id ? { ...item, archived: nextArchived } : item
+      )
+    );
     await dbSaveInspection({
       ...inspection,
-      archived: !isCurrentlyArchived,
+      archived: nextArchived,
       lastEditedAt: new Date().toISOString(),
     });
-    await loadData();
   };
 
   const handleDelete = async (id: string) => {
@@ -842,8 +850,8 @@ function ArchivePanel() {
     ) {
       return;
     }
+    setAllInspections((prev) => prev.filter((item) => item.id !== id));
     await dbHardDeleteInspection(id);
-    await loadData();
   };
 
   const q = search.trim().toLowerCase();
@@ -872,7 +880,8 @@ function ArchivePanel() {
 
   const total = filtered.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const paged = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const currentPage = Math.min(page, totalPages);
+  const paged = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   return (
     <section className="section">
@@ -1005,18 +1014,18 @@ function ArchivePanel() {
                 type="button"
                 className="btn btn--sm"
                 onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page <= 1}
+                disabled={currentPage <= 1}
               >
                 {t('admin.previous', '← Previous')}
               </button>
               <span className="small soft">
-                {t('admin.pageOf', 'Page {page} of {total}', { page, total: totalPages })}
+                {t('admin.pageOf', 'Page {page} of {total}', { page: currentPage, total: totalPages })}
               </span>
               <button
                 type="button"
                 className="btn btn--sm"
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
+                disabled={currentPage >= totalPages}
               >
                 {t('admin.next', 'Next →')}
               </button>
