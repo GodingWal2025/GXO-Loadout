@@ -169,13 +169,20 @@ async function performSync(): Promise<void> {
   await migrateExistingLocalData();
   emit({ syncing: true, error: undefined, pending: (await dbListSyncQueue()).length });
   const queue = await dbListSyncQueue();
-  for (const item of queue) {
+  // Prioritize record operations (inspections, inventory, sites) over photo uploads
+  // so metadata syncs instantly across devices without getting blocked by large photo uploads.
+  const recordItems = queue.filter((item) => item.operation === 'put-record');
+  const photoItems = queue.filter((item) => item.operation === 'upload-photo');
+
+  for (const item of [...recordItems, ...photoItems]) {
     if (item.nextAttemptAt && item.nextAttemptAt > new Date().toISOString()) continue;
     try {
       await pushItem(item);
     } catch (error) {
       await dbRetrySyncQueueItem(item);
       console.warn('Shared storage sync retry scheduled', error);
+      // Photo upload failures should never block record metadata from syncing
+      if (item.operation === 'upload-photo') continue;
       // Authentication, network, and server failures affect every queued item;
       // do not hammer the endpoint once per record (especially after inventory imports).
       if (!(error instanceof SyncHttpError) || error.status === 401 || error.status >= 500) break;
