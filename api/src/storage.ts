@@ -1,6 +1,9 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { TableClient, TableEntity } from '@azure/data-tables';
 import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
+import { validateRecordSchema } from './validation';
+import { validateMediaSignature, MAX_PHOTO_SIZE_BYTES } from './middleware/mediaValidation';
+import { extractDeviceAuth, logAudit } from './middleware/auth';
 
 const legacyStorageAccountName = (process.env.STORAGE_ACCOUNT_NAME || '').trim().toLowerCase();
 const legacyStorageAccountKey = (process.env.STORAGE_ACCOUNT_KEY || '').trim();
@@ -17,12 +20,20 @@ const tableName = (process.env.LOADOUT_TABLE_NAME || 'LoadoutRecords').trim();
 const photoContainerName = (process.env.LOADOUT_PHOTO_CONTAINER || 'loadout-photos').trim();
 const allowedKinds = new Set(['inspections', 'inventory', 'sites', 'inspectors', 'staging']);
 
-type StoredRecord = Record<string, unknown> & { id: string };
-type RecordEntity = TableEntity & {
+export type StoredRecord = Record<string, unknown> & {
+  id: string;
+  siteId?: string;
+  _rev?: number;
+  deleted?: boolean;
+};
+
+export type RecordEntity = TableEntity & {
   recordId: string;
   payload: string;
   updatedAt: string;
+  version: number;
   deleted: boolean;
+  siteId?: string;
 };
 
 let tableReady: Promise<TableClient> | null = null;
@@ -47,9 +58,6 @@ function requireConnectionString(): string {
   return connectionString;
 }
 
-// Other modules (training data collection) need their own table + container on
-// the same storage account. These share the connection-string resolution above
-// so there is exactly one place that decides which account we talk to.
 const namedTables = new Map<string, Promise<TableClient>>();
 const namedContainers = new Map<string, Promise<ContainerClient>>();
 
@@ -90,7 +98,7 @@ export function toRowKey(id: string): string {
   return Buffer.from(id, 'utf8').toString('base64url');
 }
 
-async function getTable(): Promise<TableClient> {
+export async function getTable(): Promise<TableClient> {
   if (!tableReady) {
     tableReady = (async () => {
       const client = TableClient.fromConnectionString(requireConnectionString(), tableName);
@@ -104,7 +112,7 @@ async function getTable(): Promise<TableClient> {
   return tableReady;
 }
 
-async function getPhotoContainer(): Promise<ContainerClient> {
+export async function getPhotoContainer(): Promise<ContainerClient> {
   if (!containerReady) {
     containerReady = (async () => {
       const service = BlobServiceClient.fromConnectionString(requireConnectionString());
@@ -124,16 +132,22 @@ function safeRowKey(id: string): string {
 }
 
 function recordTimestamp(kind: string, record: StoredRecord): string {
-  const value = kind === 'inspections'
-    ? record.lastEditedAt || record.completedAt || record.startedAt
-    : kind === 'inventory'
-      ? record.lastUpdated
-      : record.updatedAt || record.createdAt;
+  const value =
+    kind === 'inspections'
+      ? record.lastEditedAt || record.completedAt || record.startedAt
+      : kind === 'inventory'
+        ? record.lastUpdated
+        : record.updatedAt || record.createdAt;
   return typeof value === 'string' && value ? value : new Date().toISOString();
 }
 
 function parseEntity(entity: RecordEntity): StoredRecord {
-  return JSON.parse(entity.payload) as StoredRecord;
+  const parsed = JSON.parse(entity.payload) as StoredRecord;
+  parsed._rev = typeof entity.version === 'number' ? entity.version : 1;
+  if (entity.deleted) {
+    parsed.deleted = true;
+  }
+  return parsed;
 }
 
 function validateKind(request: HttpRequest): string | null {
@@ -141,34 +155,86 @@ function validateKind(request: HttpRequest): string | null {
   return allowedKinds.has(kind) ? kind : null;
 }
 
-async function listRecords(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+export async function listRecords(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const kind = validateKind(request);
   if (!kind) return { status: 404, jsonBody: { error: 'Unknown record type' } };
 
+  const since = request.query.get('since') || request.query.get('updatedSince');
+  const siteId = request.query.get('siteId');
+  const continuationToken = request.query.get('continuationToken') || undefined;
+  const limitParam = parseInt(request.query.get('limit') || '500', 10);
+  const limit = isNaN(limitParam) ? 500 : Math.min(500, Math.max(1, limitParam));
+
   try {
     const table = await getTable();
-    const records: StoredRecord[] = [];
-    for await (const entity of table.listEntities<RecordEntity>({
-      queryOptions: { filter: `PartitionKey eq '${kind}'` },
-    })) {
-      records.push(parseEntity(entity));
+    let filter = `PartitionKey eq '${kind}'`;
+    if (since) {
+      // Escape single quotes for OData filter
+      const safeSince = since.replace(/'/g, "''");
+      filter += ` and updatedAt gt '${safeSince}'`;
     }
-    return { status: 200, jsonBody: { resources: records } };
+
+    const records: StoredRecord[] = [];
+    let nextContinuationToken: string | undefined = undefined;
+
+    const iterator = table
+      .listEntities<RecordEntity>({ queryOptions: { filter } })
+      .byPage({ maxPageSize: limit, continuationToken });
+
+    for await (const page of iterator) {
+      for (const entity of page) {
+        const record = parseEntity(entity);
+        if (!siteId || !record.siteId || record.siteId === siteId) {
+          records.push(record);
+        }
+      }
+      nextContinuationToken = page.continuationToken;
+      // Return single page per request to respect pagination
+      break;
+    }
+
+    return {
+      status: 200,
+      jsonBody: {
+        resources: records,
+        continuationToken: nextContinuationToken,
+        serverTime: new Date().toISOString(),
+      },
+    };
   } catch (error) {
     context.error('Unable to list shared records', error);
     return { status: 503, jsonBody: { error: 'Shared storage is unavailable' } };
   }
 }
 
-async function putRecord(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+export async function putRecord(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const kind = validateKind(request);
   const id = decodeURIComponent(String(request.params.id || ''));
   if (!kind || !id) return { status: 404, jsonBody: { error: 'Unknown record' } };
+
+  const auth = extractDeviceAuth(request);
 
   try {
     const record = (await request.json()) as StoredRecord;
     if (!record || typeof record !== 'object' || record.id !== id) {
       return { status: 400, jsonBody: { error: 'Body id must match the route id' } };
+    }
+
+    // Schema Validation
+    const validation = validateRecordSchema(kind, record);
+    if (!validation.valid) {
+      logAudit(context, 'PUT_RECORD_VALIDATION_FAILED', {
+        deviceId: auth.deviceId,
+        siteId: auth.siteId,
+        kind,
+        recordId: id,
+        status: 400,
+        error: JSON.stringify(validation.errors),
+      });
+      return {
+        status: 400,
+        jsonBody: { error: 'Validation failed', details: validation.errors },
+      };
     }
 
     const payload = JSON.stringify(record);
@@ -179,13 +245,37 @@ async function putRecord(request: HttpRequest, context: InvocationContext): Prom
     const table = await getTable();
     const rowKey = safeRowKey(id);
     const incomingUpdatedAt = recordTimestamp(kind, record);
+
+    let existingEntity: RecordEntity | null = null;
     try {
-      const existing = await table.getEntity<RecordEntity>(kind, rowKey);
-      if (existing.updatedAt > incomingUpdatedAt) {
-        return { status: 409, jsonBody: { record: parseEntity(existing) } };
-      }
+      existingEntity = await table.getEntity<RecordEntity>(kind, rowKey);
     } catch (error: any) {
       if (error?.statusCode !== 404) throw error;
+    }
+
+    let nextVersion = 1;
+    if (existingEntity) {
+      nextVersion = (existingEntity.version || 0) + 1;
+
+      // Optimistic concurrency check: if existing record is newer than incoming
+      if (existingEntity.updatedAt > incomingUpdatedAt) {
+        logAudit(context, 'PUT_RECORD_CONFLICT', {
+          deviceId: auth.deviceId,
+          siteId: auth.siteId,
+          kind,
+          recordId: id,
+          status: 409,
+        });
+        return {
+          status: 409,
+          jsonBody: {
+            error: 'Conflict detected',
+            record: parseEntity(existingEntity),
+            serverRevision: existingEntity.version || 1,
+            etag: existingEntity.etag,
+          },
+        };
+      }
     }
 
     const entity: RecordEntity = {
@@ -194,44 +284,92 @@ async function putRecord(request: HttpRequest, context: InvocationContext): Prom
       recordId: id,
       payload,
       updatedAt: incomingUpdatedAt,
+      version: nextVersion,
       deleted: record.deleted === true,
+      siteId: typeof record.siteId === 'string' ? record.siteId : undefined,
     };
+
     await table.upsertEntity(entity, 'Replace');
-    return { status: 200, jsonBody: { record } };
+
+    logAudit(context, 'PUT_RECORD_SUCCESS', {
+      deviceId: auth.deviceId,
+      siteId: auth.siteId,
+      kind,
+      recordId: id,
+      status: 200,
+    });
+
+    return {
+      status: 200,
+      jsonBody: {
+        record: { ...record, _rev: nextVersion },
+        serverTime: new Date().toISOString(),
+      },
+    };
   } catch (error) {
     context.error('Unable to save shared record', error);
     return { status: 503, jsonBody: { error: 'Shared storage is unavailable' } };
   }
 }
 
-async function photos(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+export async function photos(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
   const photoId = String(request.params.photoId || '');
   if (!/^[a-zA-Z0-9_-]{8,128}$/.test(photoId)) {
     return { status: 400, jsonBody: { error: 'Invalid photo id' } };
   }
 
+  const auth = extractDeviceAuth(request);
+
   try {
     const container = await getPhotoContainer();
     const blob = container.getBlockBlobClient(`${photoId}.jpg`);
+
     if (request.method === 'POST') {
       const bytes = Buffer.from(await request.arrayBuffer());
-      if (!bytes.length || bytes.length > 8 * 1024 * 1024) {
-        return { status: 413, jsonBody: { error: 'Photo must be between 1 byte and 8 MB' } };
+      if (!bytes.length) {
+        return { status: 400, jsonBody: { error: 'Empty photo payload' } };
       }
+      if (bytes.length > MAX_PHOTO_SIZE_BYTES) {
+        return { status: 413, jsonBody: { error: 'Photo exceeds 8 MB limit' } };
+      }
+
+      // Validate magic bytes
+      const validation = validateMediaSignature(bytes, ['image/jpeg', 'image/png', 'image/webp']);
+      if (!validation.valid) {
+        logAudit(context, 'PHOTO_UPLOAD_INVALID_SIGNATURE', {
+          deviceId: auth.deviceId,
+          recordId: photoId,
+          status: 415,
+          error: validation.error,
+        });
+        return { status: 415, jsonBody: { error: validation.error || 'Invalid image signature' } };
+      }
+
+      const contentType = validation.mediaType || 'image/jpeg';
       await blob.uploadData(bytes, {
-        blobHTTPHeaders: { blobContentType: request.headers.get('content-type') || 'image/jpeg' },
+        blobHTTPHeaders: { blobContentType: contentType },
       });
+
+      logAudit(context, 'PHOTO_UPLOAD_SUCCESS', {
+        deviceId: auth.deviceId,
+        recordId: photoId,
+        status: 201,
+      });
+
       return { status: 201, jsonBody: { url: `/api/photos/${encodeURIComponent(photoId)}` } };
     }
 
     const download = await blob.download();
     const bytes = await blob.downloadToBuffer();
+    const safeContentType = download.contentType || 'image/jpeg';
+
     return {
       status: 200,
       body: bytes,
       headers: {
-        'content-type': download.contentType || 'image/jpeg',
+        'content-type': safeContentType,
         'cache-control': 'private, max-age=86400',
+        'x-content-type-options': 'nosniff',
       },
     };
   } catch (error: any) {

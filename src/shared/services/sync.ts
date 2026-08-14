@@ -5,6 +5,7 @@ import {
   dbApplyRemoteInventory,
   dbDeleteSyncQueueItem,
   dbEnqueueRecord,
+  dbGetInspection,
   dbGetPhotoBlob,
   dbListAllInspections,
   dbListInventoryItems,
@@ -14,12 +15,14 @@ import {
   type SharedRecordKind,
   type SyncQueueItem,
 } from './db';
+import { mergeInspection, mergeInventory } from './conflictMerge';
 
 export type SyncState = {
   syncing: boolean;
   pending: number;
   lastSyncedAt?: string;
   error?: string;
+  adaptiveIntervalSeconds?: number;
 };
 
 const CACHE_KEYS: Record<Exclude<SharedRecordKind, 'inspections' | 'inventory'>, string> = {
@@ -33,10 +36,15 @@ const CACHE_EVENTS: Record<keyof typeof CACHE_KEYS, string> = {
   staging: 'loadout-staging-locations-updated',
 };
 const MIGRATION_KEY = 'loadout.shared-storage.migrated.v1';
+const CURSOR_KEY_PREFIX = 'loadout.sync.cursor.';
+
+const MIN_INTERVAL_MS = 15_000;  // 15 seconds active interval
+const MAX_INTERVAL_MS = 120_000; // 2 minutes maximum idle backoff
 
 let activeSync: Promise<void> | null = null;
-let timer: number | undefined;
-let state: SyncState = { syncing: false, pending: 0 };
+let syncTimeoutId: number | undefined;
+let currentIntervalMs = MIN_INTERVAL_MS;
+let state: SyncState = { syncing: false, pending: 0, adaptiveIntervalSeconds: MIN_INTERVAL_MS / 1000 };
 
 class SyncHttpError extends Error {
   constructor(public status: number, message: string) {
@@ -45,12 +53,43 @@ class SyncHttpError extends Error {
 }
 
 function emit(patch: Partial<SyncState> = {}): void {
-  state = { ...state, ...patch };
-  window.dispatchEvent(new CustomEvent<SyncState>('loadout-sync-status', { detail: state }));
+  state = { ...state, ...patch, adaptiveIntervalSeconds: Math.round(currentIntervalMs / 1000) };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent<SyncState>('loadout-sync-status', { detail: state }));
+  }
 }
 
 export function getSyncState(): SyncState {
   return state;
+}
+
+function getActiveSiteId(): string | undefined {
+  try {
+    const raw = localStorage.getItem('loadout.deviceConfig');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.siteId) return String(parsed.siteId);
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
+}
+
+function getDeviceId(): string {
+  try {
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('loadout.deviceConfig') : null;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed?.deviceId) return String(parsed.deviceId);
+    }
+  } catch {
+    // ignore
+  }
+  const host = typeof window !== 'undefined' && (window as any).location?.hostname
+    ? (window as any).location.hostname
+    : 'client';
+  return 'device-web-' + host;
 }
 
 function timestamp(kind: SharedRecordKind, record: Record<string, any>): string {
@@ -69,7 +108,7 @@ function readCache<T>(key: string): T[] {
 }
 
 async function migrateExistingLocalData(): Promise<void> {
-  if (localStorage.getItem(MIGRATION_KEY)) return;
+  if (typeof localStorage === 'undefined' || localStorage.getItem(MIGRATION_KEY)) return;
 
   const inspections = await dbListAllInspections();
   const inventory = await dbListInventoryItems();
@@ -99,10 +138,15 @@ async function applyRemote(kind: SharedRecordKind, record: Record<string, any>):
     ? existing.filter((item) => item.id !== record.id)
     : [...existing.filter((item) => item.id !== record.id), record];
   localStorage.setItem(key, JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent(CACHE_EVENTS[kind]));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(CACHE_EVENTS[kind]));
+  }
 }
 
 async function pushItem(item: SyncQueueItem): Promise<void> {
+  const deviceId = getDeviceId();
+  const siteId = getActiveSiteId() || '';
+
   if (item.operation === 'upload-photo') {
     const blob = await dbGetPhotoBlob(item.photoId);
     if (!blob) {
@@ -111,7 +155,11 @@ async function pushItem(item: SyncQueueItem): Promise<void> {
     }
     const response = await fetch(`/api/photos/${encodeURIComponent(item.photoId)}`, {
       method: 'POST',
-      headers: { 'content-type': blob.type || 'image/jpeg' },
+      headers: {
+        'content-type': blob.type || 'image/jpeg',
+        'x-loadout-device-id': deviceId,
+        'x-loadout-site-id': siteId,
+      },
       body: blob,
     });
     if (!response.ok) throw new SyncHttpError(response.status, 'Photo upload failed');
@@ -124,25 +172,52 @@ async function pushItem(item: SyncQueueItem): Promise<void> {
     `/api/records/${item.kind}/${encodeURIComponent(item.record.id)}`,
     {
       method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        'x-loadout-device-id': deviceId,
+        'x-loadout-site-id': siteId,
+      },
       body: JSON.stringify(item.record),
     }
   );
+
   if (response.status === 409) {
     const body = await response.json();
-    if (body?.record) await applyRemote(item.kind, body.record);
+    const remoteRecord = body?.record;
     await dbDeleteSyncQueueItem(item.id);
+
+    if (remoteRecord) {
+      if (item.kind === 'inspections') {
+        const local = (await dbGetInspection(item.record.id)) || (item.record as Inspection);
+        const merged = mergeInspection(local, remoteRecord as Inspection);
+        await dbApplyRemoteInspection(merged);
+        // Re-enqueue the merged result so changes from both devices persist upstream
+        await dbEnqueueRecord('inspections', merged);
+      } else if (item.kind === 'inventory') {
+        const localItems = await dbListInventoryItems();
+        const local = localItems.find((i) => i.id === item.record.id) || (item.record as InventoryItem);
+        const merged = mergeInventory(local, remoteRecord as InventoryItem);
+        await dbApplyRemoteInventory(merged);
+        await dbEnqueueRecord('inventory', merged);
+      } else {
+        await applyRemote(item.kind, remoteRecord);
+      }
+    }
     return;
   }
+
   if (!response.ok) throw new SyncHttpError(response.status, 'Record save failed');
   await dbDeleteSyncQueueItem(item.id);
 }
 
-async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promise<void> {
-  const response = await fetch(`/api/records/${kind}`, { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new SyncHttpError(response.status, 'Record download failed');
-  const body = await response.json();
-  const records: Record<string, any>[] = Array.isArray(body?.resources) ? body.resources : [];
+async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promise<number> {
+  const siteId = getActiveSiteId();
+  const cursorKey = `${CURSOR_KEY_PREFIX}${kind}`;
+  const since = typeof localStorage !== 'undefined' ? localStorage.getItem(cursorKey) || '' : '';
+
+  let continuationToken: string | undefined = undefined;
+  let totalPulled = 0;
+  let latestServerTime: string | undefined = undefined;
 
   let localById = new Map<string, Record<string, any>>();
   if (kind === 'inspections') {
@@ -153,15 +228,48 @@ async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promis
     localById = new Map(readCache<Record<string, any>>(CACHE_KEYS[kind]).map((record) => [record.id, record]));
   }
 
-  for (const record of records) {
-    if (!record?.id || pendingIds.has(`record:${kind}:${record.id}`)) continue;
-    const local = localById.get(record.id);
-    if (!local || timestamp(kind, record) >= timestamp(kind, local)) await applyRemote(kind, record);
+  do {
+    const params = new URLSearchParams();
+    if (since) params.set('since', since);
+    if (siteId && (kind === 'inspections' || kind === 'inventory' || kind === 'staging')) {
+      params.set('siteId', siteId);
+    }
+    if (continuationToken) params.set('continuationToken', continuationToken);
+    params.set('limit', '500');
+
+    const response = await fetch(`/api/records/${kind}?${params.toString()}`, {
+      headers: {
+        accept: 'application/json',
+        'x-loadout-device-id': getDeviceId(),
+        'x-loadout-site-id': siteId || '',
+      },
+    });
+
+    if (!response.ok) throw new SyncHttpError(response.status, 'Record download failed');
+    const body = await response.json();
+    const records: Record<string, any>[] = Array.isArray(body?.resources) ? body.resources : [];
+    continuationToken = body?.continuationToken || undefined;
+    if (body?.serverTime) latestServerTime = body.serverTime;
+
+    for (const record of records) {
+      if (!record?.id || pendingIds.has(`record:${kind}:${record.id}`)) continue;
+      const local = localById.get(record.id);
+      if (!local || timestamp(kind, record) >= timestamp(kind, local)) {
+        await applyRemote(kind, record);
+        totalPulled++;
+      }
+    }
+  } while (continuationToken);
+
+  if (latestServerTime && typeof localStorage !== 'undefined') {
+    localStorage.setItem(cursorKey, latestServerTime);
   }
+
+  return totalPulled;
 }
 
 async function performSync(): Promise<void> {
-  if (!navigator.onLine) {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     emit({ syncing: false, error: 'Offline', pending: (await dbListSyncQueue()).length });
     return;
   }
@@ -169,8 +277,7 @@ async function performSync(): Promise<void> {
   await migrateExistingLocalData();
   emit({ syncing: true, error: undefined, pending: (await dbListSyncQueue()).length });
   const queue = await dbListSyncQueue();
-  // Prioritize record operations (inspections, inventory, sites) over photo uploads
-  // so metadata syncs instantly across devices without getting blocked by large photo uploads.
+
   const recordItems = queue.filter((item) => item.operation === 'put-record');
   const photoItems = queue.filter((item) => item.operation === 'upload-photo');
 
@@ -181,10 +288,7 @@ async function performSync(): Promise<void> {
     } catch (error) {
       await dbRetrySyncQueueItem(item);
       console.warn('Shared storage sync retry scheduled', error);
-      // Photo upload failures should never block record metadata from syncing
       if (item.operation === 'upload-photo') continue;
-      // Authentication, network, and server failures affect every queued item;
-      // do not hammer the endpoint once per record (especially after inventory imports).
       if (!(error instanceof SyncHttpError) || error.status === 401 || error.status >= 500) break;
     }
   }
@@ -192,12 +296,46 @@ async function performSync(): Promise<void> {
   const remaining = await dbListSyncQueue();
   const pendingIds = new Set(remaining.map((item) => item.id));
   const kinds: SharedRecordKind[] = ['sites', 'inspectors', 'staging', 'inspections', 'inventory'];
-  for (const kind of kinds) await pullKind(kind, pendingIds);
+
+  let pulledChanges = 0;
+  for (const kind of kinds) {
+    pulledChanges += await pullKind(kind, pendingIds);
+  }
+
   const pending = (await dbListSyncQueue()).length;
-  emit({ syncing: false, pending, lastSyncedAt: new Date().toISOString(), error: pending ? 'Waiting to retry' : undefined });
+  const hadChanges = recordItems.length > 0 || photoItems.length > 0 || pulledChanges > 0;
+
+  // Adaptive Idle Backoff: Reset to rapid interval when changes happen; backoff while idle
+  if (hadChanges) {
+    currentIntervalMs = MIN_INTERVAL_MS;
+  } else {
+    currentIntervalMs = Math.min(MAX_INTERVAL_MS, Math.round(currentIntervalMs * 1.5));
+  }
+
+  emit({
+    syncing: false,
+    pending,
+    lastSyncedAt: new Date().toISOString(),
+    error: pending ? 'Waiting to retry' : undefined,
+  });
+}
+
+function scheduleNextAdaptiveSync(): void {
+  if (syncTimeoutId) {
+    clearTimeout(syncTimeoutId);
+  }
+  syncTimeoutId = window.setTimeout(async () => {
+    try {
+      await syncNow();
+    } finally {
+      scheduleNextAdaptiveSync();
+    }
+  }, currentIntervalMs);
 }
 
 export function syncNow(): Promise<void> {
+  // Any explicit sync resets interval to active
+  currentIntervalMs = MIN_INTERVAL_MS;
   if (!activeSync) {
     activeSync = performSync()
       .catch(async (error) => {
@@ -216,19 +354,30 @@ export function syncNow(): Promise<void> {
 
 export function startSharedStorageSync(): () => void {
   void syncNow();
+  scheduleNextAdaptiveSync();
+
   const handleVisibility = () => {
-    if (document.visibilityState === 'visible') void syncNow();
+    if (document.visibilityState === 'visible') {
+      currentIntervalMs = MIN_INTERVAL_MS;
+      void syncNow();
+    }
   };
-  window.addEventListener('online', syncNow);
-  window.addEventListener('focus', syncNow);
+
+  const handleSyncRequest = () => {
+    currentIntervalMs = MIN_INTERVAL_MS;
+    void syncNow();
+  };
+
+  window.addEventListener('online', handleSyncRequest);
+  window.addEventListener('focus', handleSyncRequest);
   window.addEventListener('visibilitychange', handleVisibility);
-  window.addEventListener('loadout-sync-request', syncNow);
-  timer = window.setInterval(() => void syncNow(), 5_000);
+  window.addEventListener('loadout-sync-request', handleSyncRequest);
+
   return () => {
-    window.removeEventListener('online', syncNow);
-    window.removeEventListener('focus', syncNow);
+    window.removeEventListener('online', handleSyncRequest);
+    window.removeEventListener('focus', handleSyncRequest);
     window.removeEventListener('visibilitychange', handleVisibility);
-    window.removeEventListener('loadout-sync-request', syncNow);
-    if (timer) window.clearInterval(timer);
+    window.removeEventListener('loadout-sync-request', handleSyncRequest);
+    if (syncTimeoutId) clearTimeout(syncTimeoutId);
   };
 }

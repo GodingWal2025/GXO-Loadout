@@ -1,6 +1,9 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from "@azure/functions";
 import { DocumentAnalysisClient, AzureKeyCredential } from "@azure/ai-form-recognizer";
 import { probeSharedStorage } from './storage';
+import { checkRateLimit } from './middleware/rateLimit';
+import { validateMediaSignature, MAX_PHOTO_SIZE_BYTES } from './middleware/mediaValidation';
+import { extractDeviceAuth, logAudit } from './middleware/auth';
 import './training';
 
 // Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
@@ -491,6 +494,28 @@ function extractCustomModelRows(result: any, context: InvocationContext): { rows
 // the verifier to confirm (source: 'ml' on the client). Never throws to the
 // client on config/OCR failure; the app falls back to manual entry.
 export async function analyzePicklist(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const auth = extractDeviceAuth(request);
+    const rateCheck = checkRateLimit(auth.deviceId || auth.clientIp, { maxRequestsPerMinute: 20 });
+    if (!rateCheck.allowed) {
+        logAudit(context, 'OCR_RATE_LIMITED', {
+            deviceId: auth.deviceId,
+            siteId: auth.siteId,
+            status: 429,
+            error: rateCheck.warning,
+        });
+        return {
+            status: 429,
+            headers: { 'Retry-After': String(rateCheck.retryAfterSeconds || 60) },
+            jsonBody: {
+                error: "Rate limit exceeded for picklist OCR",
+                retryAfter: rateCheck.retryAfterSeconds,
+            },
+        };
+    }
+    if (rateCheck.warning) {
+        context.warn(rateCheck.warning);
+    }
+
     const client = getDocClient();
     if (!client) {
         return {
@@ -506,6 +531,14 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
         const buffer = Buffer.from(await request.arrayBuffer());
         if (!buffer.length) {
             return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+        }
+        if (buffer.length > MAX_PHOTO_SIZE_BYTES) {
+            return { status: 413, jsonBody: { error: "Image exceeds maximum allowed size of 8 MB" } };
+        }
+
+        const mediaValidation = validateMediaSignature(buffer, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+        if (!mediaValidation.valid) {
+            return { status: 415, jsonBody: { error: mediaValidation.error || "Unsupported image format" } };
         }
 
         const modelId = process.env.DOC_INTEL_MODEL_ID || "Picklist";
@@ -628,6 +661,28 @@ type BolOcrLineItem = {
 // quantity, shipment #, delivery #, stop) plus any header fields. Never throws
 // to the client; the app degrades to manual BOL entry on failure.
 export async function analyzeBol(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const auth = extractDeviceAuth(request);
+    const rateCheck = checkRateLimit(auth.deviceId || auth.clientIp, { maxRequestsPerMinute: 20 });
+    if (!rateCheck.allowed) {
+        logAudit(context, 'OCR_RATE_LIMITED', {
+            deviceId: auth.deviceId,
+            siteId: auth.siteId,
+            status: 429,
+            error: rateCheck.warning,
+        });
+        return {
+            status: 429,
+            headers: { 'Retry-After': String(rateCheck.retryAfterSeconds || 60) },
+            jsonBody: {
+                error: "Rate limit exceeded for BOL OCR",
+                retryAfter: rateCheck.retryAfterSeconds,
+            },
+        };
+    }
+    if (rateCheck.warning) {
+        context.warn(rateCheck.warning);
+    }
+
     const client = getDocClient();
     if (!client) {
         return {
@@ -643,6 +698,14 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
         const buffer = Buffer.from(await request.arrayBuffer());
         if (!buffer.length) {
             return { status: 400, jsonBody: { error: "Empty request body (expected image bytes)" } };
+        }
+        if (buffer.length > MAX_PHOTO_SIZE_BYTES) {
+            return { status: 413, jsonBody: { error: "Image exceeds maximum allowed size of 8 MB" } };
+        }
+
+        const mediaValidation = validateMediaSignature(buffer, ['image/jpeg', 'image/png', 'image/webp', 'application/pdf']);
+        if (!mediaValidation.valid) {
+            return { status: 415, jsonBody: { error: mediaValidation.error || "Unsupported image format" } };
         }
 
         const modelId = process.env.DOC_INTEL_BOL_MODEL_ID || "BOL";

@@ -15,3 +15,7 @@ local.settings.json
 # Python
 __pycache__/
 *.pyc
+
+# Local scratch
+scratch/
+

@@ -75,3 +75,27 @@ export async function resolvePhotoUrls(
 
   return urlMap;
 }
+
+/**
+ * Revoke a single created blob URL to free browser memory.
+ */
+export function revokePhotoUrl(url: string | undefined): void {
+  if (url && typeof url === 'string' && url.startsWith('blob:')) {
+    try {
+      URL.revokeObjectURL(url);
+    } catch {
+      // Ignore if URL is not revokable or running in test/server environment
+    }
+  }
+}
+
+/**
+ * Revoke multiple created blob URLs in batch.
+ */
+export function revokePhotoUrls(urls: Iterable<string | undefined> | Map<string, string>): void {
+  const items = urls instanceof Map ? urls.values() : urls;
+  for (const url of items) {
+    revokePhotoUrl(url);
+  }
+}
+

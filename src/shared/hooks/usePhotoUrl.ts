@@ -11,15 +11,37 @@ export function usePhotoUrl(photo: InspectionPhoto | undefined): string | undefi
 
   useEffect(() => {
     let cancelled = false;
+    let createdUrl: string | undefined;
+
     if (!photo) {
       setUrl(undefined);
       return;
     }
+
     resolvePhotoUrl(photo).then((resolved) => {
-      if (!cancelled) setUrl(resolved);
+      if (cancelled) {
+        if (resolved && resolved.startsWith('blob:')) {
+          try {
+            URL.revokeObjectURL(resolved);
+          } catch {
+            // ignore
+          }
+        }
+        return;
+      }
+      createdUrl = resolved;
+      setUrl(resolved);
     });
+
     return () => {
       cancelled = true;
+      if (createdUrl && createdUrl.startsWith('blob:')) {
+        try {
+          URL.revokeObjectURL(createdUrl);
+        } catch {
+          // ignore
+        }
+      }
     };
   }, [photo?.id, photo?.sharePointUrl, photo?.localBlobUrl]);
 

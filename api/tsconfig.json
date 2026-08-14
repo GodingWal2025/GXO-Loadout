@@ -7,5 +7,6 @@
     "sourceMap": true,
     "strict": true,
     "types": ["node"]
-  }
+  },
+  "exclude": ["**/*.test.ts", "node_modules", "dist"]
 }

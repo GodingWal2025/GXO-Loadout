@@ -26,6 +26,9 @@ jobs:
         working-directory: api
       - name: Test web app
         run: npm test
+      - name: Test Functions API
+        run: npm test
+        working-directory: api
       - name: Build web app
         run: npm run build
       - name: Build Functions API
