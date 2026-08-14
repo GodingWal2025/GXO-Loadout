@@ -85,6 +85,8 @@ export function InvestigationRoute() {
           allPhotos.push(...(p.photos || []));
         }
         allPhotos.push(...(ins.staging?.finalLanePhotos || []));
+        allPhotos.push(...(ins.staging?.palletsPackagingPhotos || []));
+        allPhotos.push(...(ins.staging?.seedpaksPackagingPhotos || []));
       }
       const urls = new Map<string, string>();
       await Promise.all(
@@ -519,6 +521,8 @@ function PalletGlimpse({
       overviewPhotos: rotatePhotos(item.staging?.overviewPhotos),
       coverSheetPhotos: rotatePhotos(item.staging?.coverSheetPhotos),
       finalLanePhotos: rotatePhotos(item.staging?.finalLanePhotos),
+      palletsPackagingPhotos: rotatePhotos(item.staging?.palletsPackagingPhotos),
+      seedpaksPackagingPhotos: rotatePhotos(item.staging?.seedpaksPackagingPhotos),
     };
     const updatedItem = {
       ...item,

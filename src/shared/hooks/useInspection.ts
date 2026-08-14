@@ -69,6 +69,8 @@ export function emptyInspection(siteId: string, type: InspectionType = 'outbound
       overviewPhotos: [],
       coverSheetPhotos: [],
       finalLanePhotos: [],
+      palletsPackagingPhotos: [],
+      seedpaksPackagingPhotos: [],
       pallets40x40Used: 0,
       pallets48x40Used: 0,
       seedpaksUsed: 0,
@@ -117,7 +119,13 @@ export type Action =
   | { type: 'VERIFY_RETURNS_BOL'; verifiedBy: string }
   | { type: 'SET_CROSS_REFERENCE'; result: CrossReferenceResult }
   | { type: 'VERIFY_PICKLIST'; verifiedBy: string }
-  | { type: 'ADD_PALLET'; palletType: PalletType; deliveryId: string; batchCount: 1 | 2 | 3; scannedBy?: string }
+  | {
+      type: 'ADD_PALLET';
+      palletType: PalletType;
+      deliveryId: string;
+      batchCount: 1 | 2 | 3;
+      scannedBy?: string;
+    }
   | { type: 'REMOVE_PALLET'; index: number }
   | { type: 'UPDATE_PALLET'; index: number; patch: Partial<PalletInspection> }
   | { type: 'UPDATE_BATCH_SECTION'; palletIndex: number; sectionId: string; patch: Partial<BatchSection> }
@@ -128,7 +136,7 @@ export type Action =
   | { type: 'SET_PALLET_QUALITY_FLAG'; index: number; flag?: QualityFlag }
   | { type: 'SET_INSPECTION_QUALITY_FLAG'; flag?: QualityFlag }
   | { type: 'SET_STAGING'; field: keyof Inspection['staging']; value: any }
-  | { type: 'ADD_STAGING_PHOTO'; section: 'overview' | 'cover-sheet' | 'final-lane'; photo: InspectionPhoto }
+  | { type: 'ADD_STAGING_PHOTO'; section: 'overview' | 'cover-sheet' | 'final-lane' | 'returns-pallets' | 'returns-seedpaks'; photo: InspectionPhoto }
   | { type: 'MARK_COMPLETE' };
 
 // Exported for tests: the batch-code allocation below is subtle enough to pin down.
@@ -220,6 +228,15 @@ function recomputeFlags(state: Inspection): Inspection {
     if (photo.qualityFlag) count++;
   }
   for (const photo of state.staging.coverSheetPhotos) {
+    if (photo.qualityFlag) count++;
+  }
+  for (const photo of state.staging.finalLanePhotos || []) {
+    if (photo.qualityFlag) count++;
+  }
+  for (const photo of state.staging.palletsPackagingPhotos || []) {
+    if (photo.qualityFlag) count++;
+  }
+  for (const photo of state.staging.seedpaksPackagingPhotos || []) {
     if (photo.qualityFlag) count++;
   }
   return { ...state, flaggedItemsCount: count };
@@ -535,6 +552,9 @@ function reducer(state: Inspection, action: Action): Inspection {
           ...state.staging,
           overviewPhotos: update(state.staging.overviewPhotos),
           coverSheetPhotos: update(state.staging.coverSheetPhotos),
+          finalLanePhotos: update(state.staging.finalLanePhotos || []),
+          palletsPackagingPhotos: update(state.staging.palletsPackagingPhotos || []),
+          seedpaksPackagingPhotos: update(state.staging.seedpaksPackagingPhotos || []),
         },
         pallets: state.pallets.map((p) => ({ ...p, photos: update(p.photos) })),
       };
@@ -556,6 +576,8 @@ function reducer(state: Inspection, action: Action): Inspection {
           overviewPhotos: update(state.staging.overviewPhotos),
           coverSheetPhotos: update(state.staging.coverSheetPhotos),
           finalLanePhotos: update(state.staging.finalLanePhotos || []),
+          palletsPackagingPhotos: update(state.staging.palletsPackagingPhotos || []),
+          seedpaksPackagingPhotos: update(state.staging.seedpaksPackagingPhotos || []),
         },
         pallets: state.pallets.map((p) => ({ ...p, photos: update(p.photos) })),
       };
@@ -587,6 +609,10 @@ function reducer(state: Inspection, action: Action): Inspection {
             ? { ...state.staging, overviewPhotos: [...state.staging.overviewPhotos, action.photo] }
             : action.section === 'final-lane'
             ? { ...state.staging, finalLanePhotos: [...(state.staging.finalLanePhotos || []), action.photo] }
+            : action.section === 'returns-pallets'
+            ? { ...state.staging, palletsPackagingPhotos: [...(state.staging.palletsPackagingPhotos || []), action.photo] }
+            : action.section === 'returns-seedpaks'
+            ? { ...state.staging, seedpaksPackagingPhotos: [...(state.staging.seedpaksPackagingPhotos || []), action.photo] }
             : { ...state.staging, coverSheetPhotos: [...state.staging.coverSheetPhotos, action.photo] },
       };
       break;

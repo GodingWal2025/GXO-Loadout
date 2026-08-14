@@ -568,6 +568,91 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         </section>
       )}
 
+      {isReturns && (
+        <>
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">
+                {t('review.returnsStagingLead', 'Returns')} <em>{t('review.returnsStagingEm', 'staging lane photos')}</em>
+              </h2>
+              <span className="section__meta">
+                {readOnly
+                  ? t('review.finalLaneMetaView', 'Tap a photo to enlarge')
+                  : t('review.finalLaneMeta', 'Capture the finished staging lane with product')}
+              </span>
+            </div>
+            <MultiPhotoCapture
+              inspectionId={inspection.id}
+              category="Staging_Final_Lane"
+              existingPhotos={inspection.staging.finalLanePhotos || []}
+              onPhotoAdded={(photo) =>
+                dispatch({ type: 'ADD_STAGING_PHOTO', section: 'final-lane', photo })
+              }
+              onPhotoQualityFlag={(photoId, flag) =>
+                dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })
+              }
+              label={t('returnsStaging.tabStagingLane', 'Staging Lane')}
+              currentUser={inspection.currentInspector || inspection.startedBy || 'unknown'}
+              readOnly={readOnly}
+            />
+          </section>
+
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">
+                {t('review.returnsPalletsPackagingLead', 'Packaging:')} <em>{t('review.returnsPalletsPackagingEm', 'Wooden Pallets photos')}</em>
+              </h2>
+              <span className="section__meta">
+                {readOnly
+                  ? t('review.finalLaneMetaView', 'Tap a photo to enlarge')
+                  : t('returnsStaging.palletsHint', 'Photograph the condition of the wooden pallets.')}
+              </span>
+            </div>
+            <MultiPhotoCapture
+              inspectionId={inspection.id}
+              category="Returns_Packaging_Pallets"
+              existingPhotos={inspection.staging.palletsPackagingPhotos || []}
+              onPhotoAdded={(photo) =>
+                dispatch({ type: 'ADD_STAGING_PHOTO', section: 'returns-pallets', photo })
+              }
+              onPhotoQualityFlag={(photoId, flag) =>
+                dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })
+              }
+              label={t('returnsStaging.tabPallets', 'Wooden Pallets')}
+              currentUser={inspection.currentInspector || inspection.startedBy || 'unknown'}
+              readOnly={readOnly}
+            />
+          </section>
+
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">
+                {t('review.returnsSeedpaksPackagingLead', 'Packaging:')} <em>{t('review.returnsSeedpaksPackagingEm', 'SeedPaks photos')}</em>
+              </h2>
+              <span className="section__meta">
+                {readOnly
+                  ? t('review.finalLaneMetaView', 'Tap a photo to enlarge')
+                  : t('returnsStaging.seedpaksHint', 'Photograph the condition of the SeedPak packaging.')}
+              </span>
+            </div>
+            <MultiPhotoCapture
+              inspectionId={inspection.id}
+              category="Returns_Packaging_Seedpaks"
+              existingPhotos={inspection.staging.seedpaksPackagingPhotos || []}
+              onPhotoAdded={(photo) =>
+                dispatch({ type: 'ADD_STAGING_PHOTO', section: 'returns-seedpaks', photo })
+              }
+              onPhotoQualityFlag={(photoId, flag) =>
+                dispatch({ type: 'SET_PHOTO_QUALITY_FLAG', photoId, flag })
+              }
+              label={t('returnsStaging.tabSeedpaks', 'SeedPaks')}
+              currentUser={inspection.currentInspector || inspection.startedBy || 'unknown'}
+              readOnly={readOnly}
+            />
+          </section>
+        </>
+      )}
+
       {!isReturns && (
         <section className="section">
           <div className="section__head">

@@ -125,7 +125,9 @@ export type PhotoCategory =
   | 'Staging_Overview'
   | 'Returns_BOL'
   | 'Returns_Damage_Assessment'
-  | 'Staging_Final_Lane';
+  | 'Staging_Final_Lane'
+  | 'Returns_Packaging_Pallets'
+  | 'Returns_Packaging_Seedpaks';
 
 
 
@@ -422,6 +424,8 @@ export interface StagingSection {
   overviewPhotos: InspectionPhoto[];
   coverSheetPhotos: InspectionPhoto[];
   finalLanePhotos: InspectionPhoto[];
+  palletsPackagingPhotos?: InspectionPhoto[];
+  seedpaksPackagingPhotos?: InspectionPhoto[];
   // Packaging used (outbound only)
   pallets40x40Used?: number;
   pallets48x40Used?: number;

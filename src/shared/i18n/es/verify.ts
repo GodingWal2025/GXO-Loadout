@@ -191,6 +191,12 @@ export const verify: Record<string, string> = {
   'review.finalLaneMetaView': 'Toque una foto para ampliar',
   'review.finalLaneMeta': 'Tome fotos del carril de preparación terminado con producto',
   'review.finalLaneLabel': 'Carril de preparación final',
+  'review.returnsStagingLead': 'Fotos del',
+  'review.returnsStagingEm': 'carril de preparación',
+  'review.returnsPalletsPackagingLead': 'Empaque:',
+  'review.returnsPalletsPackagingEm': 'Fotos de tarimas de madera',
+  'review.returnsSeedpaksPackagingLead': 'Empaque:',
+  'review.returnsSeedpaksPackagingEm': 'Fotos de SeedPaks',
 
   // ---- ReviewAndCompleteRoute: sign-off ----
   'review.signOffLead': 'Firma',

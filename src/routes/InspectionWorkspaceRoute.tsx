@@ -228,7 +228,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
             <button className="btn btn--ghost" onClick={() => setShowProgressModal(true)}>
               {t('workspace.reviewProgress', 'Review progress')}
             </button>
-            {!readOnly && (
+            {!readOnly && inspection.type !== 'returns' && (
               <button className="btn btn--ghost" onClick={() => setShowAdjustModal(true)}>
                 {t('workspace.adjustOrder', 'Adjust order')}
               </button>
@@ -445,17 +445,51 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
                           number: p.palletNumber,
                         })}
                       </div>
-                      {p.scannedBy && (
-                        <div
-                          className="xs soft"
-                          title={t('workspace.scannedBy', 'Scanned by {name}', {
-                            name: p.scannedBy,
-                          })}
-                          style={{ fontFamily: 'JetBrains Mono, monospace' }}
-                        >
-                          {p.scannedBy.split(' ').map((n) => n[0]).join('').slice(0, 2)}
-                        </div>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {p.scannedBy && (
+                          <div
+                            className="xs soft"
+                            title={t('workspace.scannedBy', 'Scanned by {name}', {
+                              name: p.scannedBy,
+                            })}
+                            style={{ fontFamily: 'JetBrains Mono, monospace' }}
+                          >
+                            {p.scannedBy.split(' ').map((n) => n[0]).join('').slice(0, 2)}
+                          </div>
+                        )}
+                        {!readOnly && (
+                          <button
+                            type="button"
+                            title={t('workspace.deletePallet', 'Delete pallet')}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (
+                                window.confirm(
+                                  t(
+                                    'workspace.confirmDeletePallet',
+                                    'Are you sure you want to delete Pallet #{number}?',
+                                    { number: p.palletNumber }
+                                  )
+                                )
+                              ) {
+                                dispatch({ type: 'REMOVE_PALLET', index: p.palletNumber - 1 });
+                              }
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--ink-soft)',
+                              cursor: 'pointer',
+                              padding: '2px 4px',
+                              fontSize: 14,
+                              lineHeight: 1,
+                            }}
+                          >
+                            🗑
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="fw-500" style={{ fontSize: 20, marginTop: 4 }}>
                       {p.batchSections.reduce(

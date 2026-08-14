@@ -118,6 +118,8 @@ export function mergeInspection(local: Inspection, remote: Inspection): Inspecti
       overviewPhotos: mergePhotos(local.staging?.overviewPhotos, remote.staging?.overviewPhotos),
       coverSheetPhotos: mergePhotos(local.staging?.coverSheetPhotos, remote.staging?.coverSheetPhotos),
       finalLanePhotos: mergePhotos(local.staging?.finalLanePhotos, remote.staging?.finalLanePhotos),
+      palletsPackagingPhotos: mergePhotos(local.staging?.palletsPackagingPhotos, remote.staging?.palletsPackagingPhotos),
+      seedpaksPackagingPhotos: mergePhotos(local.staging?.seedpaksPackagingPhotos, remote.staging?.seedpaksPackagingPhotos),
     },
     lastEditedAt: new Date().toISOString(),
   };

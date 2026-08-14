@@ -50,24 +50,33 @@ export const capture: Record<string, string> = {
   'returnsBol.takePhoto': 'Tomar foto',
   'returnsBol.skipManual': 'Omitir — capturar datos a mano',
 
-  // ---- Capture Returns staging ----
+  // ---- Capture Returns staging & packaging ----
   'returnsStaging.titleLead': 'Capturar',
-  'returnsStaging.titleEm': 'preparación de devoluciones',
+  'returnsStaging.titleEm': 'preparación y empaque',
   'returnsStaging.subtitle':
-    'Paso 3 de 5 · Fotografíe el producto de devoluciones en su carril de preparación final',
-  'returnsStaging.latestPhotoAlt': 'Carril de preparación más reciente',
+    'Paso 3 de 5 · Fotografíe el carril de preparación y el empaque (tarimas y SeedPaks)',
+  'returnsStaging.tabStagingLane': 'Carril de preparación',
+  'returnsStaging.tabPallets': 'Tarimas de madera',
+  'returnsStaging.tabSeedpaks': 'SeedPaks',
+  'returnsStaging.stagingHint':
+    'Tome fotos del carril de preparación con el producto devuelto. Puede tomar todas las fotos que necesite.',
+  'returnsStaging.palletsHint':
+    'Fotografíe el estado de las tarimas de madera (tarimas 54×40, 40×40, estado de la madera y base).',
+  'returnsStaging.seedpaksHint':
+    'Fotografíe el empaque de SeedPaks (totes vacíos, totes con producto, tapas y estado general).',
+  'returnsStaging.latestPhotoAlt': 'Foto más reciente',
   'returnsStaging.latestPhoto': 'Última foto',
   'returnsStaging.processing': 'Procesando foto…',
-  'returnsStaging.noPhotos': 'Sin fotos aún',
+  'returnsStaging.noPhotos': 'Sin fotos aún para {category}',
   'returnsStaging.capturedPhotos': 'Fotos capturadas ({count})',
-  'returnsStaging.thumbAlt': 'Preparación {n}',
+  'returnsStaging.thumbAlt': 'Foto {n}',
   'returnsStaging.deletePhoto': 'Eliminar foto',
-  'returnsStaging.hint':
-    'Tome fotos del carril de preparación con el producto devuelto. Puede tomar todas las fotos que necesite.',
   'returnsStaging.takeAnotherPhoto': 'Tomar otra foto',
   'returnsStaging.takePhoto': 'Tomar foto',
   'returnsStaging.continue': 'Continuar a verificar →',
   'returnsStaging.skipNoPhotos': 'Omitir — verificar sin fotos',
+  'returnsStaging.summaryBadgeOne': '1 foto',
+  'returnsStaging.summaryBadgeMany': '{count} fotos',
 
   // ---- Photo checklist ----
   'photoChecklist.photosFor': 'Fotos de {type}',
