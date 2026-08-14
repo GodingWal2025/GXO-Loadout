@@ -110,7 +110,58 @@ export function PhotoLightbox({ url, label, rotation = 0, onClose, onRetake, onR
   };
 
   const handleOpenNewTab = () => {
-    if (url) {
+    if (!url) return;
+    try {
+      const newTab = window.open('', '_blank');
+      if (newTab) {
+        newTab.document.title = label || 'Photo';
+        newTab.document.body.style.margin = '0';
+        newTab.document.body.style.padding = '0';
+        newTab.document.body.style.backgroundColor = '#0e0e11';
+        newTab.document.body.style.display = 'flex';
+        newTab.document.body.style.flexDirection = 'column';
+        newTab.document.body.style.alignItems = 'center';
+        newTab.document.body.style.justifyContent = 'center';
+        newTab.document.body.style.minHeight = '100vh';
+        newTab.document.body.style.overflow = 'auto';
+
+        const wrapper = newTab.document.createElement('div');
+        wrapper.style.display = 'flex';
+        wrapper.style.flexDirection = 'column';
+        wrapper.style.alignItems = 'center';
+        wrapper.style.justifyContent = 'center';
+        wrapper.style.padding = '24px';
+        wrapper.style.boxSizing = 'border-box';
+
+        if (label) {
+          const title = newTab.document.createElement('div');
+          title.textContent = label;
+          title.style.color = '#e2e8f0';
+          title.style.fontFamily = 'system-ui, -apple-system, sans-serif';
+          title.style.fontSize = '16px';
+          title.style.fontWeight = '600';
+          title.style.marginBottom = '16px';
+          wrapper.appendChild(title);
+        }
+
+        const img = newTab.document.createElement('img');
+        img.src = url;
+        img.alt = label || 'Photo';
+        img.style.maxWidth = '100%';
+        img.style.maxHeight = '90vh';
+        img.style.objectFit = 'contain';
+        img.style.borderRadius = '6px';
+        img.style.boxShadow = '0 8px 32px rgba(0,0,0,0.8)';
+        if (rotation) {
+          img.style.transform = `rotate(${rotation}deg)`;
+        }
+
+        wrapper.appendChild(img);
+        newTab.document.body.appendChild(wrapper);
+      } else {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+    } catch {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
   };
