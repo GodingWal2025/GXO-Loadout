@@ -103,6 +103,7 @@ function VerifyReturnsInner({
             label={t('verifyReturns.bolNumber', 'Returns BOL #')}
             field={returnsBol.bolNumber}
             mono
+            hideCamera
             placeholder="835"
             onChange={(field) => updateField({ bolNumber: field })}
           />
