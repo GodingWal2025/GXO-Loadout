@@ -1,5 +1,14 @@
-import type { Inspection } from '../types/inspection';
-import type { InventoryItem } from '../types/inventory';
+/**
+ * sync.ts — Shared storage sync engine for GXO Loadout.
+ *
+ * Implements real-time background sync with:
+ * - Two-way replication for inspections, inventory, sites, inspectors, and staging locations
+ * - Upload queue for photos with offline persistence
+ * - Client-side deterministic conflict resolution (three-way merge)
+ * - Adaptive idle backoff (15s active -> up to 120s when idle)
+ * - Rich status reporting (last synced timestamp, queue breakdowns, safe-to-close flag)
+ */
+
 import {
   dbApplyRemoteInspection,
   dbApplyRemoteInventory,
@@ -15,14 +24,28 @@ import {
   type SharedRecordKind,
   type SyncQueueItem,
 } from './db';
+import type { Inspection } from '../types/inspection';
+import type { InventoryItem } from '../types/inventory';
 import { mergeInspection, mergeInventory } from './conflictMerge';
+
+export interface FailedSyncItem {
+  id: string;
+  type: string;
+  error: string;
+  nextAttemptAt?: string;
+  retryCount: number;
+}
 
 export type SyncState = {
   syncing: boolean;
   pending: number;
+  pendingRecords: number;
+  pendingPhotos: number;
   lastSyncedAt?: string;
   error?: string;
+  failedItems?: FailedSyncItem[];
   adaptiveIntervalSeconds?: number;
+  isSafeToClose: boolean;
 };
 
 const CACHE_KEYS: Record<Exclude<SharedRecordKind, 'inspections' | 'inventory'>, string> = {
@@ -37,6 +60,7 @@ const CACHE_EVENTS: Record<keyof typeof CACHE_KEYS, string> = {
 };
 const MIGRATION_KEY = 'loadout.shared-storage.migrated.v1';
 const CURSOR_KEY_PREFIX = 'loadout.sync.cursor.';
+const LAST_SYNCED_KEY = 'loadout.sync.lastSyncedAt';
 
 const MIN_INTERVAL_MS = 15_000;  // 15 seconds active interval
 const MAX_INTERVAL_MS = 120_000; // 2 minutes maximum idle backoff
@@ -44,7 +68,19 @@ const MAX_INTERVAL_MS = 120_000; // 2 minutes maximum idle backoff
 let activeSync: Promise<void> | null = null;
 let syncTimeoutId: number | undefined;
 let currentIntervalMs = MIN_INTERVAL_MS;
-let state: SyncState = { syncing: false, pending: 0, adaptiveIntervalSeconds: MIN_INTERVAL_MS / 1000 };
+
+const initialLastSynced = typeof localStorage !== 'undefined' ? localStorage.getItem(LAST_SYNCED_KEY) || undefined : undefined;
+
+let state: SyncState = {
+  syncing: false,
+  pending: 0,
+  pendingRecords: 0,
+  pendingPhotos: 0,
+  lastSyncedAt: initialLastSynced,
+  adaptiveIntervalSeconds: MIN_INTERVAL_MS / 1000,
+  isSafeToClose: true,
+  failedItems: [],
+};
 
 class SyncHttpError extends Error {
   constructor(public status: number, message: string) {
@@ -53,7 +89,25 @@ class SyncHttpError extends Error {
 }
 
 function emit(patch: Partial<SyncState> = {}): void {
-  state = { ...state, ...patch, adaptiveIntervalSeconds: Math.round(currentIntervalMs / 1000) };
+  const isSyncing = patch.syncing !== undefined ? patch.syncing : state.syncing;
+  const pendingCount = patch.pending !== undefined ? patch.pending : state.pending;
+  const isSafe = !isSyncing && pendingCount === 0;
+
+  state = {
+    ...state,
+    ...patch,
+    adaptiveIntervalSeconds: Math.round(currentIntervalMs / 1000),
+    isSafeToClose: isSafe,
+  };
+
+  if (state.lastSyncedAt && typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(LAST_SYNCED_KEY, state.lastSyncedAt);
+    } catch {
+      // ignore
+    }
+  }
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent<SyncState>('loadout-sync-status', { detail: state }));
   }
@@ -269,25 +323,58 @@ async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promis
 }
 
 async function performSync(): Promise<void> {
+  const queueBefore = await dbListSyncQueue();
+  const recordsBefore = queueBefore.filter((item) => item.operation === 'put-record').length;
+  const photosBefore = queueBefore.filter((item) => item.operation === 'upload-photo').length;
+
   if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-    emit({ syncing: false, error: 'Offline', pending: (await dbListSyncQueue()).length });
+    emit({
+      syncing: false,
+      error: 'Offline',
+      pending: queueBefore.length,
+      pendingRecords: recordsBefore,
+      pendingPhotos: photosBefore,
+    });
     return;
   }
 
   await migrateExistingLocalData();
-  emit({ syncing: true, error: undefined, pending: (await dbListSyncQueue()).length });
-  const queue = await dbListSyncQueue();
+  emit({
+    syncing: true,
+    error: undefined,
+    pending: queueBefore.length,
+    pendingRecords: recordsBefore,
+    pendingPhotos: photosBefore,
+  });
 
+  const queue = await dbListSyncQueue();
   const recordItems = queue.filter((item) => item.operation === 'put-record');
   const photoItems = queue.filter((item) => item.operation === 'upload-photo');
 
+  const failedList: FailedSyncItem[] = [];
+
   for (const item of [...recordItems, ...photoItems]) {
-    if (item.nextAttemptAt && item.nextAttemptAt > new Date().toISOString()) continue;
+    if (item.nextAttemptAt && item.nextAttemptAt > new Date().toISOString()) {
+      failedList.push({
+        id: item.id,
+        type: item.operation === 'upload-photo' ? 'Photo' : item.kind,
+        error: 'Waiting for retry interval',
+        nextAttemptAt: item.nextAttemptAt,
+        retryCount: item.attempts || 0,
+      });
+      continue;
+    }
     try {
       await pushItem(item);
-    } catch (error) {
+    } catch (error: any) {
       await dbRetrySyncQueueItem(item);
       console.warn('Shared storage sync retry scheduled', error);
+      failedList.push({
+        id: item.id,
+        type: item.operation === 'upload-photo' ? 'Photo' : item.kind,
+        error: error instanceof Error ? error.message : 'Upload failed',
+        retryCount: (item.attempts || 0) + 1,
+      });
       if (item.operation === 'upload-photo') continue;
       if (!(error instanceof SyncHttpError) || error.status === 401 || error.status >= 500) break;
     }
@@ -299,10 +386,17 @@ async function performSync(): Promise<void> {
 
   let pulledChanges = 0;
   for (const kind of kinds) {
-    pulledChanges += await pullKind(kind, pendingIds);
+    try {
+      pulledChanges += await pullKind(kind, pendingIds);
+    } catch (e) {
+      console.warn(`Pull failed for kind: ${kind}`, e);
+    }
   }
 
-  const pending = (await dbListSyncQueue()).length;
+  const queueAfter = await dbListSyncQueue();
+  const pending = queueAfter.length;
+  const pendingRecords = queueAfter.filter((i) => i.operation === 'put-record').length;
+  const pendingPhotos = queueAfter.filter((i) => i.operation === 'upload-photo').length;
   const hadChanges = recordItems.length > 0 || photoItems.length > 0 || pulledChanges > 0;
 
   // Adaptive Idle Backoff: Reset to rapid interval when changes happen; backoff while idle
@@ -315,6 +409,9 @@ async function performSync(): Promise<void> {
   emit({
     syncing: false,
     pending,
+    pendingRecords,
+    pendingPhotos,
+    failedItems: failedList,
     lastSyncedAt: new Date().toISOString(),
     error: pending ? 'Waiting to retry' : undefined,
   });
@@ -339,9 +436,12 @@ export function syncNow(): Promise<void> {
   if (!activeSync) {
     activeSync = performSync()
       .catch(async (error) => {
+        const q = await dbListSyncQueue();
         emit({
           syncing: false,
-          pending: (await dbListSyncQueue()).length,
+          pending: q.length,
+          pendingRecords: q.filter((i) => i.operation === 'put-record').length,
+          pendingPhotos: q.filter((i) => i.operation === 'upload-photo').length,
           error: error instanceof Error ? error.message : 'Sync failed',
         });
       })

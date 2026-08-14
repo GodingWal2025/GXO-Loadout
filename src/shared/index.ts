@@ -109,6 +109,8 @@ export { SuggestableField } from './components/SuggestableField';
 export { QualityFlagButton } from './components/QualityFlagButton';
 export { ImageQualityModal } from './components/ImageQualityModal';
 export { PhotoLightbox } from './components/PhotoLightbox';
+export { ConfirmModal } from './components/ConfirmModal';
+export { UndoToast } from './components/UndoToast';
 export { ViewEditToggle } from './components/ViewEditToggle';
 export { StepBackLink } from './components/StepBackLink';
 export { StagingLanesMap } from './components/StagingLanesMap';

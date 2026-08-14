@@ -94,6 +94,7 @@ export interface InspectionPhoto {
   metadata: PhotoMetadata;
   qualityFlag?: QualityFlag;
   rotation?: number;
+  uploadedAt?: string;
 }
 
 /**

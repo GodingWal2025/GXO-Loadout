@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
-import { PALLET_TYPES, expectedBags } from '../shared';
+import { PALLET_TYPES, expectedBags, ConfirmModal, UndoToast } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
@@ -51,6 +51,18 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    title: string;
+    message: string | React.ReactNode;
+    confirmLabel?: string;
+    cancelLabel?: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+  const [undoToast, setUndoToast] = useState<{
+    message: string;
+    onUndo: () => void;
+  } | null>(null);
 
   const warnings = useMemo(() => {
     const list: string[] = [];
@@ -168,18 +180,56 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
     setShowHandoffModal(false);
   };
 
-  const handleArchive = async () => {
-    if (
-      window.confirm(
-        t(
-          'workspace.confirmArchive',
-          'Are you sure you want to archive this inspection? It will be hidden from the active list.'
-        )
-      )
-    ) {
-      await dbArchiveInspection(inspection.id);
-      navigate('/');
-    }
+  const handleArchive = () => {
+    setConfirmModal({
+      title: t('workspace.archiveTitle', 'Archive this inspection?'),
+      message: t(
+        'workspace.confirmArchive',
+        'Are you sure you want to archive this inspection? It will be hidden from the active list.'
+      ),
+      confirmLabel: t('workspace.archive', 'Archive'),
+      danger: false,
+      onConfirm: async () => {
+        setConfirmModal(null);
+        await dbArchiveInspection(inspection.id);
+        navigate('/');
+      },
+    });
+  };
+
+  const requestDeletePallet = (palletNumber: number) => {
+    const palletToDelete = inspection.pallets[palletNumber - 1];
+    if (!palletToDelete) return;
+    const bagCount = palletToDelete.batchSections.reduce(
+      (sum, bs) => sum + (bs.actualBagCount.value || 0),
+      0
+    );
+    const photoCount = palletToDelete.photos?.length || 0;
+
+    setConfirmModal({
+      title: t('workspace.deletePalletTitle', 'Delete Pallet #{number}?', { number: palletNumber }),
+      message: t(
+        'workspace.deletePalletMessage',
+        'Are you sure you want to delete Pallet #{number}? {bags} bags and {photos} photos will be removed.',
+        { number: palletNumber, bags: bagCount, photos: photoCount }
+      ),
+      confirmLabel: t('common.delete', 'Delete'),
+      danger: true,
+      onConfirm: () => {
+        setConfirmModal(null);
+        const savedPallet = { ...palletToDelete };
+        const savedIndex = palletNumber - 1;
+        dispatch({ type: 'REMOVE_PALLET', index: savedIndex });
+
+        setUndoToast({
+          message: t('workspace.palletDeletedToast', 'Pallet #{number} removed', { number: palletNumber }),
+          onUndo: () => {
+            dispatch({ type: 'RESTORE_PALLET', pallet: savedPallet, atIndex: savedIndex });
+            setUndoToast(null);
+          },
+        });
+      },
+    });
   };
 
   return (
@@ -472,17 +522,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              if (
-                                window.confirm(
-                                  t(
-                                    'workspace.confirmDeletePallet',
-                                    'Are you sure you want to delete Pallet #{number}?',
-                                    { number: p.palletNumber }
-                                  )
-                                )
-                              ) {
-                                dispatch({ type: 'REMOVE_PALLET', index: p.palletNumber - 1 });
-                              }
+                              requestDeletePallet(p.palletNumber);
                             }}
                             style={{
                               background: 'transparent',
@@ -543,6 +583,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
               readOnly={readOnly}
               dispatch={dispatch}
               lineItems={inspection.picklist.lineItems}
+              onDeletePallet={requestDeletePallet}
             />
           ))
         )}
@@ -576,7 +617,9 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
             {t('workspace.saveAndExit', 'Save & exit')}
           </button>
           <button
-            className="btn btn--accent btn--lg"
+            className={`btn btn--lg ${
+              readOnly || inspection.type === 'returns' || allFulfilled ? 'btn--accent' : 'btn--ghost'
+            }`}
             onClick={() =>
               readOnly || inspection.type === 'returns' || allFulfilled
                 ? navigate(`/inspection/${inspection.id}/complete`)
@@ -593,6 +636,26 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           </button>
         </div>
       </main>
+
+      {confirmModal && (
+        <ConfirmModal
+          title={confirmModal.title}
+          message={confirmModal.message}
+          confirmLabel={confirmModal.confirmLabel}
+          cancelLabel={confirmModal.cancelLabel}
+          danger={confirmModal.danger}
+          onConfirm={confirmModal.onConfirm}
+          onCancel={() => setConfirmModal(null)}
+        />
+      )}
+
+      {undoToast && (
+        <UndoToast
+          message={undoToast.message}
+          onUndo={undoToast.onUndo}
+          onDismiss={() => setUndoToast(null)}
+        />
+      )}
     </>
   );
 }
@@ -605,6 +668,7 @@ function StopSection({
   readOnly,
   dispatch,
   lineItems,
+  onDeletePallet,
 }: {
   stopKey: string;
   deliveries: Delivery[];
@@ -613,6 +677,7 @@ function StopSection({
   readOnly?: boolean;
   dispatch?: any;
   lineItems?: any[];
+  onDeletePallet?: (palletNumber: number) => void;
 }) {
   const t = useT();
   const allPallets = deliveries.flatMap((d) => palletsByDelivery[d.id] || []);
@@ -642,6 +707,7 @@ function StopSection({
           readOnly={readOnly}
           dispatch={dispatch}
           lineItems={lineItems}
+          onDeletePallet={onDeletePallet}
         />
       ))}
     </section>
@@ -655,6 +721,7 @@ function DeliveryGroup({
   readOnly,
   dispatch,
   lineItems,
+  onDeletePallet,
 }: {
   delivery: Delivery;
   pallets: PalletInspection[];
@@ -662,6 +729,7 @@ function DeliveryGroup({
   readOnly?: boolean;
   dispatch?: any;
   lineItems?: any[];
+  onDeletePallet?: (palletNumber: number) => void;
 }) {
   const t = useT();
   const palletTypeLabel = usePalletTypeLabel();
@@ -730,15 +798,9 @@ function DeliveryGroup({
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        if (
-                          window.confirm(
-                            t(
-                              'workspace.confirmDeletePallet',
-                              'Are you sure you want to delete Pallet #{number}?',
-                              { number: p.palletNumber }
-                            )
-                          )
-                        ) {
+                        if (onDeletePallet) {
+                          onDeletePallet(p.palletNumber);
+                        } else {
                           dispatch({ type: 'REMOVE_PALLET', index: p.palletNumber - 1 });
                         }
                       }}

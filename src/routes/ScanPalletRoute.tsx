@@ -6,7 +6,7 @@ import { SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, BatchSection, PalletType } from '../shared';
-import { PALLET_TYPES } from '../shared';
+import { PALLET_TYPES, ConfirmModal } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -138,6 +138,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   }, [pallet?.findings]);
 
   const [validationError, setValidationError] = useState('');
+  const [showConfirmRemove, setShowConfirmRemove] = useState(false);
 
   const handleAdd = () => {
     if (!pallet.lpnNumber && inspection.type !== 'returns' && pallet.passInspection === 'Fail') {
@@ -174,20 +175,12 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
     return null;
   }
 
-
-
-  // Expected batches for this pallet — pulled from picklist line items
-  // assigned to the same delivery, plus any batches already entered manually
-  // in this pallet's batchSections. Passed to OCR so it can match Tesseract's
-
-
   const removePallet = () => {
-    if (
-      !window.confirm(
-        t('pallet.confirmRemove', 'Remove this pallet? Photos and data will be lost.')
-      )
-    )
-      return;
+    setShowConfirmRemove(true);
+  };
+
+  const confirmRemovePallet = () => {
+    setShowConfirmRemove(false);
     dispatch({ type: 'REMOVE_PALLET', index: palletIndex });
     navigate(`/inspection/${inspection.id}`);
   };
@@ -720,6 +713,17 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           )}
         </div>
       </div>
+
+      {showConfirmRemove && (
+        <ConfirmModal
+          title={t('pallet.confirmRemoveTitle', 'Remove this pallet?')}
+          message={t('pallet.confirmRemove', 'Remove this pallet? Photos and data will be lost.')}
+          confirmLabel={t('pallet.removePallet', 'Remove pallet')}
+          danger
+          onConfirm={confirmRemovePallet}
+          onCancel={() => setShowConfirmRemove(false)}
+        />
+      )}
     </main>
   );
 }

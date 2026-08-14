@@ -44,6 +44,10 @@ interface SlotPhotoCaptureProps {
   readOnly?: boolean;
   /** Skip the portrait-orientation warning (for wide/document subjects). */
   allowLandscape?: boolean;
+  /** Sequence indicator: next required photo to take */
+  isNextRequired?: boolean;
+  /** Step number in required photo sequence */
+  stepNumber?: number;
 }
 
 export function SlotPhotoCapture({
@@ -59,6 +63,8 @@ export function SlotPhotoCapture({
   currentUser,
   readOnly = false,
   allowLandscape = false,
+  isNextRequired = false,
+  stepNumber,
 }: SlotPhotoCaptureProps) {
   const [pending, setPending] = useState<PendingCapture | null>(null);
   const [viewing, setViewing] = useState(false);
@@ -118,28 +124,68 @@ export function SlotPhotoCapture({
   }
 
   const handleRetake = () => {
-    if (pending) URL.revokeObjectURL(pending.previewUrl);
     setPending(null);
-    setTimeout(() => capture(), 50);
+    capture();
   };
 
   const handleKeep = async () => {
     if (!pending) return;
-    const { blob, previewUrl } = pending;
-    URL.revokeObjectURL(previewUrl);
+    const blobToProcess = pending.blob;
     setPending(null);
-    await processCapture(blob);
+    await processCapture(blobToProcess);
   };
 
   if (!existingPhoto) {
     return (
       <>
         <button
-          className="photo-slot photo-slot--empty"
+          className={`photo-slot photo-slot--empty ${isNextRequired ? 'photo-slot--next-required' : ''}`}
           onClick={capture}
           type="button"
           disabled={readOnly}
+          style={
+            isNextRequired
+              ? {
+                  border: '2px solid var(--accent)',
+                  boxShadow: '0 0 0 3px var(--accent-bg)',
+                  position: 'relative',
+                }
+              : { position: 'relative' }
+          }
         >
+          {stepNumber && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 6,
+                left: 8,
+                fontSize: 10,
+                fontWeight: 600,
+                color: isNextRequired ? 'var(--accent)' : 'var(--ink-faint)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+              }}
+            >
+              #{stepNumber}
+            </span>
+          )}
+          {isNextRequired && (
+            <span
+              style={{
+                position: 'absolute',
+                top: 6,
+                right: 8,
+                fontSize: 10,
+                fontWeight: 700,
+                background: 'var(--accent)',
+                color: '#fff',
+                padding: '1px 5px',
+                borderRadius: 4,
+              }}
+            >
+              NEXT
+            </span>
+          )}
           <div className="photo-slot__icon">📷</div>
           <div className="photo-slot__label">{slotLabel}</div>
           <div className="photo-slot__hint">{readOnly ? 'Not captured' : 'Tap to capture'}</div>
@@ -165,7 +211,29 @@ export function SlotPhotoCapture({
   return (
     <>
       {/* Tapping a filled slot ENLARGES the photo; retake is a button inside the viewer */}
-      <div className={tileClass} onClick={() => setViewing(true)} style={{ overflow: 'hidden' }}>
+      <div className={tileClass} onClick={() => setViewing(true)} style={{ overflow: 'hidden', position: 'relative' }}>
+        {/* Upload status indicator badge */}
+        <div
+          style={{
+            position: 'absolute',
+            top: 4,
+            left: 4,
+            background: 'rgba(0,0,0,0.65)',
+            color: '#ffffff',
+            borderRadius: 4,
+            padding: '2px 5px',
+            fontSize: 10,
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3,
+            zIndex: 2,
+          }}
+          title={existingPhoto.uploadedAt ? 'Uploaded to server' : 'Queued for cloud upload'}
+        >
+          {existingPhoto.uploadedAt ? '☁️' : '⏳'}
+        </div>
+
         <img
           src={displayUrl}
           alt={slotLabel}

@@ -49,6 +49,7 @@ export function DynamicPhotoChecklist({
 
   const findSlotPhoto = (slotKey: string) => photos.find((p) => p.slotKey === slotKey);
   const capturedCount = photos.filter((p) => p.slotKey && requiredShots.includes(p.slotKey as any)).length;
+  const firstMissingIndex = requiredShots.findIndex((shot) => !findSlotPhoto(shot));
 
   return (
     <div className="photo-checklist">
@@ -69,8 +70,8 @@ export function DynamicPhotoChecklist({
       </div>
 
       <div className="photo-slot-grid">
-        {/* 2. Dynamically render exactly what is needed */}
-        {requiredShots.map((shotType) => {
+        {/* 2. Dynamically render exactly what is needed with step sequencing */}
+        {requiredShots.map((shotType, idx) => {
           // Determine generic photo category based on requirement (or default to Pallet_Side)
           let category: any = 'Pallet_Side';
           if (
@@ -92,6 +93,8 @@ export function DynamicPhotoChecklist({
             category = 'Returns_Damage_Assessment';
           }
 
+          const isNext = !readOnly && idx === firstMissingIndex;
+
           return (
             <SlotPhotoCapture
               key={shotType}
@@ -106,6 +109,8 @@ export function DynamicPhotoChecklist({
               onQualityFlag={onQualityFlag}
               onRotatePhoto={onRotatePhoto}
               readOnly={readOnly}
+              isNextRequired={isNext}
+              stepNumber={idx + 1}
             />
           );
         })}

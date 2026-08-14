@@ -132,10 +132,15 @@ export const pallet: Record<string, string> = {
   'workspace.backToBol': '← Fotos del BOL',
   'workspace.backToBolTitle': 'Volver a las páginas de fotos del BOL / lista de surtido',
   'workspace.archive': 'Archivar',
+  'workspace.archiveTitle': '¿Archivar esta inspección?',
   'workspace.home': '← Inicio',
   'workspace.saveAndExit': 'Guardar y salir',
   'workspace.deletePallet': 'Eliminar tarima',
-  'workspace.confirmDeletePallet': '¿Seguro que desea eliminar la tarima n.º {number}?',
+  'workspace.deletePalletTitle': '¿Eliminar tarima n.º {number}?',
+  'workspace.deletePalletMessage':
+    '¿Seguro que desea eliminar la tarima n.º {number}? Se eliminarán {bags} bolsas y {photos} fotos.',
+  'workspace.palletDeletedToast': 'Tarima n.º {number} eliminada',
+  'pallet.confirmRemoveTitle': '¿Eliminar esta tarima?',
   'workspace.confirmArchive':
     '¿Seguro que desea archivar esta inspección? Se ocultará de la lista activa.',
   'workspace.viewBannerPre': 'Esta inspección está completa y abierta en',

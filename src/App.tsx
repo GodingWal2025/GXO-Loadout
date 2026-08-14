@@ -27,6 +27,7 @@ const InvestigationRoute = lazy(() => import('./routes/InvestigationRoute').then
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
 import { SyncRefreshButton } from './components/SyncRefreshButton';
+import { SyncDetailsModal } from './components/SyncDetailsModal';
 import { getSyncState, type SyncState } from './shared/services/sync';
 
 export default function App() {
@@ -87,6 +88,7 @@ function Shell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const t = useT();
   const [syncState, setSyncState] = useState<SyncState>(() => getSyncState());
+  const [showSyncModal, setShowSyncModal] = useState(false);
 
   useEffect(() => {
     const update = (event: Event) => setSyncState((event as CustomEvent<SyncState>).detail);
@@ -128,7 +130,23 @@ function Shell({ children }: { children: ReactNode }) {
                 <span className="topbar__site-name">{config.siteName}</span>
               </div>
             )}
-            <div className="topbar__status" title={syncState.error || undefined}>
+            <button
+              type="button"
+              className="topbar__status"
+              onClick={() => setShowSyncModal(true)}
+              title={syncState.error || t('sync.clickForDetails', 'Click for sync & device safety details')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                cursor: 'pointer',
+                font: 'inherit',
+                color: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '4px 8px',
+                borderRadius: '6px',
+              }}
+            >
               <span className={`topbar__status-dot ${syncState.syncing ? 'topbar__status-dot--syncing' : syncState.error ? 'topbar__status-dot--offline' : ''}`} />
               {syncState.syncing
                 ? t('shell.syncing', 'Syncing…')
@@ -137,12 +155,14 @@ function Shell({ children }: { children: ReactNode }) {
                   : syncState.error
                     ? t('shell.offline', 'Offline')
                     : t('shell.savedToServer', 'Saved to server')}
-            </div>
+            </button>
             <SyncRefreshButton />
             <LanguageToggle />
           </div>
         </div>
       </div>
+
+      {showSyncModal && <SyncDetailsModal onClose={() => setShowSyncModal(false)} />}
 
       {children}
     </div>

@@ -125,4 +125,10 @@ export const components: Record<string, string> = {
 
   // Workspace
   'workspace.adjustOrder': 'Ajustar pedido',
+
+  // Common & Toast
+  'common.cancel': 'Cancelar',
+  'common.delete': 'Eliminar',
+  'common.confirm': 'Confirmar',
+  'toast.undoWithSec': '↺ Deshacer ({sec}s)',
 };

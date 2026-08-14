@@ -127,6 +127,7 @@ export type Action =
       scannedBy?: string;
     }
   | { type: 'REMOVE_PALLET'; index: number }
+  | { type: 'RESTORE_PALLET'; pallet: PalletInspection; atIndex?: number }
   | { type: 'UPDATE_PALLET'; index: number; patch: Partial<PalletInspection> }
   | { type: 'UPDATE_BATCH_SECTION'; palletIndex: number; sectionId: string; patch: Partial<BatchSection> }
   | { type: 'ADD_PALLET_PHOTO'; palletIndex: number; photo: InspectionPhoto }
@@ -489,6 +490,20 @@ function reducer(state: Inspection, action: Action): Inspection {
           .map((p, i) => ({ ...p, palletNumber: i + 1 })),
       };
       break;
+
+    case 'RESTORE_PALLET': {
+      const list = [...state.pallets];
+      const targetIdx =
+        action.atIndex !== undefined
+          ? Math.max(0, Math.min(action.atIndex, list.length))
+          : list.length;
+      list.splice(targetIdx, 0, action.pallet);
+      next = {
+        ...state,
+        pallets: list.map((p, i) => ({ ...p, palletNumber: i + 1 })),
+      };
+      break;
+    }
 
     case 'UPDATE_PALLET':
       next = {
