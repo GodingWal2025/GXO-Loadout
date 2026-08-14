@@ -49,6 +49,10 @@ export const components: Record<string, string> = {
   'lightbox.retake': '📷 Volver a tomar foto',
   'lightbox.rotate': '↻ Rotar foto',
   'lightbox.close': '✕ Cerrar',
+  'lightbox.openNewTab': '↗ Abrir en nueva pestaña',
+  'lightbox.zoomIn': 'Acercar',
+  'lightbox.zoomOut': 'Alejar',
+  'lightbox.resetZoom': 'Restablecer',
 
   // ImageQualityModal
   'imgQuality.titleBlocking': '✋ Debe volver a tomar la foto',
