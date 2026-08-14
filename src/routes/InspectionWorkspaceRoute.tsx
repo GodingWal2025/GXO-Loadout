@@ -184,7 +184,15 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
 
   return (
     <>
-      {inspection.type === 'outbound' && <RunningTallyHeader picklist={inspection.picklist} />}
+      {inspection.type === 'outbound' && (
+        <RunningTallyHeader
+          picklist={inspection.picklist}
+          pallets={inspection.pallets}
+          startedBy={inspection.startedBy}
+          currentInspector={inspection.currentInspector}
+          handoffLog={inspection.handoffLog}
+        />
+      )}
       <main>
         <div className="page-head">
           <div>
