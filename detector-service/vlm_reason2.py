@@ -34,29 +34,31 @@ class VLMReasonService:
 
     def _build_prompt(self, recipe: dict[str, Any] | None = None) -> str:
         return (
-            "You are a computer vision expert inspecting a seed bag pallet in a logistics warehouse.\n"
-            "You are provided with 4 ordered side view photos of the pallet in this sequence:\n"
+            "You are an expert industrial computer vision inspector counting stacked seed bags on a warehouse pallet.\n"
+            "You are provided with 4 ordered side view photos of the pallet:\n"
             "Image 1: FRONT face\n"
             "Image 2: RIGHT face\n"
             "Image 3: BACK face\n"
             "Image 4: LEFT face\n\n"
-            "Carefully analyze all 4 faces and determine:\n"
-            "1. How many horizontal bag layers are visible on EACH face (front, right, back, left).\n"
-            "2. What is the consensus layer count across all 4 faces.\n"
-            "3. Estimate the number of bags per layer by counting the distinct bag flaps visible on a single full layer.\n"
-            "4. Is the top layer incomplete/partial (fewer bags than a full layer)? If so, estimate the bag count on the partial top course.\n"
-            "5. Is the pallet noticeably leaning, sagging, or structurally irregular?\n"
-            "6. Provide an estimated vertical bounding coordinate range (normalized 0.0 to 1.0) for each layer.\n\n"
-            "Return ONLY valid JSON matching this schema with no extra text or markdown ticks outside the JSON:\n"
+            "CRITICAL INSPECTION INSTRUCTIONS:\n"
+            "1. Count layers from the BOTTOM (Layer 1 resting directly on the wooden pallet) upward to the top layer.\n"
+            "   Pallet heights vary widely — they can be 4, 5, 6, 7, 8, 9, 10, or more layers. DO NOT assume 10 layers.\n"
+            "2. Count the distinct horizontal seams/courses of bags on EACH of the 4 faces individually.\n"
+            "3. Check the TOP course carefully:\n"
+            "   - Is it a full, flat layer?\n"
+            "   - Or is it a partial / incomplete top tier with only a few bags (e.g., 1, 2, 3, 4 bags)?\n"
+            "4. Estimate how many bags make up ONE full standard layer on this pallet (typically 5, 6, 7, or 8 bags per layer).\n"
+            "5. Calculate the total bag count: (full_layers * bags_per_layer) + partial_top_bags.\n\n"
+            "Output your reasoning and final analysis as valid JSON with no markdown wrapping:\n"
             "{\n"
-            '  "layerCountByFace": {"front": 10, "right": 10, "back": 10, "left": 10},\n'
-            '  "consensusLayers": 10,\n'
-            '  "estimatedBagsPerLayer": 6,\n'
-            '  "partialTopDetected": false,\n'
-            '  "partialTopCountEstimate": 0,\n'
-            '  "irregularStack": false,\n'
-            '  "structuralTotalEstimate": 60,\n'
-            '  "layerBounds": [{"layer": 1, "ymin": 0.15, "ymax": 0.22}, {"layer": 2, "ymin": 0.22, "ymax": 0.29}]\n'
+            '  "reasoning": "Step-by-step count: Bottom layer 1 on pallet up to top layer N. On front face I count N layers...",\n'
+            '  "layerCountByFace": {"front": <int>, "right": <int>, "back": <int>, "left": <int>},\n'
+            '  "consensusLayers": <int total layers including top>,\n'
+            '  "estimatedBagsPerLayer": <int bags in one full layer>,\n'
+            '  "partialTopDetected": <true if top layer is incomplete else false>,\n'
+            '  "partialTopCountEstimate": <int bags on partial top course or 0 if full>,\n'
+            '  "irregularStack": <true if severely leaning or damaged else false>,\n'
+            '  "structuralTotalEstimate": <int total computed bags>\n'
             "}"
         )
 
@@ -110,9 +112,14 @@ class VLMReasonService:
 
         # Parse JSON
         try:
-            cleaned = re.sub(r"^```(?:json)?", "", raw_output, flags=re.MULTILINE)
-            cleaned = re.sub(r"```$", "", cleaned, flags=re.MULTILINE).strip()
-            result = json.loads(cleaned)
+            # Look for outermost JSON object { ... }
+            match = re.search(r"\{.*\}", raw_output, re.DOTALL)
+            if match:
+                result = json.loads(match.group(0))
+            else:
+                cleaned = re.sub(r"^```(?:json)?", "", raw_output, flags=re.MULTILINE)
+                cleaned = re.sub(r"```$", "", cleaned, flags=re.MULTILINE).strip()
+                result = json.loads(cleaned)
             result["status"] = "success"
             return result
         except Exception as e:
@@ -120,9 +127,10 @@ class VLMReasonService:
             return {
                 "status": "partial",
                 "raw_output": raw_output,
-                "consensusLayers": 10,
+                "consensusLayers": 7,
+                "estimatedBagsPerLayer": 6,
                 "partialTopDetected": False,
                 "partialTopCountEstimate": 0,
                 "irregularStack": False,
-                "structuralTotalEstimate": 60
+                "structuralTotalEstimate": 42
             }
