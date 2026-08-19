@@ -572,14 +572,8 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
               <label style="flex:1;min-width:200px"><span class="fld">Select pallet from Review data</span>
                 <select id="testSampleSelect"><option value="">-- Choose uploaded sample or drop photos below --</option></select>
               </label>
-              <label style="width:160px"><span class="fld">SKU / Material</span>
+              <label style="width:200px"><span class="fld">SKU / Material <span class="hint" style="font-weight:400">(optional)</span></span>
                 <input type="text" id="testSkuInput" class="mono" placeholder="e.g. DKC42-64RIB">
-              </label>
-              <label style="width:100px"><span class="fld">Bags / Layer</span>
-                <input type="number" id="testBagsPerLayer" min="1" max="200" value="6" inputmode="numeric">
-              </label>
-              <label style="width:100px"><span class="fld">Exp. Layers</span>
-                <input type="number" id="testExpLayers" min="1" max="200" value="10" inputmode="numeric">
               </label>
               <button class="btn" id="testRunBtn">⚡ Run Vision Pipeline</button>
             </div>
@@ -1581,17 +1575,29 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
   if ($("#testEndpointUrl")) $("#testEndpointUrl").value = savedEndpoint;
   $("#testEndpointUrl")?.addEventListener("input", e => store.set("bcc-gpu-endpoint", e.target.value.trim()));
 
+  function normalizeEndpointUrl(url) {
+    if (!url) return "";
+    let clean = url.trim().replace(/\/+$/, "");
+    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+      clean = "http://" + clean;
+    }
+    return clean;
+  }
+
   async function pingGpuEndpoint() {
-    const url = $("#testEndpointUrl")?.value.trim();
+    const rawUrl = $("#testEndpointUrl")?.value.trim();
     const badge = $("#testEndpointStatus");
-    if (!url) { badge.textContent = "⏳ enter URL"; badge.style.color = "var(--faint)"; return; }
+    if (!rawUrl) { badge.textContent = "⏳ enter URL"; badge.style.color = "var(--faint)"; return; }
+    const url = normalizeEndpointUrl(rawUrl);
     badge.textContent = "⏳ pinging…"; badge.style.color = "var(--faint)";
     try {
-      const r = await fetch(url.replace(/\/+$/, "") + "/api/v1/health", { mode: "cors" });
+      const r = await fetch(url + "/api/v1/health", { mode: "cors" });
       const j = await r.json();
       badge.textContent = "✓ " + (j.gpu_0 || "connected"); badge.style.color = "var(--ok)";
     } catch (e) {
-      badge.textContent = "✕ offline"; badge.style.color = "var(--crit)";
+      const isHttpsToHttp = location.protocol === "https:" && url.startsWith("http:");
+      badge.textContent = isHttpsToHttp ? "✕ blocked (mixed content)" : "✕ offline";
+      badge.style.color = "var(--crit)";
     }
   }
   $("#testPingBtn")?.addEventListener("click", pingGpuEndpoint);
@@ -1612,8 +1618,9 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
   }
 
   $("#testRunBtn")?.addEventListener("click", async () => {
-    const gpuUrl = $("#testEndpointUrl")?.value.trim().replace(/\/+$/, "");
-    if (!gpuUrl) { alert("Enter the GPU Endpoint URL first (e.g. https://your-vast-host:8000)"); return; }
+    const rawUrl = $("#testEndpointUrl")?.value.trim();
+    if (!rawUrl) { alert("Enter the GPU Endpoint URL first (e.g. http://38.58.188.42:33865)"); return; }
+    const gpuUrl = normalizeEndpointUrl(rawUrl);
 
     const sideRoles = ["FRONT", "RIGHT", "BACK", "LEFT"];
     const missing = sideRoles.filter(r => !testPhotos[r]);
@@ -1634,18 +1641,11 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
         images[role.toLowerCase()] = await blobToBase64(testPhotos[role].blob);
       }
 
-      // Build recipe payload
+      // Send SKU (if known) — vision model must determine bags per layer and layer count autonomously
       const sku = $("#testSkuInput")?.value.trim() || "STANDARD";
-      const bagsPerLayer = parseInt($("#testBagsPerLayer")?.value) || 6;
-      const expLayers = parseInt($("#testExpLayers")?.value) || 10;
-      const recipe = {
-        sku,
-        bags_per_layer: bagsPerLayer,
-        expected_layers: expLayers,
-        expected_total: bagsPerLayer * expLayers
-      };
+      const recipe = { sku };
 
-      statusEl.innerHTML = `<span>⏳ Running inference on GPU 0 (Qwen2.5-VL) + GPU 1 (SAM 2)… this takes 4-8 seconds.</span>`;
+      statusEl.innerHTML = `<span>⏳ Running vision inference on GPU 0 (Qwen2.5-VL) + GPU 1 (SAM 2)…</span>`;
 
       const resp = await fetch(gpuUrl + "/api/v1/analyze-pallet", {
         method: "POST",
@@ -1666,7 +1666,16 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       renderTestResults(result, elapsed);
     } catch (err) {
       statusEl.className = "banner err";
-      statusEl.innerHTML = `<b>Inference error:</b> ${escapeHtml(err.message || String(err))}`;
+      const msg = err.message || String(err);
+      if (msg.includes("Failed to fetch") && location.protocol === "https:" && gpuUrl.startsWith("http:")) {
+        statusEl.innerHTML = `<b>Mixed Content / Connection Blocked:</b><br>` +
+          `Your browser is on an HTTPS page (<code>${location.origin}</code>) and blocked the request to plain HTTP (<code>${escapeHtml(gpuUrl)}</code>).<br><br>` +
+          `<b>Fix options:</b><br>` +
+          `1. In Chrome address bar, click the <b>Site Settings</b> (left of URL) → set <b>Insecure content</b> to <i>Allow</i>, then reload.<br>` +
+          `2. Or test locally via <code>http://localhost:5173/bag-count-console.html</code>.`;
+      } else {
+        statusEl.innerHTML = `<b>Inference error:</b> ${escapeHtml(msg)}`;
+      }
     }
   });
 

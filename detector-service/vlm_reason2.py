@@ -33,15 +33,6 @@ class VLMReasonService:
         print(f"[✓] VLM Reasoner loaded into VRAM on {device}!")
 
     def _build_prompt(self, recipe: dict[str, Any] | None = None) -> str:
-        recipe_hint = ""
-        if recipe:
-            bags_per_layer = recipe.get("bags_per_layer", 5)
-            exp_layers = recipe.get("expected_layers", 10)
-            recipe_hint = (
-                f"Reference Stacking Recipe for this SKU: Standard is {bags_per_layer} bags per layer, "
-                f"typically {exp_layers} full layers.\n"
-            )
-
         return (
             "You are a computer vision expert inspecting a seed bag pallet in a logistics warehouse.\n"
             "You are provided with 4 ordered side view photos of the pallet in this sequence:\n"
@@ -49,17 +40,18 @@ class VLMReasonService:
             "Image 2: RIGHT face\n"
             "Image 3: BACK face\n"
             "Image 4: LEFT face\n\n"
-            f"{recipe_hint}"
             "Carefully analyze all 4 faces and determine:\n"
             "1. How many horizontal bag layers are visible on EACH face (front, right, back, left).\n"
             "2. What is the consensus layer count across all 4 faces.\n"
-            "3. Is the top layer incomplete/partial (fewer bags than a full layer)? If so, estimate the bag count on the partial top course.\n"
-            "4. Is the pallet noticeably leaning, sagging, or structurally irregular?\n"
-            "5. Provide an estimated vertical bounding coordinate range (normalized 0.0 to 1.0) for each layer.\n\n"
+            "3. Estimate the number of bags per layer by counting the distinct bag flaps visible on a single full layer.\n"
+            "4. Is the top layer incomplete/partial (fewer bags than a full layer)? If so, estimate the bag count on the partial top course.\n"
+            "5. Is the pallet noticeably leaning, sagging, or structurally irregular?\n"
+            "6. Provide an estimated vertical bounding coordinate range (normalized 0.0 to 1.0) for each layer.\n\n"
             "Return ONLY valid JSON matching this schema with no extra text or markdown ticks outside the JSON:\n"
             "{\n"
             '  "layerCountByFace": {"front": 10, "right": 10, "back": 10, "left": 10},\n'
             '  "consensusLayers": 10,\n'
+            '  "estimatedBagsPerLayer": 6,\n'
             '  "partialTopDetected": false,\n'
             '  "partialTopCountEstimate": 0,\n'
             '  "irregularStack": false,\n'
