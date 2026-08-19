@@ -33,7 +33,19 @@ class PalletSFTDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         item = self.data[idx]
         image_paths = item["images"]
-        images = [Image.open(p).convert("RGB") for p in image_paths]
+        images = []
+        for p in image_paths:
+            img_p = Path(p)
+            if not img_p.exists():
+                # Check relative to repo root
+                alt = Path("/workspace/GXO-Loadout") / p
+                if alt.exists():
+                    img_p = alt
+                else:
+                    alt2 = Path("/workspace/GXO-Loadout/detector-service") / p
+                    if alt2.exists():
+                        img_p = alt2
+            images.append(Image.open(img_p).convert("RGB"))
         
         user_prompt = item["conversations"][0]["value"]
         assistant_resp = item["conversations"][1]["value"]

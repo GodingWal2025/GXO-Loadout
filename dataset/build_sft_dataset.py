@@ -84,10 +84,10 @@ def build_training_dataset(
         entry = {
             "id": p.name,
             "images": [
-                str(p / "FRONT.jpg"),
-                str(p / "RIGHT.jpg"),
-                str(p / "BACK.jpg"),
-                str(p / "LEFT.jpg")
+                str((p / "FRONT.jpg").resolve()),
+                str((p / "RIGHT.jpg").resolve()),
+                str((p / "BACK.jpg").resolve()),
+                str((p / "LEFT.jpg").resolve())
             ],
             "conversations": [
                 {
