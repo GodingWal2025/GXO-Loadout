@@ -37,7 +37,6 @@ class PalletSFTDataset(torch.utils.data.Dataset):
         for p in image_paths:
             img_p = Path(p)
             if not img_p.exists():
-                # Check relative to repo root
                 alt = Path("/workspace/GXO-Loadout") / p
                 if alt.exists():
                     img_p = alt
@@ -45,7 +44,9 @@ class PalletSFTDataset(torch.utils.data.Dataset):
                     alt2 = Path("/workspace/GXO-Loadout/detector-service") / p
                     if alt2.exists():
                         img_p = alt2
-            images.append(Image.open(img_p).convert("RGB"))
+            img = Image.open(img_p).convert("RGB")
+            img.thumbnail((768, 768), Image.Resampling.LANCZOS)
+            images.append(img)
         
         user_prompt = item["conversations"][0]["value"]
         assistant_resp = item["conversations"][1]["value"]
@@ -62,10 +63,7 @@ class PalletSFTDataset(torch.utils.data.Dataset):
         inputs = self.processor(
             text=[text],
             images=images,
-            return_tensors="pt",
-            padding="max_length",
-            max_length=2048,
-            truncation=True
+            return_tensors="pt"
         )
         
         # Flatten batch dimension
@@ -132,7 +130,8 @@ def run_training(
         save_strategy="epoch",
         save_total_limit=2,
         report_to="none",
-        dataloader_num_workers=2
+        dataloader_num_workers=0,
+        remove_unused_columns=False
     )
 
     trainer = Trainer(
