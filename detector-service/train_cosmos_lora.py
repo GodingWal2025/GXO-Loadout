@@ -23,9 +23,8 @@ from peft import LoraConfig, get_peft_model
 
 
 class PalletSFTDataset(torch.utils.data.Dataset):
-    def __init__(self, data_path: str, processor: Any):
+    def __init__(self, data_path: str):
         self.data = json.loads(Path(data_path).read_text(encoding="utf-8"))
-        self.processor = processor
 
     def __len__(self):
         return len(self.data)
@@ -59,17 +58,28 @@ class PalletSFTDataset(torch.utils.data.Dataset):
             {"role": "assistant", "content": assistant_resp}
         ]
 
-        text = self.processor.apply_chat_template(messages, add_generation_prompt=False)
-        inputs = self.processor(
-            text=[text],
-            images=images,
+        return {"messages": messages, "images": images}
+
+
+class MultimodalDataCollator:
+    def __init__(self, processor: Any):
+        self.processor = processor
+
+    def __call__(self, batch: list[dict[str, Any]]) -> dict[str, torch.Tensor]:
+        texts = [
+            self.processor.apply_chat_template(item["messages"], add_generation_prompt=False)
+            for item in batch
+        ]
+        images_list = [item["images"] for item in batch]
+
+        batch_inputs = self.processor(
+            text=texts,
+            images=images_list,
+            padding=True,
             return_tensors="pt"
         )
-        
-        # Flatten batch dimension
-        item_dict = {k: v.squeeze(0) for k, v in inputs.items()}
-        item_dict["labels"] = item_dict["input_ids"].clone()
-        return item_dict
+        batch_inputs["labels"] = batch_inputs["input_ids"].clone()
+        return batch_inputs
 
 
 def run_training(
@@ -116,7 +126,8 @@ def run_training(
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    train_dataset = PalletSFTDataset(str(dpath), processor)
+    train_dataset = PalletSFTDataset(str(dpath))
+    data_collator = MultimodalDataCollator(processor)
     print(f"[*] Prepared {len(train_dataset)} training examples.")
 
     training_args = TrainingArguments(
@@ -137,7 +148,8 @@ def run_training(
     trainer = Trainer(
         model=model,
         args=training_args,
-        train_dataset=train_dataset
+        train_dataset=train_dataset,
+        data_collator=data_collator
     )
 
     print("[*] Starting LoRA training on GPU 0...")
