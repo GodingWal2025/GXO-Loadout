@@ -37,6 +37,7 @@ def build_training_dataset(
     pallet_dirs = [d for d in actual_raw_dir.iterdir() if d.is_dir() and (d / "FRONT.jpg").exists()]
     print(f"[*] Found {len(pallet_dirs)} pallet directories in {actual_raw_dir}...")
 
+    dataset = []
     for p in pallet_dirs:
         # Check required faces
         faces = ["FRONT.jpg", "RIGHT.jpg", "BACK.jpg", "LEFT.jpg"]
