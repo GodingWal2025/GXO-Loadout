@@ -110,7 +110,7 @@ def run_training(
     model = AutoModelForImageTextToText.from_pretrained(
         model_id,
         torch_dtype=torch.bfloat16,
-        device_map="auto",
+        device_map={"": "cuda:0"},
         trust_remote_code=True
     )
     model.enable_input_require_grads()
@@ -144,7 +144,8 @@ def run_training(
         report_to="none",
         dataloader_num_workers=0,
         remove_unused_columns=False,
-        gradient_checkpointing=True
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False}
     )
 
     trainer = Trainer(
