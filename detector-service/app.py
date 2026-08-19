@@ -52,7 +52,7 @@ def get_vlm_service() -> VLMReasonService:
     global vlm_service
     if vlm_service is None:
         vlm_service = VLMReasonService(
-            model_id=os.environ.get("VLM_MODEL_ID", "Qwen/Qwen2.5-VL-7B-Instruct"),
+            model_id=os.environ.get("VLM_MODEL_ID", "nvidia/Cosmos-Reason2-8B"),
             device=os.environ.get("VLM_DEVICE", "cuda:0")
         )
     return vlm_service
@@ -62,8 +62,8 @@ def get_sam_service() -> SAMDetectorService:
     global sam_service
     if sam_service is None:
         sam_service = SAMDetectorService(
-            checkpoint_path=os.environ.get("SAM_CHECKPOINT", "/workspace/models/sam/sam2_hiera_large.pt"),
-            model_cfg=os.environ.get("SAM_CONFIG", "sam2_hiera_l.yaml"),
+            checkpoint_path=os.environ.get("SAM_CHECKPOINT", "/workspace/models/sam/sam2.1_hiera_large.pt"),
+            model_cfg=os.environ.get("SAM_CONFIG", "configs/sam2.1/sam2.1_hiera_l.yaml"),
             device=os.environ.get("SAM_DEVICE", "cuda:1")
         )
     return sam_service
@@ -83,8 +83,8 @@ async def health():
         "status": "healthy",
         "service": "gxo-bag-count-detector",
         "version": "2.0.0",
-        "gpu_0": "Qwen2.5-VL-7B-Instruct",
-        "gpu_1": "Meta-SAM-2-Large"
+        "gpu_0": "NVIDIA-Cosmos-Reason2-8B",
+        "gpu_1": "Meta-SAM-3-Large"
     }
 
 

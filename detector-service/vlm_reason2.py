@@ -18,10 +18,10 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 
 
 class VLMReasonService:
-    def __init__(self, model_id: str = "Qwen/Qwen2.5-VL-7B-Instruct", device: str = "cuda:0") -> None:
+    def __init__(self, model_id: str = "nvidia/Cosmos-Reason2-8B", device: str = "cuda:0") -> None:
         self.device = device
         self.model_id = model_id
-        print(f"[*] Initializing VLM Reasoning Model ({model_id}) on {device}...")
+        print(f"[*] Initializing NVIDIA Cosmos Reason VLM ({model_id}) on {device}...")
         self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
         self.model = AutoModelForImageTextToText.from_pretrained(
             model_id,
