@@ -553,17 +553,33 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       <div class="stack">
         <div class="card">
           <div class="hd">
-            <span class="eyebrow">Multi-View Pallet Inference (SAM 3 + Cosmos Reason VLM)</span>
+            <span class="eyebrow">Multi-View Pallet Inference (Meta SAM 2 + Qwen2.5-VL)</span>
           </div>
           <div class="bd stack">
-            <p class="lead" style="margin:0">Live test harness to evaluate the multi-view vision pipeline across four side views + elevated top view with three complementary evidence sources.</p>
-            
+            <p class="lead" style="margin:0">Live test harness — sends 4 side photos to the GPU detector service running Qwen2.5-VL (structural reasoning) + Meta SAM 2 (bag-flap segmentation) with recipe reconciliation.</p>
+
+            <div class="row" style="align-items:flex-end;gap:10px">
+              <label style="flex:1;min-width:260px"><span class="fld">GPU Endpoint URL <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">Vast.ai or local</span></span>
+                <div style="display:flex;gap:8px;align-items:center">
+                  <input type="text" id="testEndpointUrl" class="mono" placeholder="https://your-vast-instance:8000" style="flex:1">
+                  <span class="status" id="testEndpointStatus" style="white-space:nowrap">⏳ not checked</span>
+                </div>
+              </label>
+              <button class="btn ghost" id="testPingBtn" style="height:37px">🏓 Ping</button>
+            </div>
+
             <div class="row" style="align-items:flex-end">
               <label style="flex:1;min-width:200px"><span class="fld">Select pallet from Review data</span>
                 <select id="testSampleSelect"><option value="">-- Choose uploaded sample or drop photos below --</option></select>
               </label>
-              <label style="width:200px"><span class="fld">SKU / Stacking Recipe</span>
+              <label style="width:160px"><span class="fld">SKU / Material</span>
                 <input type="text" id="testSkuInput" class="mono" placeholder="e.g. DKC42-64RIB">
+              </label>
+              <label style="width:100px"><span class="fld">Bags / Layer</span>
+                <input type="number" id="testBagsPerLayer" min="1" max="200" value="6" inputmode="numeric">
+              </label>
+              <label style="width:100px"><span class="fld">Exp. Layers</span>
+                <input type="number" id="testExpLayers" min="1" max="200" value="10" inputmode="numeric">
               </label>
               <button class="btn" id="testRunBtn">⚡ Run Vision Pipeline</button>
             </div>
@@ -578,30 +594,31 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <span class="eyebrow">Inference Results &amp; Evidence Breakdown</span>
             <div class="grow"></div>
             <span class="status" id="testDecisionBadge">—</span>
+            <span class="mono" id="testLatency" style="font-size:11px;color:var(--faint)"></span>
           </div>
           <div class="bd stack">
             <!-- 3 Complementary Evidence Sources Cards -->
             <div class="tiles" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr))">
               <div class="tile" style="border-left:4px solid var(--accent)">
-                <div class="eyebrow" style="color:var(--accent-ink)">1 · SAM 3 Visible Evidence</div>
+                <div class="eyebrow" style="color:var(--accent-ink)">1 · Meta SAM 2 Visible Evidence</div>
                 <div class="v mono" id="testSamFlaps">— <small>visible flaps</small></div>
                 <div class="l" id="testSamBreakdown">Per face: front: —, right: —, back: —, left: —</div>
               </div>
               <div class="tile" style="border-left:4px solid #8e44ad">
-                <div class="eyebrow" style="color:#8e44ad">2 · Cosmos Reason Structural</div>
+                <div class="eyebrow" style="color:#8e44ad">2 · Qwen2.5-VL Structural</div>
                 <div class="v mono" id="testVlmTotal">— <small>est. bags</small></div>
                 <div class="l" id="testVlmBreakdown">Layers: — · Partial top: — · Regular: —</div>
               </div>
               <div class="tile" style="border-left:4px solid var(--ok)">
-                <div class="eyebrow" style="color:var(--ok)">3 · Stacking Recipe Calculation</div>
-                <div class="v mono" id="testRecipeTotal">— <small>recipe bags</small></div>
-                <div class="l" id="testRecipeBreakdown">Pattern: — · Full: — + Partial: —</div>
+                <div class="eyebrow" style="color:var(--ok)">3 · Recipe Reconciliation</div>
+                <div class="v mono" id="testRecipeTotal">— <small>reconciled bags</small></div>
+                <div class="l" id="testRecipeBreakdown">Decision: — · Confidence: — · Discrepancy: —</div>
               </div>
             </div>
 
             <div class="banner ok" id="testExplanationBanner" style="display:none"></div>
 
-            <span class="eyebrow">Visual Detections (Multi-View Masks &amp; Isolated Region)</span>
+            <span class="eyebrow">Visual Detections (Multi-View Faces)</span>
             <div class="facegrid" id="testFaceGrid"></div>
 
             <details class="raw">
@@ -1559,121 +1576,161 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     renderTestSlots();
   });
 
+  /* ---- GPU endpoint persistence ---- */
+  const savedEndpoint = store.get("bcc-gpu-endpoint") || "";
+  if ($("#testEndpointUrl")) $("#testEndpointUrl").value = savedEndpoint;
+  $("#testEndpointUrl")?.addEventListener("input", e => store.set("bcc-gpu-endpoint", e.target.value.trim()));
+
+  async function pingGpuEndpoint() {
+    const url = $("#testEndpointUrl")?.value.trim();
+    const badge = $("#testEndpointStatus");
+    if (!url) { badge.textContent = "⏳ enter URL"; badge.style.color = "var(--faint)"; return; }
+    badge.textContent = "⏳ pinging…"; badge.style.color = "var(--faint)";
+    try {
+      const r = await fetch(url.replace(/\/+$/, "") + "/api/v1/health", { mode: "cors" });
+      const j = await r.json();
+      badge.textContent = "✓ " + (j.gpu_0 || "connected"); badge.style.color = "var(--ok)";
+    } catch (e) {
+      badge.textContent = "✕ offline"; badge.style.color = "var(--crit)";
+    }
+  }
+  $("#testPingBtn")?.addEventListener("click", pingGpuEndpoint);
+  if (savedEndpoint) setTimeout(pingGpuEndpoint, 600);
+
+  /* ---- helper: blob → base64 data string ---- */
+  function blobToBase64(blob) {
+    return new Promise((res, rej) => {
+      const fr = new FileReader();
+      fr.onload = () => {
+        const full = fr.result;           // data:image/jpeg;base64,AAAA…
+        const b64 = full.split(",")[1];   // strip prefix → raw base64
+        res(b64);
+      };
+      fr.onerror = rej;
+      fr.readAsDataURL(blob);
+    });
+  }
+
   $("#testRunBtn")?.addEventListener("click", async () => {
+    const gpuUrl = $("#testEndpointUrl")?.value.trim().replace(/\/+$/, "");
+    if (!gpuUrl) { alert("Enter the GPU Endpoint URL first (e.g. https://your-vast-host:8000)"); return; }
+
     const sideRoles = ["FRONT", "RIGHT", "BACK", "LEFT"];
     const missing = sideRoles.filter(r => !testPhotos[r]);
-    if (missing.length) {
-      alert(`Missing required side photos: ${missing.join(", ")}`);
-      return;
-    }
-    
+    if (missing.length) { alert(`Missing required side photos: ${missing.join(", ")}`); return; }
+
     const statusEl = $("#testStatus");
     const resultsCard = $("#testResultsCard");
     statusEl.style.display = "block";
     statusEl.className = "banner";
-    statusEl.innerHTML = `<span>⏳ Running multi-view SAM 3 + Cosmos Reason VLM inference pipeline...</span>`;
+    statusEl.innerHTML = `<span>⏳ Encoding images & sending to GPU service (Qwen2.5-VL + SAM 2)…</span>`;
     resultsCard.style.display = "none";
 
+    const t0 = performance.now();
     try {
-      const fd = new FormData();
-      fd.append("front", testPhotos["FRONT"].blob, "front.jpg");
-      fd.append("right", testPhotos["RIGHT"].blob, "right.jpg");
-      fd.append("back", testPhotos["BACK"].blob, "back.jpg");
-      fd.append("left", testPhotos["LEFT"].blob, "left.jpg");
-      if (testPhotos["TOP"]) fd.append("top", testPhotos["TOP"].blob, "top.jpg");
-      
-      const sku = $("#testSkuInput")?.value.trim();
-      if (sku) fd.append("sku", sku);
-      fd.append("requestId", randId("req_"));
-
-      const resp = await fetch("/api/analyze-pallet", { method: "POST", body: fd });
-      let result;
-      if (resp.ok) {
-        result = await resp.json();
-      } else {
-        const singleResp = await fetch("/api/analyze-pallet-count", { method: "POST", body: testPhotos["FRONT"].blob });
-        const singleJson = await singleResp.json();
-        result = {
-          decision: {
-            action: "confirm",
-            suggestedCount: (singleJson.layers || 10) * 6,
-            calibratedConfidence: singleJson.confidence || 0.85,
-            reasonCodes: ["FALLBACK_SINGLE_FACE_VOTING"],
-            explanation: singleJson.rationale || "Evaluated via vision detector proxy fallback."
-          },
-          evidence: {
-            samEvidence: {
-              frontFlaps: (singleJson.boxes || []).length || 12,
-              totalVisibleFlaps: ((singleJson.boxes || []).length || 12) * 4,
-              boxes: { front: singleJson.boxes || [] }
-            },
-            vlmStructuralEvidence: {
-              layerCountByFace: { front: singleJson.layers || 10, right: singleJson.layers || 10, back: singleJson.layers || 10, left: singleJson.layers || 10 },
-              consensusLayers: singleJson.layers || 10,
-              partialTopDetected: singleJson.topLayerFull === false,
-              partialTopCountEstimate: 0,
-              irregularStack: false,
-              structuralTotalEstimate: (singleJson.layers || 10) * 6
-            },
-            recipeEvidence: {
-              sku: sku || "STANDARD_60",
-              layerPattern: [6],
-              fullLayers: singleJson.layers || 10,
-              partialTopCount: 0,
-              calculatedTotal: (singleJson.layers || 10) * 6
-            }
-          }
-        };
+      // Encode all 4 sides as base64
+      const images = {};
+      for (const role of sideRoles) {
+        images[role.toLowerCase()] = await blobToBase64(testPhotos[role].blob);
       }
+
+      // Build recipe payload
+      const sku = $("#testSkuInput")?.value.trim() || "STANDARD";
+      const bagsPerLayer = parseInt($("#testBagsPerLayer")?.value) || 6;
+      const expLayers = parseInt($("#testExpLayers")?.value) || 10;
+      const recipe = {
+        sku,
+        bags_per_layer: bagsPerLayer,
+        expected_layers: expLayers,
+        expected_total: bagsPerLayer * expLayers
+      };
+
+      statusEl.innerHTML = `<span>⏳ Running inference on GPU 0 (Qwen2.5-VL) + GPU 1 (SAM 2)… this takes 4-8 seconds.</span>`;
+
+      const resp = await fetch(gpuUrl + "/api/v1/analyze-pallet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ images, recipe })
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${errBody.slice(0, 300)}`);
+      }
+
+      const result = await resp.json();
+      const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
 
       statusEl.style.display = "none";
       resultsCard.style.display = "block";
-      renderTestResults(result);
+      renderTestResults(result, elapsed);
     } catch (err) {
       statusEl.className = "banner err";
       statusEl.innerHTML = `<b>Inference error:</b> ${escapeHtml(err.message || String(err))}`;
     }
   });
 
-  function renderTestResults(data) {
-    const decision = data.decision || {};
-    const ev = data.evidence || {};
-    const sam = ev.samEvidence || {};
-    const vlm = ev.vlmStructuralEvidence || {};
-    const rec = ev.recipeEvidence || {};
+  function renderTestResults(data, elapsed) {
+    // New v2 response shape: { success, analysis, vlm_raw, sam_flaps }
+    const analysis = data.analysis || {};
+    const vlm = data.vlm_raw || {};
+    const samFlaps = data.sam_flaps || {};
 
+    // Decision badge
     const badge = $("#testDecisionBadge");
-    badge.textContent = decision.action ? decision.action.toUpperCase() : "CONFIRM";
-    badge.className = "status " + (decision.action === "accept" ? "ok" : "warn");
+    const decision = (analysis.decision || "ACCEPT").toUpperCase();
+    badge.textContent = decision;
+    badge.className = "status";
+    badge.style.background = decision === "ACCEPT" ? "var(--ok-soft)" : decision === "REJECT" ? "var(--crit-soft)" : "var(--warn-soft)";
+    badge.style.color = decision === "ACCEPT" ? "var(--ok)" : decision === "REJECT" ? "var(--crit)" : "var(--warn)";
+    badge.style.borderColor = "transparent";
 
-    $("#testSamFlaps").innerHTML = `${sam.totalVisibleFlaps ?? "—"} <small>flaps</small>`;
-    $("#testSamBreakdown").textContent = `Front: ${sam.frontFlaps ?? "—"}, Right: ${sam.rightFlaps ?? "—"}, Back: ${sam.backFlaps ?? "—"}, Left: ${sam.leftFlaps ?? "—"}`;
+    // Latency
+    if ($("#testLatency")) $("#testLatency").textContent = elapsed ? `${elapsed}s` : "";
 
-    $("#testVlmTotal").innerHTML = `${vlm.structuralTotalEstimate ?? "—"} <small>est. bags</small>`;
-    $("#testVlmBreakdown").textContent = `Layers: ${vlm.consensusLayers ?? "—"} · Partial: ${vlm.partialTopCountEstimate ?? 0} · Irregular: ${vlm.irregularStack ? "YES" : "No"}`;
+    // SAM tile
+    const totalFlaps = Object.values(samFlaps).reduce((a, b) => a + (b||0), 0);
+    $("#testSamFlaps").innerHTML = `${totalFlaps} <small>visible flaps</small>`;
+    $("#testSamBreakdown").textContent = `Front: ${samFlaps.front ?? "—"}, Right: ${samFlaps.right ?? "—"}, Back: ${samFlaps.back ?? "—"}, Left: ${samFlaps.left ?? "—"}`;
 
-    $("#testRecipeTotal").innerHTML = `${rec.calculatedTotal ?? "—"} <small>recipe bags</small>`;
-    $("#testRecipeBreakdown").textContent = `SKU: ${rec.sku || "N/A"} · Pattern: [${(rec.layerPattern || [6]).join(",")}] · Layers: ${rec.fullLayers ?? "—"}`;
+    // VLM tile
+    const vlmTotal = vlm.structuralTotalEstimate ?? analysis.computed_total ?? "—";
+    $("#testVlmTotal").innerHTML = `${vlmTotal} <small>est. bags</small>`;
+    const vlmFaces = vlm.layerCountByFace || analysis.face_layer_breakdown || {};
+    $("#testVlmBreakdown").textContent = `Consensus: ${vlm.consensusLayers ?? analysis.consensus_layers ?? "—"} layers · Partial: ${vlm.partialTopCountEstimate ?? analysis.partial_top_count ?? 0} · Irregular: ${(vlm.irregularStack || analysis.irregular_stack) ? "YES" : "No"}`;
 
+    // Reconciliation tile
+    $("#testRecipeTotal").innerHTML = `${analysis.computed_total ?? "—"} <small>reconciled bags</small>`;
+    $("#testRecipeBreakdown").textContent = `Decision: ${decision} · Confidence: ${analysis.confidence ? (analysis.confidence * 100).toFixed(0) + "%" : "—"} · Discrepancy: ${analysis.discrepancy ?? "—"}`;
+
+    // Explanation banner
     const expBanner = $("#testExplanationBanner");
-    if (decision.explanation) {
+    const codes = analysis.reason_codes || [];
+    if (codes.length) {
       expBanner.style.display = "block";
-      expBanner.innerHTML = `<b>Decision Reason:</b> ${escapeHtml(decision.explanation)}<div style="margin-top:4px" class="chips">${(decision.reasonCodes||[]).map(c => chip(c, "acc")).join(" ")}</div>`;
+      const decClass = decision === "ACCEPT" ? "ok" : decision === "REJECT" ? "err" : "";
+      expBanner.className = "banner " + decClass;
+      expBanner.innerHTML = `<b>${decision}:</b> ${analysis.computed_total} computed vs ${analysis.expected_total} expected<div style="margin-top:4px" class="chips">${codes.map(c => chip(c, decision === "ACCEPT" ? "ok" : "warn")).join(" ")}</div>`;
     } else {
       expBanner.style.display = "none";
     }
 
+    // Face grid
     const grid = $("#testFaceGrid");
     grid.innerHTML = "";
-    ["FRONT", "RIGHT", "BACK", "LEFT", "TOP"].forEach(role => {
+    ["FRONT", "RIGHT", "BACK", "LEFT"].forEach(role => {
       const p = testPhotos[role];
       if (!p) return;
+      const faceLower = role.toLowerCase();
+      const layers = vlmFaces[faceLower] ?? analysis.consensus_layers ?? "—";
+      const flaps = samFlaps[faceLower] ?? "—";
       const card = document.createElement("div");
       card.className = "face";
       card.innerHTML = `
         <div class="cv"><img src="${p.dataUrl}" style="width:100%;display:block"></div>
         <div class="meta">
-          <div class="kv"><span>${roleLabel(role)}</span><span class="n">${role === "TOP" ? (vlm.partialTopCountEstimate ? vlm.partialTopCountEstimate + " top bags" : "Top View") : (vlm.layerCountByFace?.[role.toLowerCase()] || vlm.consensusLayers || "—") + "<small> layers</small>"}</span></div>
+          <div class="kv"><span>${roleLabel(role)}</span><span class="n">${layers}<small> layers</small></span></div>
+          <div class="kv"><span class="hint">SAM flaps</span><span class="mono" style="font-size:13px">${flaps}</span></div>
         </div>`;
       grid.appendChild(card);
     });
