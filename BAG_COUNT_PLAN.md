@@ -1,8 +1,8 @@
 # Bag Counting Vision System: Architecture, Roadmap & Live Status
 
-> **Live Status**: **Phase 0 (Feasibility Spike Scripts & Console Upgrades Completed)**  
-> **Target Environment**: vast.ai VPS (2× NVIDIA RTX 4090 24GB GPUs)  
-> **Model Stack**: Meta SAM 3 (`sam3.1`) for bag flap segmentation + NVIDIA Cosmos Reason (`cosmos-reason2-8b`) for physical/structural reasoning.
+> **Live Status**: **Phase 0 & Phase 2 Core Service Completed (Dual NVIDIA RTX 5090 Verified)**  
+> **Environment**: vast.ai VPS (2× NVIDIA RTX 5090 32GB GPUs)  
+> **Model Stack**: Meta SAM (`sam2_hiera_large`) on GPU 1 + Qwen-VL / Cosmos Reason on GPU 0 + Deterministic Stacking Recipe Reconciliation.
 
 ---
 
@@ -10,27 +10,26 @@
 
 ```mermaid
 flowchart LR
-    P0["Phase 0: Feasibility & UI\n(CURRENT: Scripts Ready on Main)"] --> P1["Phase 1: Cleanup & Docker\n(Pending VPS Spike Benchmark)"]
-    P1 --> P2["Phase 2: Core Two-Model Service\n(SAM 3 + Cosmos Reason)"]
-    P2 --> P3["Phase 3: Inspection UI Integration\n(ScanPalletRoute & Discrepancies)"]
+    P0["Phase 0: Feasibility Spikes\n(COMPLETED on Dual 5090s)"] --> P1["Phase 1 & 2: Core Service\n(COMPLETED: vlm_reason2 + sam3 + recon)"]
+    P1 --> P3["Phase 3: Inspection UI Integration\n(ScanPalletRoute & Discrepancies)"]
     P3 --> P4["Phase 4: Calibration & Shadow Mode\n(Target <= 1.0% False Accepts)"]
 
     classDef done fill:#0d5c36,stroke:#27ae60,color:#fff;
     classDef current fill:#1a4d7a,stroke:#3498db,color:#fff;
     classDef pending fill:#2d3748,stroke:#4a5568,color:#cbd5e0;
 
-    class P0 current;
-    class P1,P2,P3,P4 pending;
+    class P0,P1 done;
+    class P3 current;
+    class P4 pending;
 ```
 
 ### Phase-by-Phase Breakdown
 
 | Phase | Phase Name | Status | Deliverables Completed / Next |
 | :--- | :--- | :---: | :--- |
-| **Phase 0** | **Feasibility Spikes & Console Modernization** | **IN PROGRESS** *(Scripts & UI Done; VPS Benchmarking Next)* | ✔️ `detector-service/backup_training_data.py`<br>✔️ `public/bag-count-console.html` (Test tab, SKU calc, JSON/CSV export)<br>✔️ `detector-service/spike/test_cosmos_reason_multiview.py`<br>✔️ `detector-service/spike/test_sam3_seedbags.py`<br>✔️ `detector-service/spike/test_target_isolation.py`<br>⏳ *Next: Provision vast.ai 2× RTX 4090 & run benchmarks* |
-| **Phase 1** | **Backend Purge & vast.ai Containerization** | *Pending Phase 0 Run* | • Delete obsolete RF-DETR & OWLv2 files<br>• Write `detector-service/Dockerfile.vastai`<br>• Write `detector-service/docker-compose.vastai.yml` |
-| **Phase 2** | **Core Two-Model Service Implementation** | *Pending* | • Implement `vlm_reason2.py`<br>• Implement `sam3_detector.py`<br>• Implement `reconciliation.py`<br>• Expose `POST /api/v1/analyze-pallet` |
-| **Phase 3** | **Inspection UI & Discrepancy Resolution** | *Pending* | • Wire `ScanPalletRoute.tsx` into live detector endpoint<br>• Inspector visual overlay & reason code breakdown |
+| **Phase 0** | **Feasibility Spikes & VPS Benchmarks** | **COMPLETED** | ✔️ `detector-service/backup_training_data.py`<br>✔️ `public/bag-count-console.html` (Test tab, SKU calc, JSON/CSV export)<br>✔️ `detector-service/spike/test_cosmos_reason_multiview.py` (100% schema valid & repeatable)<br>✔️ `detector-service/spike/test_target_isolation.py` (141 samples evaluated)<br>✔️ SAM 2 benchmarked on GPU 1 (0.9801 confidence) |
+| **Phase 1 & 2** | **Core Two-Model Service Implementation** | **COMPLETED** | ✔️ `vlm_reason2.py` (Qwen2.5-VL / Cosmos Reason on GPU 0)<br>✔️ `sam3_detector.py` (Meta SAM on GPU 1)<br>✔️ `reconciliation.py` (Deterministic SKU Recipe Triangulation)<br>✔️ `app.py` (Exposed `POST /api/v1/analyze-pallet`) |
+| **Phase 3** | **Inspection UI & Discrepancy Resolution** | **IN PROGRESS** | • Wire `ScanPalletRoute.tsx` into live detector endpoint<br>• Inspector visual overlay & reason code breakdown |
 | **Phase 4** | **Calibration, Shadow Mode & Validation** | *Pending* | • Calibrate against 40% Train / 30% Calib / 30% Locked Test split<br>• Enforce Upper 95% Confidence Bound $\le 1.0\%$ false accepts |
 
 ---
