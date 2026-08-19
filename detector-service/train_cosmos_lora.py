@@ -70,8 +70,20 @@ def run_training(
     batch_size: int = 1,
     learning_rate: float = 2e-4
 ):
+    # Resolve dataset path if running from detector-service or repo root
+    dpath = Path(dataset_path)
+    if not dpath.exists():
+        for alt in [
+            Path("../dataset/cosmos_sft_training.json"),
+            Path("/workspace/GXO-Loadout/dataset/cosmos_sft_training.json")
+        ]:
+            if alt.exists():
+                dpath = alt
+                break
+
     print(f"[*] Initializing Cosmos-Reason2-8B LoRA fine-tuning...")
     print(f"[*] Target Model: {model_id}")
+    print(f"[*] Dataset: {dpath}")
     print(f"[*] Output Directory: {output_dir}")
 
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
@@ -94,7 +106,7 @@ def run_training(
     model = get_peft_model(model, lora_config)
     model.print_trainable_parameters()
 
-    train_dataset = PalletSFTDataset(dataset_path, processor)
+    train_dataset = PalletSFTDataset(str(dpath), processor)
     print(f"[*] Prepared {len(train_dataset)} training examples.")
 
     training_args = TrainingArguments(
