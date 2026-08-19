@@ -16,14 +16,26 @@ def build_training_dataset(
     raw_dir: Path = Path("dataset/raw"),
     output_json: Path = Path("dataset/cosmos_sft_training.json")
 ) -> list[dict[str, Any]]:
-    dataset = []
-    
-    if not raw_dir.exists():
-        print(f"[!] Raw dataset directory not found: {raw_dir}")
+    # Search common locations for raw pallet photos
+    candidates = [
+        raw_dir,
+        Path("detector-service/dataset/raw"),
+        Path("../dataset/raw"),
+        Path("/workspace/GXO-Loadout/detector-service/dataset/raw"),
+        Path("/workspace/GXO-Loadout/dataset/raw")
+    ]
+    actual_raw_dir = None
+    for cand in candidates:
+        if cand.exists() and any(cand.iterdir()):
+            actual_raw_dir = cand
+            break
+
+    if not actual_raw_dir:
+        print(f"[!] Raw dataset directory not found in: {[str(c) for c in candidates]}")
         return []
 
-    pallet_dirs = [d for d in raw_dir.iterdir() if d.is_dir() and (d / "FRONT.jpg").exists()]
-    print(f"[*] Found {len(pallet_dirs)} pallet directories in {raw_dir}...")
+    pallet_dirs = [d for d in actual_raw_dir.iterdir() if d.is_dir() and (d / "FRONT.jpg").exists()]
+    print(f"[*] Found {len(pallet_dirs)} pallet directories in {actual_raw_dir}...")
 
     for p in pallet_dirs:
         # Check required faces
