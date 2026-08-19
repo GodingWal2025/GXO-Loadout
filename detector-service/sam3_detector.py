@@ -1,6 +1,6 @@
-"""SAM Segmenter Service (GPU 1)
+"""Meta SAM 3 Segmenter Service (GPU 1)
 
-Runs Meta SAM (Segment Anything) on GPU 1 to segment individual bag flap
+Runs Meta SAM 3 (Segment Anything Model 3) on GPU 1 to segment individual bag flap
 masks within VLM-guided layer slices.
 """
 
@@ -12,29 +12,49 @@ from typing import Any
 import numpy as np
 from PIL import Image
 import torch
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
+
+try:
+    from sam3.build_sam import build_sam3, build_sam
+    from sam3.sam3_image_predictor import SAM3ImagePredictor as SAMPredictor
+except ImportError:
+    try:
+        from sam2.build_sam import build_sam2 as build_sam
+        from sam2.sam2_image_predictor import SAM2ImagePredictor as SAMPredictor
+    except ImportError:
+        build_sam = None
+        SAMPredictor = None
 
 
 class SAMDetectorService:
     def __init__(
         self,
-        checkpoint_path: str = "/workspace/models/sam/sam2_hiera_large.pt",
-        model_cfg: str = "sam2_hiera_l.yaml",
+        checkpoint_path: str = "/workspace/models/sam3/sam3.pt",
+        model_cfg: str = "sam3.yaml",
         device: str = "cuda:1"
     ) -> None:
         self.device = device
-        print(f"[*] Initializing SAM 2 on {device} (checkpoint: {checkpoint_path})...")
+        print(f"[*] Initializing Meta SAM 3 on {device} (checkpoint: {checkpoint_path})...")
         
-        # Fallback to local default if container path differs
         ckpt = Path(checkpoint_path)
         if not ckpt.exists():
-            ckpt = Path("weights/sam2_hiera_large.pt")
+            # Check common alternative locations
+            for alt in [
+                Path("/workspace/models/sam3/sam3.pth"),
+                Path("/workspace/models/sam/sam2.1_hiera_large.pt"),
+                Path("/workspace/models/sam/sam2_hiera_large.pt")
+            ]:
+                if alt.exists():
+                    ckpt = alt
+                    break
             
-        self.predictor = SAM2ImagePredictor(
-            build_sam2(model_cfg, str(ckpt), device=device)
-        )
-        print(f"[✓] SAM 2 loaded into VRAM on {device}!")
+        if build_sam is not None and ckpt.exists():
+            self.predictor = SAMPredictor(
+                build_sam(model_cfg, str(ckpt), device=device)
+            )
+            print(f"[✓] Meta SAM 3 loaded into VRAM on {device} ({ckpt.name})!")
+        else:
+            print(f"[!] Warning: Meta SAM 3 checkpoint or package not found at {ckpt}, will use grid segmentation fallback.")
+            self.predictor = None
 
     def segment_flaps_in_layer_bands(
         self,
