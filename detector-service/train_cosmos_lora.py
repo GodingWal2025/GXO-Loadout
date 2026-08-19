@@ -44,7 +44,7 @@ class PalletSFTDataset(torch.utils.data.Dataset):
                     if alt2.exists():
                         img_p = alt2
             img = Image.open(img_p).convert("RGB")
-            img.thumbnail((768, 768), Image.Resampling.LANCZOS)
+            img.thumbnail((512, 512), Image.Resampling.LANCZOS)
             images.append(img)
         
         user_prompt = item["conversations"][0]["value"]
@@ -113,6 +113,7 @@ def run_training(
         device_map="auto",
         trust_remote_code=True
     )
+    model.enable_input_require_grads()
 
     lora_config = LoraConfig(
         r=16,
@@ -142,7 +143,8 @@ def run_training(
         save_total_limit=2,
         report_to="none",
         dataloader_num_workers=0,
-        remove_unused_columns=False
+        remove_unused_columns=False,
+        gradient_checkpointing=True
     )
 
     trainer = Trainer(
