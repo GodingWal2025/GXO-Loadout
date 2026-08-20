@@ -375,7 +375,7 @@ export interface InboundLineItem {
   materialNumber: Suggestable<string>; // SKU / Material
   materialDescription?: Suggestable<string>;
   batch: Suggestable<string>;
-  uom: 'SP' | 'BG';
+  uom: 'SP' | 'BG' | 'MB';
   location?: Suggestable<string>; // LOC
   qtyReceived: Suggestable<number>;
   qtyDamaged: Suggestable<number>;

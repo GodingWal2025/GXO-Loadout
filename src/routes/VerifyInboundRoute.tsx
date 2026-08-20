@@ -65,6 +65,7 @@ function VerifyInboundInner({
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [activeDamageLineIndex, setActiveDamageLineIndex] = useState<number | null>(null);
   const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
   const [pendingDamage, setPendingDamage] = useState<{
     blob: Blob;
     previewUrl: string;
@@ -152,7 +153,8 @@ function VerifyInboundInner({
   };
 
   const addLine = () => {
-    const nextItemNumber = (inbound.lineItems?.length || 0) + 1;
+    const currentLength = inbound.lineItems?.length || 0;
+    const nextItemNumber = currentLength + 1;
     const newLine: InboundLineItem = {
       id: generateId(),
       itemNumber: nextItemNumber,
@@ -167,6 +169,8 @@ function VerifyInboundInner({
       damagePhotoIds: [],
     };
     dispatch({ type: 'ADD_INBOUND_LINE', line: newLine });
+    // Automatically collapse previous item and expand the newly added item
+    setExpandedIndex(currentLength);
   };
 
   const updateLine = (index: number, patch: Partial<InboundLineItem>) => {
@@ -182,9 +186,10 @@ function VerifyInboundInner({
     const invMatch = inventoryByBatch.get(batchUpper);
 
     if (invMatch) {
-      // Auto-detect UOM from description
+      // Auto-detect UOM from description (MB for Jumbo/Minibulk, SP for SeedPak, BG for Bag)
       const pack = parsePackInfo(invMatch.description);
-      const uom: 'SP' | 'BG' = pack?.kind === 'SP' ? 'SP' : 'BG';
+      const uom: 'SP' | 'BG' | 'MB' =
+        pack?.kind === 'MB' ? 'MB' : pack?.kind === 'SP' ? 'SP' : 'BG';
 
       updateLine(index, {
         batch: { value: rawBatch, source: 'manual' },
@@ -285,6 +290,7 @@ function VerifyInboundInner({
               label={t('verifyInbound.bolNumber', 'BoL Number / Load #')}
               field={inbound.bolNumber}
               mono
+              hideCamera
               placeholder="e.g. 835008894"
               onChange={(field) => updateHeader({ bolNumber: field })}
             />
@@ -292,6 +298,7 @@ function VerifyInboundInner({
               label={t('verifyInbound.deliveryNumber', 'Delivery Number')}
               field={inbound.deliveryNumber}
               mono
+              hideCamera
               placeholder="e.g. 40188921"
               onChange={(field) => updateHeader({ deliveryNumber: field })}
             />
@@ -378,13 +385,84 @@ function VerifyInboundInner({
             </button>
           </div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {lines.map((li, index) => {
               const batchCode = (li.batch.value || '').trim().toUpperCase();
               const hasDamage = (Number(li.qtyDamaged.value) || 0) > 0;
               const inInv = inventoryByBatch.has(batchCode);
               const damagePhotoIds = li.damagePhotoIds || [];
+              const isExpanded = expandedIndex === index;
 
+              if (!isExpanded) {
+                // Collapsed compact row
+                return (
+                  <div
+                    key={li.id}
+                    className="card"
+                    style={{
+                      borderLeft: hasDamage ? '4px solid var(--danger)' : inInv ? '4px solid var(--success)' : '4px solid var(--rule)',
+                      padding: '10px 14px',
+                      cursor: 'pointer',
+                    }}
+                    onClick={() => setExpandedIndex(index)}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span className="pill pill--neutral" style={{ fontWeight: 700 }}>
+                          #{li.itemNumber || index + 1}
+                        </span>
+                        <span className="mono fw-600" style={{ fontSize: 13 }}>
+                          {li.batch.value || <span className="soft">—</span>}
+                        </span>
+                        {li.materialNumber?.value && (
+                          <span className="mono small soft">({li.materialNumber.value})</span>
+                        )}
+                        <span className="pill pill--info" style={{ fontSize: 11 }}>
+                          {li.qtyReceived.value ?? 0} {li.uom}
+                        </span>
+                        {hasDamage && (
+                          <span className="pill pill--danger" style={{ fontSize: 11 }}>
+                            ⚑ {li.qtyDamaged.value} Damaged ({damagePhotoIds.length} 📷)
+                          </span>
+                        )}
+                        {li.location?.value && (
+                          <span className="small soft">📍 {li.location.value}</span>
+                        )}
+                        <span className={`pill ${li.onBol ? 'pill--success' : 'pill--warn'}`} style={{ fontSize: 10 }}>
+                          BOL: {li.onBol ? 'Yes' : 'No'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          type="button"
+                          className="btn btn--outline btn--sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedIndex(index);
+                          }}
+                          style={{ fontSize: 12, padding: '2px 8px' }}
+                        >
+                          ▼ Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeLine(index);
+                          }}
+                          title={t('verifyInbound.removeLine', 'Remove row')}
+                          style={{ color: 'var(--danger)', padding: '2px 6px' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              // Expanded full editable card
               return (
                 <div
                   key={li.id}
@@ -422,20 +500,30 @@ function VerifyInboundInner({
                         </span>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--sm"
-                      onClick={() => removeLine(index)}
-                      title={t('verifyInbound.removeLine', 'Remove row')}
-                      style={{ color: 'var(--danger)', padding: '4px 8px' }}
-                    >
-                      ✕
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => setExpandedIndex(null)}
+                        style={{ fontSize: 12 }}
+                      >
+                        ▲ Collapse
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--sm"
+                        onClick={() => removeLine(index)}
+                        title={t('verifyInbound.removeLine', 'Remove row')}
+                        style={{ color: 'var(--danger)', padding: '4px 8px' }}
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
 
                   {/* Grid fields */}
                   <div className="field-row" style={{ marginBottom: 12 }}>
-                    <div className="field" style={{ flex: 1.2 }}>
+                    <div className="field" style={{ flex: 1.1 }}>
                       <div className="field__label">{t('verifyInbound.colBatch', 'Batch')} *</div>
                       <input
                         type="text"
@@ -447,7 +535,7 @@ function VerifyInboundInner({
                       />
                     </div>
 
-                    <div className="field" style={{ flex: 1.2 }}>
+                    <div className="field" style={{ flex: 1.1 }}>
                       <div className="field__label">{t('verifyInbound.colMaterial', 'Material / SKU')}</div>
                       <input
                         type="text"
@@ -462,14 +550,14 @@ function VerifyInboundInner({
                       />
                     </div>
 
-                    <div className="field" style={{ flex: 0.8 }}>
+                    <div className="field" style={{ flex: 1.2 }}>
                       <div className="field__label">{t('verifyInbound.colUom', 'Package / UOM')}</div>
-                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                      <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
                         <button
                           type="button"
                           className={`btn btn--sm ${li.uom === 'SP' ? 'btn--accent' : 'btn--outline'}`}
                           onClick={() => updateLine(index, { uom: 'SP' })}
-                          style={{ flex: 1, padding: '6px 0' }}
+                          style={{ flex: 1, padding: '6px 2px', fontSize: 11 }}
                         >
                           SP (SeedPak)
                         </button>
@@ -477,9 +565,17 @@ function VerifyInboundInner({
                           type="button"
                           className={`btn btn--sm ${li.uom === 'BG' ? 'btn--accent' : 'btn--outline'}`}
                           onClick={() => updateLine(index, { uom: 'BG' })}
-                          style={{ flex: 1, padding: '6px 0' }}
+                          style={{ flex: 1, padding: '6px 2px', fontSize: 11 }}
                         >
                           BG (Bag)
+                        </button>
+                        <button
+                          type="button"
+                          className={`btn btn--sm ${li.uom === 'MB' ? 'btn--accent' : 'btn--outline'}`}
+                          onClick={() => updateLine(index, { uom: 'MB' })}
+                          style={{ flex: 1, padding: '6px 2px', fontSize: 11 }}
+                        >
+                          MB (Jumbo)
                         </button>
                       </div>
                     </div>

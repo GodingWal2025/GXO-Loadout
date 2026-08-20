@@ -643,7 +643,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         </section>
       )}
 
-      {!isReturns && (
+      {!isReturns && !isInbound && (
         <section className="section">
           <div className="section__head">
             <h2 className="section__title">
@@ -714,7 +714,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         </section>
       )}
 
-      {!isReturns && (
+      {!isReturns && !isInbound && (
         <section className="section">
           <div className="section__head">
             <h2 className="section__title">
