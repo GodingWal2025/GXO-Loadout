@@ -5,6 +5,7 @@
 
 // Types
 export * from './types/inspection';
+export { PACKAGING_SKUS, isPackagingLine, picklistHasOcr } from './types/inspection';
 export * from './types/ontology';
 
 // Utils

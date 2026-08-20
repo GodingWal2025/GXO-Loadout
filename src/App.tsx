@@ -15,6 +15,8 @@ const ScanPalletRoute = lazy(() => import('./routes/ScanPalletRoute').then((m) =
 const ReviewAndCompleteRoute = lazy(() => import('./routes/ReviewAndCompleteRoute').then((m) => ({ default: m.ReviewAndCompleteRoute })));
 const CaptureReturnsBOLRoute = lazy(() => import('./routes/CaptureReturnsBOLRoute').then((m) => ({ default: m.CaptureReturnsBOLRoute })));
 const VerifyReturnsRoute = lazy(() => import('./routes/VerifyReturnsRoute').then((m) => ({ default: m.VerifyReturnsRoute })));
+const CaptureInboundBOLRoute = lazy(() => import('./routes/CaptureInboundBOLRoute').then((m) => ({ default: m.CaptureInboundBOLRoute })));
+const VerifyInboundRoute = lazy(() => import('./routes/VerifyInboundRoute').then((m) => ({ default: m.VerifyInboundRoute })));
 const DashboardRoute = lazy(() => import('./routes/DashboardRoute').then((m) => ({ default: m.DashboardRoute })));
 const AdminRoute = lazy(() => import('./routes/AdminRoute').then((m) => ({ default: m.AdminRoute })));
 const AdminGateRoute = lazy(() => import('./routes/AdminGateRoute').then((m) => ({ default: m.AdminGateRoute })));
@@ -57,6 +59,10 @@ export default function App() {
             <Route path="/inspection/:id/capture-returns-bol" element={<CaptureReturnsBOLRoute />} />
             <Route path="/inspection/:id/capture-returns-staging" element={<CaptureReturnsStagingRoute />} />
             <Route path="/inspection/:id/verify-returns" element={<VerifyReturnsRoute />} />
+
+            {/* Inbound workflow */}
+            <Route path="/inspection/:id/capture-inbound-bol" element={<CaptureInboundBOLRoute />} />
+            <Route path="/inspection/:id/verify-inbound" element={<VerifyInboundRoute />} />
   
             {/* Shared Pallet & Workspace */}
             <Route path="/inspection/:id" element={<InspectionWorkspaceRoute />} />

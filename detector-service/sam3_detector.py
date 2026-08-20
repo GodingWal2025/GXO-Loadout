@@ -14,9 +14,11 @@ from PIL import Image
 import torch
 
 try:
-    from sam3.build_sam import build_sam3, build_sam
+    from sam3.build_sam import build_sam3 as build_sam
     from sam3.sam3_image_predictor import SAM3ImagePredictor as SAMPredictor
+    HAS_SAM3 = True
 except ImportError:
+    HAS_SAM3 = False
     try:
         from sam2.build_sam import build_sam2 as build_sam
         from sam2.sam2_image_predictor import SAM2ImagePredictor as SAMPredictor
@@ -33,28 +35,67 @@ class SAMDetectorService:
         device: str = "cuda:1"
     ) -> None:
         self.device = device
-        print(f"[*] Initializing Meta SAM 3 on {device} (checkpoint: {checkpoint_path})...")
+        print(f"[*] Initializing Meta SAM on {device} (checkpoint: {checkpoint_path}, config: {model_cfg})...")
         
         ckpt = Path(checkpoint_path)
         if not ckpt.exists():
             # Check common alternative locations
             for alt in [
+                Path("/workspace/models/sam3/sam3.pt"),
                 Path("/workspace/models/sam3/sam3.pth"),
+                Path("/workspace/models/sam/sam3.pt"),
                 Path("/workspace/models/sam/sam2.1_hiera_large.pt"),
                 Path("/workspace/models/sam/sam2_hiera_large.pt")
             ]:
                 if alt.exists():
                     ckpt = alt
                     break
-            
+
+        self.predictor = None
+
         if build_sam is not None and ckpt.exists():
-            self.predictor = SAMPredictor(
-                build_sam(model_cfg, str(ckpt), device=device)
-            )
-            print(f"[✓] Meta SAM 3 loaded into VRAM on {device} ({ckpt.name})!")
+            configs_to_try = [
+                model_cfg,
+                "sam3.yaml",
+                "configs/sam3/sam3.yaml",
+                "configs/sam2.1/sam2.1_hiera_l.yaml",
+                "sam2.1_hiera_l.yaml",
+                "configs/sam2/sam2_hiera_l.yaml",
+                "sam2_hiera_l.yaml"
+            ]
+
+            model = None
+            # 1. Try standard build_sam across candidate configs
+            for cfg in configs_to_try:
+                try:
+                    model = build_sam(cfg, str(ckpt), device=device)
+                    print(f"[✓] SAM model built with config '{cfg}'!")
+                    break
+                except Exception as e:
+                    continue
+
+            # 2. If strict state_dict loading failed (e.g. SAM 2.0 vs 2.1 key mismatch), try strict=False
+            if model is None:
+                for cfg in configs_to_try:
+                    try:
+                        model = build_sam(cfg, ckpt_path=None, device=device)
+                        sd = torch.load(str(ckpt), map_location=device)
+                        if isinstance(sd, dict) and "model" in sd:
+                            sd = sd["model"]
+                        missing, _ = model.load_state_dict(sd, strict=False)
+                        print(f"[✓] SAM loaded with strict=False (missing keys: {missing}) using config '{cfg}'!")
+                        break
+                    except Exception as e:
+                        model = None
+                        continue
+
+            if model is not None:
+                self.predictor = SAMPredictor(model)
+                print(f"[✓] Meta SAM loaded into VRAM on {device} ({ckpt.name})!")
+            else:
+                print(f"[!] Warning: Could not initialize SAM model state dict on {device}.")
         else:
-            print(f"[!] Warning: Meta SAM 3 checkpoint or package not found at {ckpt}, will use grid segmentation fallback.")
-            self.predictor = None
+            print(f"[!] Warning: Meta SAM checkpoint or package not found at {ckpt}, will use VLM reasoning primary.")
 
     def segment_flaps_in_layer_bands(
         self,
@@ -62,6 +103,9 @@ class SAMDetectorService:
         layer_bounds: list[dict[str, Any]] | None = None
     ) -> list[dict[str, Any]]:
         """Segment bag flaps within specific layer horizontal bands."""
+        if self.predictor is None:
+            return []
+
         img_rgb = image.convert("RGB")
         w, h = img_rgb.size
         img_np = np.array(img_rgb)

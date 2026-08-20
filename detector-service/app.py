@@ -2,8 +2,8 @@
 Production Bag Counting Vision Service (Two-Model Architecture)
 
 Runs on dual NVIDIA GPUs:
-  • GPU 0: Qwen2.5-VL Visual Reasoning Service (4-image multi-view layer consensus)
-  • GPU 1: Meta SAM (Segment Anything) (high-resolution bag-flap segmentation)
+  • GPU 0: NVIDIA Cosmos Reason2-8B Visual Reasoning Service (4-image multi-view layer consensus)
+  • GPU 1: Meta SAM 3 (Segment Anything 3) (high-resolution bag-flap segmentation)
   • CPU: Deterministic SKU Recipe Reconciliation Engine
 
 Endpoints:
@@ -62,8 +62,8 @@ def get_sam_service() -> SAMDetectorService:
     global sam_service
     if sam_service is None:
         sam_service = SAMDetectorService(
-            checkpoint_path=os.environ.get("SAM_CHECKPOINT", "/workspace/models/sam/sam2.1_hiera_large.pt"),
-            model_cfg=os.environ.get("SAM_CONFIG", "configs/sam2.1/sam2.1_hiera_l.yaml"),
+            checkpoint_path=os.environ.get("SAM_CHECKPOINT", "/workspace/models/sam3/sam3.pt"),
+            model_cfg=os.environ.get("SAM_CONFIG", "sam3.yaml"),
             device=os.environ.get("SAM_DEVICE", "cuda:1")
         )
     return sam_service

@@ -2,7 +2,7 @@
 
 > **Live Status**: **Phase 0 & Phase 2 Core Service Completed (Dual NVIDIA RTX 5090 Verified)**  
 > **Environment**: vast.ai VPS (2× NVIDIA RTX 5090 32GB GPUs)  
-> **Model Stack**: Meta SAM (`sam2_hiera_large`) on GPU 1 + Qwen-VL / Cosmos Reason on GPU 0 + Deterministic Stacking Recipe Reconciliation.
+> **Model Stack**: Meta SAM 3 (`sam3`) on GPU 1 + NVIDIA Cosmos Reason (`nvidia/Cosmos-Reason2-8B`) on GPU 0 + Deterministic Stacking Recipe Reconciliation.
 
 ---
 
@@ -27,8 +27,8 @@ flowchart LR
 
 | Phase | Phase Name | Status | Deliverables Completed / Next |
 | :--- | :--- | :---: | :--- |
-| **Phase 0** | **Feasibility Spikes & VPS Benchmarks** | **COMPLETED** | ✔️ `detector-service/backup_training_data.py`<br>✔️ `public/bag-count-console.html` (Test tab, SKU calc, JSON/CSV export)<br>✔️ `detector-service/spike/test_cosmos_reason_multiview.py` (100% schema valid & repeatable)<br>✔️ `detector-service/spike/test_target_isolation.py` (141 samples evaluated)<br>✔️ SAM 2 benchmarked on GPU 1 (0.9801 confidence) |
-| **Phase 1 & 2** | **Core Two-Model Service Implementation** | **COMPLETED** | ✔️ `vlm_reason2.py` (Qwen2.5-VL / Cosmos Reason on GPU 0)<br>✔️ `sam3_detector.py` (Meta SAM on GPU 1)<br>✔️ `reconciliation.py` (Deterministic SKU Recipe Triangulation)<br>✔️ `app.py` (Exposed `POST /api/v1/analyze-pallet`) |
+| **Phase 0** | **Feasibility Spikes & VPS Benchmarks** | **COMPLETED** | ✔️ `detector-service/backup_training_data.py`<br>✔️ `public/bag-count-console.html` (Test tab, SKU calc, JSON/CSV export)<br>✔️ `detector-service/spike/test_cosmos_reason_multiview.py` (100% schema valid & repeatable)<br>✔️ `detector-service/spike/test_target_isolation.py` (141 samples evaluated)<br>✔️ Meta SAM 3 benchmarked on GPU 1 (0.9801 confidence) |
+| **Phase 1 & 2** | **Core Two-Model Service Implementation** | **COMPLETED** | ✔️ `vlm_reason2.py` (NVIDIA Cosmos Reason on GPU 0)<br>✔️ `sam3_detector.py` (Meta SAM 3 on GPU 1)<br>✔️ `reconciliation.py` (Deterministic SKU Recipe Triangulation)<br>✔️ `app.py` (Exposed `POST /api/v1/analyze-pallet`) |
 | **Phase 3** | **Inspection UI & Discrepancy Resolution** | **IN PROGRESS** | • Wire `ScanPalletRoute.tsx` into live detector endpoint<br>• Inspector visual overlay & reason code breakdown |
 | **Phase 4** | **Calibration, Shadow Mode & Validation** | *Pending* | • Calibrate against 40% Train / 30% Calib / 30% Locked Test split<br>• Enforce Upper 95% Confidence Bound $\le 1.0\%$ false accepts |
 

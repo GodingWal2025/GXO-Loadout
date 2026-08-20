@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
-import { PALLET_TYPES, expectedBags, ConfirmModal, UndoToast } from '../shared';
+import { PALLET_TYPES, expectedBags, ConfirmModal, UndoToast, isPackagingLine, picklistHasOcr } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
@@ -33,7 +33,13 @@ export function InspectionWorkspaceRoute() {
     if (!id) return;
     dbGetInspection(id).then((i) => {
       if (!i) navigate('/');
-      else setLoaded(i);
+      else if (i.type === 'inbound') {
+        if (i.status === 'COMPLETED' || i.status === 'FLAGGED') {
+          navigate(`/inspection/${id}/review`);
+        } else {
+          navigate(`/inspection/${id}/verify-inbound`);
+        }
+      } else setLoaded(i);
     });
   }, [id, navigate]);
 
@@ -117,21 +123,28 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
     return list;
   }, [inspection.pallets, inspection.type, t]);
 
+  // For outbound + OCR, packaging SKUs are excluded from completion counts.
+  const excludePackaging =
+    inspection.type === 'outbound' && picklistHasOcr(inspection.picklist);
+  const productLineItems = excludePackaging
+    ? inspection.picklist.lineItems.filter((li) => !isPackagingLine(li))
+    : inspection.picklist.lineItems;
+
   const allFulfilled =
     inspection.type === 'returns'
       ? true // Returns are ad-hoc counts, we don't enforce exact picklist fulfillment
-      : inspection.picklist.lineItems.length === 0 ||
-        inspection.picklist.lineItems.every((li) => li.fulfilled);
+      : productLineItems.length === 0 ||
+        productLineItems.every((li) => li.fulfilled);
 
   // Both sides of this comparison must be in BAGS. actualQuantity is a bag tally,
   // so the expected side needs the same UOM conversion the header uses — summing
   // raw expectedQuantity would compare bags against pallets/SeedPaks and report a
   // total that disagrees with the tally header on the very same screen.
-  const totalExpected = inspection.picklist.lineItems.reduce(
+  const totalExpected = productLineItems.reduce(
     (sum, li) => sum + expectedBags(li.uom, li.expectedQuantity.value, li.description.value),
     0
   );
-  const totalActual = inspection.picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
+  const totalActual = productLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
   // Floor at zero: an over-scan should never render as "-39 more bags to scan".
   const remaining = Math.max(0, totalExpected - totalActual);
 
@@ -241,6 +254,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           startedBy={inspection.startedBy}
           currentInspector={inspection.currentInspector}
           handoffLog={inspection.handoffLog}
+          inspectionType={inspection.type}
         />
       )}
       <main>

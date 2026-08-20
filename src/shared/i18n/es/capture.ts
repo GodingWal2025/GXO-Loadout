@@ -17,6 +17,23 @@ export const capture: Record<string, string> = {
   'bol.skipManual': 'Omitir — capturar datos del BOL a mano',
   'bol.skipRest': 'Omitir lo demás',
 
+  // ---- Capture Inbound BOL ----
+  'inboundBol.titleLead': 'Capturar',
+  'inboundBol.titleEm': 'BOL de entrada',
+  'inboundBol.subtitle': 'Paso 2 de 3 · Fotografíe el conocimiento de embarque / documento de empaque',
+  'inboundBol.saving': 'Guardando…',
+  'inboundBol.noPages': 'Sin páginas aún',
+  'inboundBol.pagesOne': '1 página capturada',
+  'inboundBol.pagesMany': '{count} páginas capturadas',
+  'inboundBol.pageLabel': 'Página {n}',
+  'inboundBol.hint':
+    'Fotografíe el BOL para el registro. Agregue una página por cada hoja, luego proceda a registrar el producto recibido.',
+  'inboundBol.takePhoto': 'Tomar foto',
+  'inboundBol.addPage': 'Agregar otra página',
+  'inboundBol.continue': 'Continuar → Registro de verificación de entrada',
+  'inboundBol.skipManual': 'Omitir — capturar datos de BOL a mano',
+  'inboundBol.skipRest': 'Omitir lo demás',
+
   // ---- Capture picklist ----
   'picklist.titleLead': 'Capturar',
   'picklist.titleEm': 'lista de surtido',

@@ -15,8 +15,10 @@ import type {
   BatchSection,
   CrossReferenceResult,
   ReturnsBOLData,
+  InboundData,
+  InboundLineItem,
 } from '../types/inspection';
-import { emptySuggestable, getPhotoRotation } from '../types/inspection';
+import { emptySuggestable, getPhotoRotation, isPackagingLine, picklistHasOcr } from '../types/inspection';
 import { expectedBags } from '../rules/uomRules';
 import { dbSaveInspection } from '../services/db';
 
@@ -56,6 +58,16 @@ export function emptyInspection(siteId: string, type: InspectionType = 'outbound
       expectedEmptySeedPaks: emptySuggestable(),
       expectedProductSeedPaks: emptySuggestable(),
       expectedBaggedProduct: emptySuggestable(),
+    },
+    inbound: {
+      photoIds: [],
+      bolNumber: emptySuggestable(),
+      deliveryNumber: emptySuggestable(),
+      stagingLane: emptySuggestable(),
+      dateReceived: emptySuggestable(),
+      dateVerified: emptySuggestable(),
+      verifier: emptySuggestable(),
+      lineItems: [],
     },
     pallets: [],
     staging: {
@@ -117,6 +129,14 @@ export type Action =
   | { type: 'SET_RETURNS_BOL'; patch: Partial<ReturnsBOLData> }
   | { type: 'ADD_RETURNS_BOL_PHOTO'; photo: InspectionPhoto }
   | { type: 'VERIFY_RETURNS_BOL'; verifiedBy: string }
+  | { type: 'SET_INBOUND'; patch: Partial<InboundData> }
+  | { type: 'ADD_INBOUND_BOL_PHOTO'; photo: InspectionPhoto }
+  | { type: 'ADD_INBOUND_LINE'; line: InboundLineItem }
+  | { type: 'UPDATE_INBOUND_LINE'; index: number; patch: Partial<InboundLineItem> }
+  | { type: 'REMOVE_INBOUND_LINE'; index: number }
+  | { type: 'ADD_INBOUND_DAMAGE_PHOTO'; lineIndex: number; photoId: string }
+  | { type: 'REMOVE_INBOUND_DAMAGE_PHOTO'; lineIndex: number; photoId: string }
+  | { type: 'VERIFY_INBOUND'; verifiedBy: string }
   | { type: 'SET_CROSS_REFERENCE'; result: CrossReferenceResult }
   | { type: 'VERIFY_PICKLIST'; verifiedBy: string }
   | {
@@ -176,8 +196,14 @@ export function recomputeTallies(state: Inspection): Inspection {
     if (code) lastLineForCode[code] = i;
   });
 
+  // For outbound inspections with OCR data, packaging SKUs are excluded from
+  // completion counts — they inflate the expected total and can never be
+  // "fulfilled" by scanning product bags. Treated identically to cancelled lines.
+  const excludePackaging =
+    state.type === 'outbound' && picklistHasOcr(state.picklist);
+
   const lineItems = state.picklist.lineItems.map((li, i) => {
-    if (li.cancelled) {
+    if (li.cancelled || (excludePackaging && isPackagingLine(li))) {
       return {
         ...li,
         actualQuantity: 0,
@@ -441,6 +467,89 @@ function reducer(state: Inspection, action: Action): Inspection {
         status: transitionInspection(state.status, 'START'),
         returnsBol: {
           ...state.returnsBol!,
+          verifiedAt: new Date().toISOString(),
+          verifiedBy: action.verifiedBy,
+        },
+      };
+      break;
+
+    case 'SET_INBOUND':
+      next = { ...state, inbound: { ...state.inbound!, ...action.patch } };
+      break;
+
+    case 'ADD_INBOUND_BOL_PHOTO':
+      next = {
+        ...state,
+        inbound: { ...state.inbound!, photoIds: [...(state.inbound?.photoIds || []), action.photo.id] },
+      };
+      break;
+
+    case 'ADD_INBOUND_LINE':
+      next = {
+        ...state,
+        inbound: {
+          ...state.inbound!,
+          lineItems: [...(state.inbound?.lineItems || []), action.line],
+        },
+      };
+      break;
+
+    case 'UPDATE_INBOUND_LINE':
+      next = {
+        ...state,
+        inbound: {
+          ...state.inbound!,
+          lineItems: (state.inbound?.lineItems || []).map((li, i) =>
+            i === action.index ? { ...li, ...action.patch } : li
+          ),
+        },
+      };
+      break;
+
+    case 'REMOVE_INBOUND_LINE':
+      next = {
+        ...state,
+        inbound: {
+          ...state.inbound!,
+          lineItems: (state.inbound?.lineItems || []).filter((_, i) => i !== action.index),
+        },
+      };
+      break;
+
+    case 'ADD_INBOUND_DAMAGE_PHOTO':
+      next = {
+        ...state,
+        inbound: {
+          ...state.inbound!,
+          lineItems: (state.inbound?.lineItems || []).map((li, i) =>
+            i === action.lineIndex
+              ? { ...li, damagePhotoIds: [...(li.damagePhotoIds || []), action.photoId] }
+              : li
+          ),
+        },
+      };
+      break;
+
+    case 'REMOVE_INBOUND_DAMAGE_PHOTO':
+      next = {
+        ...state,
+        inbound: {
+          ...state.inbound!,
+          lineItems: (state.inbound?.lineItems || []).map((li, i) =>
+            i === action.lineIndex
+              ? { ...li, damagePhotoIds: (li.damagePhotoIds || []).filter((id) => id !== action.photoId) }
+              : li
+          ),
+        },
+      };
+      break;
+
+    case 'VERIFY_INBOUND':
+      next = {
+        ...state,
+        status: transitionInspection(state.status, 'START'),
+        inbound: {
+          ...state.inbound!,
           verifiedAt: new Date().toISOString(),
           verifiedBy: action.verifiedBy,
         },

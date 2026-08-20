@@ -306,7 +306,12 @@ export function NewInspectionRoute() {
   }
 
   // Outbound / Inbound / Returns workflow
-  const canStart = (inspectionType === 'returns' ? returnsBrand !== '' : pickerName !== '') && selectedInspectors.length > 0 && selectedLocations.length > 0;
+  const canStart =
+    inspectionType === 'returns'
+      ? returnsBrand !== '' && selectedInspectors.length > 0 && selectedLocations.length > 0
+      : inspectionType === 'inbound'
+      ? selectedInspectors.length > 0 && selectedLocations.length > 0
+      : pickerName !== '' && selectedInspectors.length > 0 && selectedLocations.length > 0;
 
   const start = async () => {
     if (!canStart) return;
@@ -314,12 +319,25 @@ export function NewInspectionRoute() {
     try {
       const inspection = {
         ...emptyInspection(config.siteId, inspectionType),
-        pickerName: inspectionType === 'returns' ? undefined : pickerName,
+        pickerName: inspectionType === 'outbound' ? pickerName : undefined,
         startedBy: selectedInspectors.join(', '),
         currentInspector: selectedInspectors.join(', '),
         lastEditedBy: selectedInspectors.join(', '),
         stagingLocation: selectedLocations.join(', '),
         returnsBrand: inspectionType === 'returns' ? (returnsBrand as 'Dekalb' | 'Channel') : undefined,
+        inbound:
+          inspectionType === 'inbound'
+            ? {
+                photoIds: [],
+                bolNumber: { value: null, source: 'empty' as const },
+                deliveryNumber: { value: null, source: 'empty' as const },
+                stagingLane: { value: selectedLocations.join(', '), source: 'manual' as const },
+                dateReceived: { value: new Date().toISOString().split('T')[0], source: 'manual' as const },
+                dateVerified: { value: new Date().toISOString().split('T')[0], source: 'manual' as const },
+                verifier: { value: selectedInspectors.join(', '), source: 'manual' as const },
+                lineItems: [],
+              }
+            : undefined,
       };
 
       const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout saving to IndexedDB! Is another tab blocking it?")), 5000));
@@ -330,6 +348,8 @@ export function NewInspectionRoute() {
       
       if (inspectionType === 'returns') {
         navigate(`/inspection/${inspection.id}/capture-returns-bol`);
+      } else if (inspectionType === 'inbound') {
+        navigate(`/inspection/${inspection.id}/capture-inbound-bol`);
       } else {
         navigate(`/inspection/${inspection.id}/capture-bol`);
       }
@@ -385,13 +405,13 @@ export function NewInspectionRoute() {
           </h1>
           <div className="page-head__sub">
             {t('newInspection.stepLine', 'Step 1 of {total} · Names and location', {
-              total: inspectionType === 'returns' ? 5 : 4,
+              total: inspectionType === 'returns' ? 5 : inspectionType === 'inbound' ? 3 : 4,
             })}
           </div>
         </div>
       </div>
 
-      {inspectionType !== 'returns' && (
+      {inspectionType === 'outbound' && (
         <div className="field">
           <div className="field__label">
             {t('newInspection.pickerLabel', 'Picker (who pulled the load)')}
@@ -407,7 +427,11 @@ export function NewInspectionRoute() {
 
       <div className="field">
         <SearchableMultiSelect 
-          label={t('newInspection.inspectorsLabel', 'Inspector(s)')}
+          label={
+            inspectionType === 'inbound'
+              ? t('newInspection.verifiersLabel', 'Verifier(s) / Inspector(s)')
+              : t('newInspection.inspectorsLabel', 'Inspector(s)')
+          }
           options={inspectors.map(i => i.name)}
           selected={selectedInspectors}
           onChange={setSelectedInspectors}
@@ -500,6 +524,8 @@ export function NewInspectionRoute() {
               ? t('newInspection.starting', 'Starting…')
               : inspectionType === 'returns'
                 ? t('newInspection.continueReturnsBol', 'Continue → Capture Returns BOL')
+                : inspectionType === 'inbound'
+                ? t('newInspection.continueInboundBol', 'Continue → Capture Inbound BOL')
                 : t('newInspection.continueBol', 'Continue → Capture BOL')}
         </button>
       </div>

@@ -48,6 +48,39 @@ export const PICKLIST_UOM_OPTIONS: Uom[] = ['BG', 'SP', 'MB', 'PL', 'C62'];
 export const BAGS_PER_PALLET = 60;
 
 // ============================================================
+// Packaging SKU exclusion (outbound + OCR only)
+// ============================================================
+//
+// When a picklist is captured via OCR, packaging materials (shrink wrap,
+// pallet wood, etc.) appear as line items alongside actual product. They
+// inflate the expected total and can never be "fulfilled" by scanning bags,
+// so they must be excluded from completion counts.
+//
+// The filter only activates when OCR populated the picklist (source === 'ml').
+// If an inspector types lines manually and enters a packaging SKU, it stays
+// in the count — the assumption is they intentionally added it.
+
+/** SKUs that represent packaging materials, not product. */
+export const PACKAGING_SKUS: ReadonlySet<string> = new Set([
+  '87674223',
+  '9905613',
+  '87675793',
+]);
+
+/** True when a picklist line's SKU is a known packaging material. */
+export function isPackagingLine(li: PicklistLineItemEntry): boolean {
+  const sku = li.sku?.value?.trim();
+  return sku != null && PACKAGING_SKUS.has(sku);
+}
+
+/** True when at least one picklist line was populated by OCR. */
+export function picklistHasOcr(picklist: Picklist): boolean {
+  return picklist.lineItems.some(
+    (li) => li.sku?.source === 'ml' || li.batchCode?.source === 'ml'
+  );
+}
+
+// ============================================================
 // Suggestable - ML-ready field wrapper
 // ============================================================
 
@@ -128,7 +161,9 @@ export type PhotoCategory =
   | 'Returns_Damage_Assessment'
   | 'Staging_Final_Lane'
   | 'Returns_Packaging_Pallets'
-  | 'Returns_Packaging_Seedpaks';
+  | 'Returns_Packaging_Seedpaks'
+  | 'Inbound_BOL'
+  | 'Inbound_Damage';
 
 
 
@@ -334,6 +369,36 @@ export interface ReturnsBOLData {
   verifiedBy?: string;
 }
 
+export interface InboundLineItem {
+  id: string;
+  itemNumber: number;
+  materialNumber: Suggestable<string>; // SKU / Material
+  materialDescription?: Suggestable<string>;
+  batch: Suggestable<string>;
+  uom: 'SP' | 'BG';
+  location?: Suggestable<string>; // LOC
+  qtyReceived: Suggestable<number>;
+  qtyDamaged: Suggestable<number>;
+  onBol: boolean; // Yes / No
+  damagePhotoIds?: string[];
+  notes?: string;
+}
+
+export interface InboundData {
+  capturedAt?: string;
+  capturedBy?: string;
+  photoIds: string[]; // Inbound BOL photos
+  bolNumber: Suggestable<string>;
+  deliveryNumber: Suggestable<string>;
+  stagingLane: Suggestable<string>;
+  dateReceived: Suggestable<string>;
+  dateVerified: Suggestable<string>;
+  verifier: Suggestable<string>;
+  lineItems: InboundLineItem[];
+  verifiedAt?: string;
+  verifiedBy?: string;
+}
+
 export interface Delivery {
   id: string;
   deliveryNumber: string;
@@ -400,6 +465,7 @@ export interface Inspection {
   bol: BOLData;
   returnsBol?: ReturnsBOLData;
   returnsBrand?: 'Dekalb' | 'Channel';
+  inbound?: InboundData;
   crossReference?: CrossReferenceResult;
 
   pallets: PalletInspection[];
@@ -560,4 +626,4 @@ export const INSPECTION_TYPE_DESCRIPTIONS: Record<InspectionType, string> = {
  * Remove a type from here as its workflow lands — that single edit is what turns
  * the stub off.
  */
-export const STUBBED_INSPECTION_TYPES: InspectionType[] = ['inbound', 'retag', 'discard'];
+export const STUBBED_INSPECTION_TYPES: InspectionType[] = ['retag', 'discard'];

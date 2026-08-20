@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { dbGetInspection, computeCrossReference } from '../shared';
+import { dbGetInspection, dbGetPhotoBlob, computeCrossReference, PhotoLightbox } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import { InspectorPicker } from '../shared';
 import { MultiPhotoCapture } from '../shared';
+import { isPackagingLine, picklistHasOcr } from '../shared';
 import type { Inspection } from '../shared';
+import { CapturedPageThumb } from '../components/CapturedPageThumb';
+import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT } from '../shared/i18n/LanguageContext';
 
 export function ReviewAndCompleteRoute() {
@@ -34,22 +37,37 @@ function ReviewInner({ initial }: { initial: Inspection }) {
     inspection.completedBy || inspection.startedBy || ''
   );
 
-  const totalExpected = inspection.picklist.lineItems.reduce(
+  // For outbound + OCR, packaging SKUs are excluded from completion counts.
+  const excludePackaging =
+    inspection.type === 'outbound' && picklistHasOcr(inspection.picklist);
+  const productLineItems = excludePackaging
+    ? inspection.picklist.lineItems.filter((li) => !isPackagingLine(li))
+    : inspection.picklist.lineItems;
+
+  const totalExpected = productLineItems.reduce(
     (sum, li) => sum + (li.expectedQuantity.value || 0),
     0
   );
-  const totalActual = inspection.picklist.lineItems.reduce(
+  const totalActual = productLineItems.reduce(
     (sum, li) => sum + li.actualQuantity,
     0
   );
-  const allFulfilled = inspection.type === 'returns' || inspection.picklist.lineItems.every((li) => li.fulfilled);
+  const allFulfilled = inspection.type === 'returns' || productLineItems.every((li) => li.fulfilled);
 
   const isReturns = inspection.type === 'returns';
+  const isInbound = inspection.type === 'inbound';
   const returnsBol = inspection.returnsBol;
+  const inbound = inspection.inbound;
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
+
+  const openLightbox = async (photoId: string) => {
+    const blob = await dbGetPhotoBlob(photoId);
+    if (blob) setLightboxUrl(URL.createObjectURL(blob));
+  };
 
   // Cross-reference the picklist against the BOL (SKU totals + header fields).
   // Only meaningful for outbound loads that actually captured BOL line items.
-  const hasBolLines = !isReturns && (inspection.bol.lineItems?.length ?? 0) > 0;
+  const hasBolLines = !isReturns && !isInbound && (inspection.bol.lineItems?.length ?? 0) > 0;
   const crossRef = useMemo(
     () => (hasBolLines ? computeCrossReference(inspection) : null),
     // Recompute only when the compared values change — not on every tally
@@ -111,7 +129,23 @@ function ReviewInner({ initial }: { initial: Inspection }) {
     setTimeout(() => navigate('/'), 100);
   };
 
-  const loadNum = inspection.picklist.loadNumber.value || inspection.bol.loadNumber.value || inspection.id.slice(0, 8);
+  const loadNum =
+    inspection.inbound?.bolNumber.value ||
+    inspection.picklist.loadNumber.value ||
+    inspection.bol.loadNumber.value ||
+    inspection.returnsBol?.bolNumber.value ||
+    inspection.id.slice(0, 8);
+
+  const inboundLines = inbound?.lineItems || [];
+  const inboundTotalReceived = inboundLines.reduce(
+    (sum, li) => sum + (Number(li.qtyReceived?.value) || 0),
+    0
+  );
+  const inboundTotalDamaged = inboundLines.reduce(
+    (sum, li) => sum + (Number(li.qtyDamaged?.value) || 0),
+    0
+  );
+  const inboundDamagePhotos = inboundLines.flatMap((li) => li.damagePhotoIds || []);
 
   return (
     <main>
@@ -130,7 +164,11 @@ function ReviewInner({ initial }: { initial: Inspection }) {
           </h1>
           <div className="page-head__sub">
             {t('review.load', 'Load')} <span className="mono">#{loadNum}</span> ·{' '}
-            {isReturns
+            {isInbound
+              ? t('review.subInbound', '{count} items logged · Inbound Verification Log', {
+                  count: inboundLines.length,
+                })
+              : isReturns
               ? t('review.subReturns', '{pallets} total pallets returned', {
                   pallets: inspection.pallets.length,
                 })
@@ -151,11 +189,17 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                   })}
           </div>
         </div>
-        {locked && (
-          <div className="page-head__actions">
-            <ViewEditToggle editing={editing} onChange={setEditing} />
-          </div>
-        )}
+        <div className="page-head__actions" style={{ display: 'flex', gap: 8 }}>
+          <button
+            type="button"
+            className="btn btn--outline btn--sm"
+            onClick={() => downloadInspectionPdf(inspection)}
+            title="Download PDF report"
+          >
+            ⤓ PDF
+          </button>
+          {locked && <ViewEditToggle editing={editing} onChange={setEditing} />}
+        </div>
       </div>
 
       {readOnly && (
@@ -176,7 +220,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         </div>
       )}
 
-      {!isReturns && totalExpected > 0 && (
+      {!isReturns && !isInbound && totalExpected > 0 && (
         allFulfilled ? (
           <div className="banner banner--success">
             <span className="banner__icon">✓</span>
@@ -200,6 +244,180 @@ function ReviewInner({ initial }: { initial: Inspection }) {
             </div>
           </div>
         )
+      )}
+
+      {/* ===== Inbound Review View ===== */}
+      {isInbound && inbound && (
+        <>
+          {/* Header Card */}
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">
+                {t('verifyInbound.titleLead', 'Inbound')} <em>{t('verifyInbound.titleEm', 'Verification Log')}</em>
+              </h2>
+            </div>
+            <div className="card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16 }}>
+              <div>
+                <div className="xs soft">{t('verifyInbound.bolNumber', 'BoL Number / Load #')}</div>
+                <div className="mono fw-600" style={{ fontSize: 16 }}>{inbound.bolNumber?.value || '—'}</div>
+              </div>
+              <div>
+                <div className="xs soft">{t('verifyInbound.deliveryNumber', 'Delivery Number')}</div>
+                <div className="mono fw-600" style={{ fontSize: 16 }}>{inbound.deliveryNumber?.value || '—'}</div>
+              </div>
+              <div>
+                <div className="xs soft">{t('verifyInbound.stagingLanes', 'Staging Lane(s)')}</div>
+                <div className="fw-500">{inbound.stagingLane?.value || inspection.stagingLocation || '—'}</div>
+              </div>
+              <div>
+                <div className="xs soft">{t('verifyInbound.verifier', 'Verifier')}</div>
+                <div className="fw-500">{inbound.verifier?.value || inspection.startedBy || '—'}</div>
+              </div>
+              <div>
+                <div className="xs soft">{t('verifyInbound.dateReceived', 'Date Received')}</div>
+                <div>{inbound.dateReceived?.value || '—'}</div>
+              </div>
+              <div>
+                <div className="xs soft">{t('verifyInbound.dateVerified', 'Date Verified')}</div>
+                <div>{inbound.dateVerified?.value || '—'}</div>
+              </div>
+            </div>
+          </section>
+
+          {/* Metrics summary */}
+          <div
+            className="card"
+            style={{
+              display: 'flex',
+              justifyContent: 'space-around',
+              alignItems: 'center',
+              padding: 16,
+              background: 'var(--surface-tint)',
+              marginBottom: 24,
+            }}
+          >
+            <div style={{ textAlign: 'center' }}>
+              <div className="small soft">{t('verifyInbound.summaryLines', 'Items Logged')}</div>
+              <div className="mono fw-600" style={{ fontSize: 22 }}>{inboundLines.length}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div className="small soft">{t('verifyInbound.summaryReceived', 'Total Received')}</div>
+              <div className="mono fw-600" style={{ fontSize: 22, color: 'var(--accent)' }}>{inboundTotalReceived}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div className="small soft">{t('verifyInbound.summaryDamaged', 'Total Damaged')}</div>
+              <div className="mono fw-600" style={{ fontSize: 22, color: inboundTotalDamaged > 0 ? 'var(--danger)' : 'var(--ink)' }}>
+                {inboundTotalDamaged}
+              </div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div className="small soft">{t('verifyInbound.summaryBolPhotos', 'BOL Photos')}</div>
+              <div className="mono fw-600" style={{ fontSize: 22 }}>{inbound.photoIds?.length || 0}</div>
+            </div>
+            <div style={{ textAlign: 'center' }}>
+              <div className="small soft">{t('verifyInbound.damagePhotos', 'Damage Photos')}</div>
+              <div className="mono fw-600" style={{ fontSize: 22, color: inboundDamagePhotos.length > 0 ? 'var(--danger)' : 'var(--ink)' }}>
+                {inboundDamagePhotos.length}
+              </div>
+            </div>
+          </div>
+
+          {/* Received Line Items Table */}
+          <section className="section">
+            <div className="section__head">
+              <h2 className="section__title">
+                {t('verifyInbound.lineItemsLead', 'Received')} <em>{t('verifyInbound.lineItemsEm', 'products')}</em>
+              </h2>
+            </div>
+            <div className="table-card">
+              <table className="data">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>{t('verifyInbound.colBatch', 'Batch')}</th>
+                    <th>{t('verifyInbound.colMaterial', 'Material / SKU')}</th>
+                    <th>{t('verifyInbound.colDesc', 'Description')}</th>
+                    <th>{t('verifyInbound.colUom', 'Package')}</th>
+                    <th>{t('verifyInbound.colLoc', 'LOC')}</th>
+                    <th className="right">{t('verifyInbound.colQtyReceived', 'Qty Received')}</th>
+                    <th className="right">{t('verifyInbound.colQtyDamaged', 'Qty Damaged')}</th>
+                    <th className="center">{t('verifyInbound.colOnBol', 'On BOL?')}</th>
+                    <th>{t('verifyInbound.damagePhotos', 'Damage Photos')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {inboundLines.map((li, idx) => (
+                    <tr key={li.id}>
+                      <td className="fw-600">{li.itemNumber || idx + 1}</td>
+                      <td className="mono">{li.batch?.value || '—'}</td>
+                      <td className="mono small">{li.materialNumber?.value || '—'}</td>
+                      <td className="small soft">{li.materialDescription?.value || '—'}</td>
+                      <td>
+                        <span className="pill pill--neutral">{li.uom}</span>
+                      </td>
+                      <td className="mono small">{li.location?.value || '—'}</td>
+                      <td className="right num fw-600">{li.qtyReceived?.value ?? 0}</td>
+                      <td className="right num" style={{ color: (Number(li.qtyDamaged?.value) || 0) > 0 ? 'var(--danger)' : undefined }}>
+                        {li.qtyDamaged?.value ?? 0}
+                      </td>
+                      <td className="center">
+                        {li.onBol ? (
+                          <span className="pill pill--success">{t('verifyInbound.yes', 'Yes')}</span>
+                        ) : (
+                          <span className="pill pill--warn">{t('verifyInbound.no', 'No')}</span>
+                        )}
+                      </td>
+                      <td>
+                        {(li.damagePhotoIds || []).length > 0 ? (
+                          <div style={{ display: 'flex', gap: 4 }}>
+                            {(li.damagePhotoIds || []).map((pid) => (
+                              <div
+                                key={pid}
+                                onClick={() => openLightbox(pid)}
+                                style={{ cursor: 'pointer' }}
+                              >
+                                <CapturedPageThumb
+                                  photoId={pid}
+                                  inspectionId={inspection.id}
+                                  label="Damage"
+                                />
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="soft xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Inbound BOL photos gallery */}
+          {(inbound.photoIds || []).length > 0 && (
+            <section className="section">
+              <div className="section__head">
+                <h2 className="section__title">
+                  {t('inboundBol.titleLead', 'Inbound')} <em>{t('inboundBol.titleEm', 'BOL Documents')}</em>
+                </h2>
+                <span className="section__meta">{t('inboundBol.pagesMany', '{count} pages captured', { count: inbound.photoIds.length })}</span>
+              </div>
+              <div className="photo-grid">
+                {inbound.photoIds.map((pid, i) => (
+                  <div key={pid} onClick={() => openLightbox(pid)} style={{ cursor: 'pointer' }}>
+                    <CapturedPageThumb
+                      photoId={pid}
+                      inspectionId={inspection.id}
+                      label={t('inboundBol.pageLabel', 'Page {n}', { n: i + 1 })}
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+        </>
       )}
 
       {isReturns && returnsBol && (
@@ -315,7 +533,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         </section>
       )}
 
-      {!isReturns && (
+      {!isReturns && !isInbound && (
         <section className="section">
           <div className="section__head">
             <h2 className="section__title">
@@ -341,8 +559,9 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                   const delivery = inspection.bol.deliveries.find(
                     (d) => d.id === li.deliveryId
                   );
+                  const isExcludedPackaging = excludePackaging && isPackagingLine(li);
                   return (
-                    <tr key={li.id}>
+                    <tr key={li.id} style={isExcludedPackaging ? { opacity: 0.45 } : undefined}>
                       <td className="mono">{li.batchCode.value || '—'}</td>
                       <td className="mono small">{li.sku.value || '—'}</td>
                       <td className="small soft">{li.description.value || '—'}</td>
@@ -354,7 +573,11 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                         {li.actualQuantity} {li.uom}
                       </td>
                       <td className="right">
-                        {li.fulfilled ? (
+                        {isExcludedPackaging ? (
+                          <span className="pill pill--neutral" style={{ fontSize: 10 }}>
+                            {t('review.statusPackaging', 'Packaging — excluded')}
+                          </span>
+                        ) : li.fulfilled ? (
                           <span className="pill pill--success">{t('review.statusMatch', '✓ match')}</span>
                         ) : (
                           <span className="pill pill--warn">{t('review.statusShort', 'short')}</span>
@@ -653,7 +876,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
         </>
       )}
 
-      {!isReturns && (
+      {!isReturns && !isInbound && (
         <section className="section">
           <div className="section__head">
             <h2 className="section__title">
@@ -745,7 +968,12 @@ function ReviewInner({ initial }: { initial: Inspection }) {
               style={{ marginTop: 4 }}
             />
             <span className="small">
-              {isReturns
+              {isInbound
+                ? t(
+                    'review.attestInbound',
+                    'I have personally verified this inbound load against the BOL and paperwork. All received product counts, batches, and damages are accurately recorded.'
+                  )
+                : isReturns
                 ? t(
                     'review.attestReturns',
                     'I have personally verified this return. All product photos, batch, and product have been reviewed and are accurate.'
@@ -781,7 +1009,14 @@ function ReviewInner({ initial }: { initial: Inspection }) {
           </div>
         )}
         <div className="row-between">
-          <button className="btn btn--ghost" onClick={() => navigate(`/inspection/${inspection.id}`)}>
+          <button
+            className="btn btn--ghost"
+            onClick={() =>
+              isInbound
+                ? navigate(`/inspection/${inspection.id}/verify-inbound`)
+                : navigate(`/inspection/${inspection.id}`)
+            }
+          >
             {readOnly
               ? t('review.backToLoad', '← Back to load')
               : t('review.continueEditing', '← Continue editing')}
@@ -798,6 +1033,16 @@ function ReviewInner({ initial }: { initial: Inspection }) {
           )}
         </div>
       </div>
+
+      {lightboxUrl && (
+        <PhotoLightbox
+          url={lightboxUrl}
+          onClose={() => {
+            URL.revokeObjectURL(lightboxUrl);
+            setLightboxUrl(null);
+          }}
+        />
+      )}
     </main>
   );
 }

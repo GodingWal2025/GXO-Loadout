@@ -1,6 +1,6 @@
 """VLM Visual Reasoning Service (GPU 0)
 
-Runs Qwen2.5-VL on GPU 0 to perform multi-view structural reasoning across
+Runs NVIDIA Cosmos Reason2-8B on GPU 0 to perform multi-view structural reasoning across
 all 4 pallet sides (FRONT, RIGHT, BACK, LEFT) simultaneously.
 """
 
@@ -9,28 +9,46 @@ from __future__ import annotations
 import base64
 import io
 import json
+from pathlib import Path
 import re
 from typing import Any
 
 from PIL import Image
 import torch
 from transformers import AutoModelForImageTextToText, AutoProcessor
+from peft import PeftModel
 
 
 class VLMReasonService:
-    def __init__(self, model_id: str = "nvidia/Cosmos-Reason2-8B", device: str = "cuda:0") -> None:
+    def __init__(
+        self,
+        model_id: str = "nvidia/Cosmos-Reason2-8B",
+        adapter_path: str = "/workspace/models/cosmos_lora_adapter",
+        device: str = "cuda:0"
+    ) -> None:
         self.device = device
         self.model_id = model_id
         print(f"[*] Initializing NVIDIA Cosmos Reason VLM ({model_id}) on {device}...")
         self.processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-        self.model = AutoModelForImageTextToText.from_pretrained(
+        base_model = AutoModelForImageTextToText.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
-            device_map=device,
+            device_map={"": device},
             trust_remote_code=True
         )
+
+        # Load fine-tuned LoRA adapter if present
+        adapter_p = Path(adapter_path)
+        if adapter_p.exists():
+            print(f"[*] Loading fine-tuned LoRA adapter from {adapter_path}...")
+            self.model = PeftModel.from_pretrained(base_model, str(adapter_p))
+            print(f"[✓] Fine-tuned Cosmos LoRA adapter successfully attached on {device}!")
+        else:
+            self.model = base_model
+            print(f"[!] Warning: Adapter not found at {adapter_path}, running zero-shot base model.")
+
         self.model.eval()
-        print(f"[✓] VLM Reasoner loaded into VRAM on {device}!")
+        print(f"[✓] NVIDIA Cosmos Reason ready in VRAM on {device}!")
 
     def _build_prompt(self, recipe: dict[str, Any] | None = None) -> str:
         return (
@@ -97,7 +115,6 @@ class VLMReasonService:
             output_ids = self.model.generate(
                 **inputs,
                 max_new_tokens=768,
-                temperature=0.01,
                 do_sample=False
             )
 

@@ -553,10 +553,10 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       <div class="stack">
         <div class="card">
           <div class="hd">
-            <span class="eyebrow">Multi-View Pallet Inference (Meta SAM 2 + Qwen2.5-VL)</span>
+            <span class="eyebrow">Multi-View Pallet Inference (Meta SAM 3 + NVIDIA Cosmos Reasoner)</span>
           </div>
           <div class="bd stack">
-            <p class="lead" style="margin:0">Live test harness — sends 4 side photos to the GPU detector service running Qwen2.5-VL (structural reasoning) + Meta SAM 2 (bag-flap segmentation) with recipe reconciliation.</p>
+            <p class="lead" style="margin:0">Live test harness — sends 4 side photos to the GPU detector service running NVIDIA Cosmos Reasoner (structural reasoning) + Meta SAM 3 (bag-flap segmentation) with recipe reconciliation.</p>
 
             <div class="row" style="align-items:flex-end;gap:10px">
               <label style="flex:1;min-width:260px"><span class="fld">GPU Endpoint URL <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">Vast.ai or local</span></span>
@@ -594,12 +594,12 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <!-- 3 Complementary Evidence Sources Cards -->
             <div class="tiles" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr))">
               <div class="tile" style="border-left:4px solid var(--accent)">
-                <div class="eyebrow" style="color:var(--accent-ink)">1 · Meta SAM 2 Visible Evidence</div>
+                <div class="eyebrow" style="color:var(--accent-ink)">1 · Meta SAM 3 Visible Evidence</div>
                 <div class="v mono" id="testSamFlaps">— <small>visible flaps</small></div>
                 <div class="l" id="testSamBreakdown">Per face: front: —, right: —, back: —, left: —</div>
               </div>
               <div class="tile" style="border-left:4px solid #8e44ad">
-                <div class="eyebrow" style="color:#8e44ad">2 · Qwen2.5-VL Structural</div>
+                <div class="eyebrow" style="color:#8e44ad">2 · NVIDIA Cosmos Structural</div>
                 <div class="v mono" id="testVlmTotal">— <small>est. bags</small></div>
                 <div class="l" id="testVlmBreakdown">Layers: — · Partial top: — · Regular: —</div>
               </div>
@@ -1630,7 +1630,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     const resultsCard = $("#testResultsCard");
     statusEl.style.display = "block";
     statusEl.className = "banner";
-    statusEl.innerHTML = `<span>⏳ Encoding images & sending to GPU service (Qwen2.5-VL + SAM 2)…</span>`;
+    statusEl.innerHTML = `<span>⏳ Encoding images & sending to GPU service (Cosmos Reasoner + SAM 3)…</span>`;
     resultsCard.style.display = "none";
 
     const t0 = performance.now();
@@ -1645,7 +1645,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       const sku = $("#testSkuInput")?.value.trim() || "STANDARD";
       const recipe = { sku };
 
-      statusEl.innerHTML = `<span>⏳ Running vision inference on GPU 0 (Qwen2.5-VL) + GPU 1 (SAM 2)…</span>`;
+      statusEl.innerHTML = `<span>⏳ Running vision inference on GPU 0 (NVIDIA Cosmos Reasoner) + GPU 1 (Meta SAM 3)…</span>`;
 
       const resp = await fetch(gpuUrl + "/api/v1/analyze-pallet", {
         method: "POST",

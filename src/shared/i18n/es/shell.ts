@@ -140,6 +140,7 @@ export const shell: Record<string, string> = {
   'newInspection.pickerLabel': 'Surtidor (quién armó la carga)',
   'newInspection.pickerPlaceholder': 'Seleccione surtidor…',
   'newInspection.inspectorsLabel': 'Inspector(es)',
+  'newInspection.verifiersLabel': 'Verificador(es) / Inspector(es)',
   'newInspection.inspectorsPlaceholder': 'Buscar y seleccionar inspectores...',
   'newInspection.inspectorsHint':
     'Seleccione todos los inspectores que trabajan en esta carga. Si no ve su nombre, pida a un gerente que lo agregue.',
@@ -154,6 +155,7 @@ export const shell: Record<string, string> = {
   'newInspection.saveChanges': 'Guardar cambios',
   'newInspection.continueBol': 'Continuar → Capturar BOL',
   'newInspection.continueReturnsBol': 'Continuar → Capturar BOL de devoluciones',
+  'newInspection.continueInboundBol': 'Continuar → Capturar BOL de entrada',
 
   // ---- Inspection list card ----
   'listCard.typeOutbound': 'Salida',

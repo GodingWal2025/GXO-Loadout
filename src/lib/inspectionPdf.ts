@@ -20,11 +20,151 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
   const pageWidth = doc.internal.pageSize.getWidth();
   const margin = 40;
 
+  const isInbound = inspection.type === 'inbound';
+  const isReturns = inspection.type === 'returns';
+
   const loadNum =
+    inspection.inbound?.bolNumber?.value ||
     inspection.picklist.loadNumber.value ||
     inspection.bol.loadNumber.value ||
     inspection.returnsBol?.bolNumber?.value ||
     inspection.id.slice(0, 8);
+
+  // If inbound, render digital replica of the Inbound Verification Log
+  if (isInbound) {
+    const inbound = inspection.inbound;
+    const lines = inbound?.lineItems || [];
+    const totalReceived = lines.reduce(
+      (sum, li) => sum + (Number(li.qtyReceived?.value) || 0),
+      0
+    );
+    const totalDamaged = lines.reduce(
+      (sum, li) => sum + (Number(li.qtyDamaged?.value) || 0),
+      0
+    );
+
+    // Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.text('Inbound Verification Log', margin, 46);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(
+      `Generated: ${new Date().toLocaleString()}  ·  Status: ${inspection.status}`,
+      margin,
+      60
+    );
+
+    // Header Table (replicating paper log top header)
+    autoTable(doc, {
+      startY: 70,
+      margin: { left: margin, right: margin },
+      theme: 'grid',
+      styles: { fontSize: 8.5, cellPadding: 4, textColor: 30 },
+      headStyles: { fillColor: [245, 245, 245], textColor: 20, fontStyle: 'bold' },
+      body: [
+        [
+          { content: 'BoL Number:', styles: { fontStyle: 'bold' } },
+          inbound?.bolNumber?.value || '—',
+          { content: 'Date Received:', styles: { fontStyle: 'bold' } },
+          inbound?.dateReceived?.value || '—',
+        ],
+        [
+          { content: 'Delivery Number:', styles: { fontStyle: 'bold' } },
+          inbound?.deliveryNumber?.value || '—',
+          { content: 'Date Verified:', styles: { fontStyle: 'bold' } },
+          inbound?.dateVerified?.value || '—',
+        ],
+        [
+          { content: 'Staging Lane(s):', styles: { fontStyle: 'bold' } },
+          inbound?.stagingLane?.value || inspection.stagingLocation || '—',
+          { content: 'Verifier:', styles: { fontStyle: 'bold' } },
+          inbound?.verifier?.value || inspection.startedBy || '—',
+        ],
+        [
+          { content: 'Check one:', styles: { fontStyle: 'bold' } },
+          '[X] Inbound    [ ] Return',
+          { content: 'Damage photos:', styles: { fontStyle: 'bold' } },
+          `${lines.flatMap((l) => l.damagePhotoIds || []).length} captured`,
+        ],
+      ],
+    });
+
+    const headerFinalY = (doc as any).lastAutoTable.finalY;
+
+    // Line items table
+    const tableBody = lines.map((li, idx) => [
+      String(li.itemNumber || idx + 1),
+      li.materialNumber?.value || '—',
+      li.batch?.value ? li.batch.value.toUpperCase() : '—',
+      li.uom || 'BG',
+      li.location?.value || '—',
+      String(li.qtyReceived?.value ?? 0),
+      String(li.qtyDamaged?.value ?? 0),
+      li.onBol ? 'Y' : 'N',
+      (li.damagePhotoIds || []).length > 0 ? `${li.damagePhotoIds?.length} photos` : 'None',
+    ]);
+
+    autoTable(doc, {
+      startY: headerFinalY + 14,
+      margin: { left: margin, right: margin },
+      head: [
+        [
+          '#',
+          'MATERIAL NUMBER',
+          'BATCH',
+          'UOM',
+          'LOC',
+          'QTY RECEIVED',
+          'QTY DAMAGED',
+          'ON BOL?',
+          'DAMAGES',
+        ],
+      ],
+      body: tableBody,
+      foot: [
+        [
+          'Total',
+          '',
+          '',
+          '',
+          '',
+          String(totalReceived),
+          String(totalDamaged),
+          '',
+          '',
+        ],
+      ],
+      theme: 'grid',
+      headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 8.5 },
+      footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: 'bold', fontSize: 8.5 },
+      styles: { fontSize: 8, cellPadding: 4 },
+      columnStyles: {
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        7: { halign: 'center' },
+      },
+    });
+
+    // Page footer
+    const pageCount = doc.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(140);
+      doc.text(
+        `GXO Loadout — Inbound Verification Log — BoL #${loadNum} — page ${i} of ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.getHeight() - 20,
+        { align: 'center' }
+      );
+    }
+
+    doc.save(`inbound-${loadNum}-log.pdf`);
+    return;
+  }
 
   // Delivery lookup
   const deliveryMap: Record<string, { deliveryNumber: string; stopNumber?: number }> = {};
@@ -99,8 +239,6 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     batchTotals.set(r.batchCode, (batchTotals.get(r.batchCode) || 0) + r.bagCount);
   }
   const totalBags = rows.reduce((s, r) => s + r.bagCount, 0);
-
-  const isReturns = inspection.type === 'returns';
 
   // Distinct delivery numbers across all pallets, in first-seen order
   const deliveryNums: string[] = [];

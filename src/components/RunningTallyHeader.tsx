@@ -1,5 +1,5 @@
-import type { Picklist, PalletInspection, HandoffEntry } from '../shared';
-import { expectedBags } from '../shared';
+import type { Picklist, PalletInspection, HandoffEntry, InspectionType } from '../shared';
+import { expectedBags, isPackagingLine, picklistHasOcr } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
 export interface InspectorColorTheme {
@@ -82,6 +82,7 @@ interface Props {
   startedBy?: string;
   currentInspector?: string;
   handoffLog?: HandoffEntry[];
+  inspectionType?: InspectionType;
 }
 
 export function RunningTallyHeader({
@@ -90,6 +91,7 @@ export function RunningTallyHeader({
   startedBy,
   currentInspector,
   handoffLog = [],
+  inspectionType,
 }: Props) {
   const t = useT();
 
@@ -120,7 +122,12 @@ export function RunningTallyHeader({
   const bagsExpected = (li: Picklist['lineItems'][number]) =>
     expectedBags(li.uom, li.expectedQuantity.value, li.description.value);
 
-  const activeLineItems = picklist.lineItems.filter((li) => !li.cancelled);
+  const excludePackaging =
+    inspectionType === 'outbound' && picklistHasOcr(picklist);
+
+  const activeLineItems = picklist.lineItems.filter(
+    (li) => !li.cancelled && !(excludePackaging && isPackagingLine(li))
+  );
 
   const totalExpected = activeLineItems.reduce((sum, li) => sum + bagsExpected(li), 0);
   const totalActual = activeLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
