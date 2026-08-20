@@ -275,6 +275,48 @@ function VerifyInboundInner({
         </div>
       </div>
 
+      {/* ===== Top Actions ===== */}
+      <div className="flex gap-8" style={{ flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 24 }}>
+        <div className="flex gap-8">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => navigate('/')}
+          >
+            {t('verifyInbound.home', 'Home')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            onClick={async () => {
+              if (!window.confirm(t('workspace.confirmArchive', 'Are you sure you want to archive this?'))) return;
+              const i2 = { ...inspection, inbound, archived: true };
+              await dbSaveInspection(i2);
+              navigate('/');
+            }}
+          >
+            {t('workspace.archive', 'Archive')}
+          </button>
+        </div>
+        <div className="flex gap-8">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => navigate(`/inspection/${inspection.id}/capture-inbound-bol`)}
+          >
+            {t('verifyInbound.backToBol', '← Back to BOL photo')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--accent btn--lg"
+            onClick={confirmAndFinish}
+            disabled={lines.length === 0}
+          >
+            {t('verifyInbound.reviewProgress', 'Review Progress')}
+          </button>
+        </div>
+      </div>
+
       {/* ===== Header details section matching paper log ===== */}
       <section className="section">
         <div className="section__head">
@@ -801,47 +843,6 @@ function VerifyInboundInner({
         </div>
       </div>
 
-      {/* ===== Bottom Actions ===== */}
-      <div className="flex gap-8 mt-24" style={{ flexWrap: 'wrap', justifyContent: 'space-between' }}>
-        <div className="flex gap-8">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => navigate('/')}
-          >
-            {t('verifyInbound.home', 'Home')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--danger"
-            onClick={async () => {
-              if (!window.confirm(t('workspace.confirmArchive', 'Are you sure you want to archive this?'))) return;
-              const i2 = { ...inspection, inbound, archived: true };
-              await dbSaveInspection(i2);
-              navigate('/');
-            }}
-          >
-            {t('workspace.archive', 'Archive')}
-          </button>
-        </div>
-        <div className="flex gap-8">
-          <button
-            type="button"
-            className="btn btn--ghost"
-            onClick={() => navigate(`/inspection/${inspection.id}/capture-inbound-bol`)}
-          >
-            {t('verifyInbound.backToBol', '← Back to BOL photo')}
-          </button>
-          <button
-            type="button"
-            className="btn btn--accent btn--lg"
-            onClick={confirmAndFinish}
-            disabled={lines.length === 0}
-          >
-            {t('verifyInbound.reviewProgress', 'Review Progress')}
-          </button>
-        </div>
-      </div>
 
       {/* Lightbox for damage photos */}
       {lightboxUrl && (
