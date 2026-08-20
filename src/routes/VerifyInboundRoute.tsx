@@ -815,7 +815,7 @@ function VerifyInboundInner({
             type="button"
             className="btn btn--danger"
             onClick={async () => {
-              if (!window.confirm(t('workspace.archiveConfirm', 'Are you sure you want to archive this?'))) return;
+              if (!window.confirm(t('workspace.confirmArchive', 'Are you sure you want to archive this?'))) return;
               const i2 = { ...inspection, inbound, archived: true };
               await dbSaveInspection(i2);
               navigate('/');

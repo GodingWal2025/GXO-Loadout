@@ -132,7 +132,8 @@ export const verify: Record<string, string> = {
   'verifyInbound.summaryDamaged': 'Total dañado',
   'verifyInbound.summaryBolPhotos': 'Fotos de BOL',
   'verifyInbound.backToBol': '← Volver a foto de BOL',
-  'verifyInbound.continueReview': '✓ Revisar y completar inspección',
+  'verifyInbound.reviewProgress': 'Revisar progreso',
+  'verifyInbound.home': 'Inicio',
 
   // ---- ReviewAndCompleteRoute: header ----
   'review.titleLead': 'Revisar y',
