@@ -54,13 +54,30 @@ export function buildDashboardStats(
   });
   const inspectorRows = [...inspectorGroups.entries()].map(([name, rows]) => {
     const flagged = rows.filter((inspection) => inspection.flaggedItemsCount > 0 || inspection.qualityFlag).length;
+    const discrepanciesCaught = rows.reduce((sum, row) => sum + (row.flaggedItemsCount || 0), 0);
+    const flawlessLoads = rows.length - flagged;
+    const accuracyScore = rows.length ? Math.round(((rows.length - flagged) / rows.length) * 100) : 0;
+    
+    const cycleMinutes = rows.flatMap((inspection) => {
+      if (!inspection.completedAt) return [];
+      const minutes = (Date.parse(inspection.completedAt) - Date.parse(inspection.startedAt)) / 60_000;
+      return Number.isFinite(minutes) && minutes >= 0 ? [minutes] : [];
+    });
+    const avgCycle = cycleMinutes.length ? cycleMinutes.reduce((a, b) => a + b, 0) / cycleMinutes.length : 0;
+    const loadsPerHour = avgCycle > 0 ? (60 / avgCycle).toFixed(1) : '—';
+    const cycleStr = avgCycle > 0 ? `${Math.round(avgCycle)}m` : '—';
+
     return {
       name,
       site: siteById.get(rows[0]?.siteId)?.name || rows[0]?.siteId || 'Unknown',
       loads: rows.length,
       flagRate: percent(flagged, rows.length),
-      cycle: '—',
+      cycle: cycleStr,
       workload: filtered.length ? Math.round((rows.length / filtered.length) * 100) : 0,
+      discrepanciesCaught,
+      flawlessLoads,
+      accuracyScore: `${accuracyScore}%`,
+      loadsPerHour,
     };
   }).sort((a, b) => b.loads - a.loads);
 

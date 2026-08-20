@@ -186,10 +186,10 @@ export function DashboardRoute() {
       csvContent += `"${s.name}",${s.loads},"${s.flagRate}","${s.cycle}",${s.disc},${s.inspectors},"${s.status}"\n`;
     });
     
-    csvContent += "\nInspector Performance Metrics\n";
-    csvContent += "Inspector,Site,Loads,Flag Rate,Avg Cycle Time,Workload %\n";
+    csvContent += "\nEmployee Performance Metrics\n";
+    csvContent += "Employee,Site,Loads,Flawless Loads,Discrepancies Caught,Accuracy Score,Loads per Hour\n";
     stats.inspectorRows.forEach((i: any) => {
-      csvContent += `"${i.name}","${i.site}",${i.loads},"${i.flagRate}","${i.cycle}",${i.workload}\n`;
+      csvContent += `"${i.name}","${i.site}",${i.loads},${i.flawlessLoads},${i.discrepanciesCaught},"${i.accuracyScore}","${i.loadsPerHour}"\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -207,7 +207,7 @@ export function DashboardRoute() {
   };
 
   return (
-    <main className="dashboard-print-container">
+    <main className="dashboard-print-container" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px' }}>
       <div className="page-head">
         <div className="row-between">
           <div>
@@ -233,6 +233,7 @@ export function DashboardRoute() {
           gap: 16,
           alignItems: 'flex-end',
           flexWrap: 'wrap',
+          borderRadius: 8,
         }}
       >
         <div>
@@ -470,7 +471,12 @@ export function DashboardRoute() {
                 </thead>
                 <tbody>
                   {stats.siteRows.map((s: any) => (
-                    <tr key={s.name}>
+                    <tr 
+                      key={s.name} 
+                      onClick={() => setSelectedSite(s.id)}
+                      style={{ cursor: 'pointer', background: selectedSite === s.id ? 'var(--surface-tint)' : undefined }}
+                      title={t('dashboard.clickToFilter', 'Click to filter dashboard by this site')}
+                    >
                       <td className="fw-500">{s.name}</td>
                       <td className="right num">{s.loads}</td>
                       <td className="right num">{s.flagRate}</td>
@@ -498,12 +504,13 @@ export function DashboardRoute() {
               <table className="data">
                 <thead>
                   <tr>
-                    <th>{t('dashboard.colInspector', 'Inspector')}</th>
+                    <th>{t('dashboard.colInspector', 'Employee')}</th>
                     <th>{t('dashboard.colSite', 'Site')}</th>
                     <th className="right">{t('dashboard.colLoads', 'Loads')}</th>
-                    <th className="right">{t('dashboard.colFlagRate', 'Flag rate')}</th>
-                    <th className="right">{t('dashboard.colCycle', 'Cycle')}</th>
-                    <th className="right">{t('dashboard.colWorkload', 'Workload')}</th>
+                    <th className="right">{t('dashboard.colFlawless', 'Flawless')}</th>
+                    <th className="right">{t('dashboard.colDiscCaught', 'Disc. Caught')}</th>
+                    <th className="right">{t('dashboard.colAccuracy', 'Accuracy')}</th>
+                    <th className="right">{t('dashboard.colLph', 'Loads/Hr')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -512,13 +519,12 @@ export function DashboardRoute() {
                       <td className="fw-500">{i.name}</td>
                       <td>{i.site}</td>
                       <td className="right num">{i.loads}</td>
-                      <td className="right num">{i.flagRate}</td>
-                      <td className="right num">{i.cycle}</td>
-                      <td className="right" style={{ width: 160 }}>
-                        <div className="mini-bar">
-                          <div style={{ width: `${i.workload}%` }} />
-                        </div>
+                      <td className="right num">{i.flawlessLoads}</td>
+                      <td className="right num">{i.discrepanciesCaught}</td>
+                      <td className="right num">
+                        <span className="pill pill--success">{i.accuracyScore}</span>
                       </td>
+                      <td className="right num">{i.loadsPerHour}</td>
                     </tr>
                   ))}
                   {stats.inspectorRows.length === 0 && (
