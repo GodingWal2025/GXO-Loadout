@@ -510,15 +510,7 @@ function StagingPanel({ siteId }: { siteId: string }) {
             {t('admin.addStaging', 'Add')} <em>{t('admin.addStagingEm', 'staging location')}</em>
           </h2>
         </div>
-        <div className="banner banner--info">
-          <span className="banner__icon">i</span>
-          <div className="banner__body">
-            {t(
-              'admin.stagingInfo',
-              'Staging locations are picked by inspectors when they start a new load. Examples: "Door 12", "Bay 3-A", "South Yard". These are per-site.'
-            )}
-          </div>
-        </div>
+
         <div className="field-row">
           <div className="field">
             <div className="field__label">{t('admin.locationNameLabel', 'Location Name')}</div>
