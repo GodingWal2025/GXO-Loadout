@@ -12,6 +12,7 @@ import {
   addInspector,
   listAllInspectorsForSite,
   updateInspector,
+  deleteInspector,
   dbListAllInspections,
   dbSaveInspection,
   dbHardDeleteInspection,
@@ -115,7 +116,7 @@ export function AdminRoute() {
           disabled={!config}
           title={!config ? t('admin.assignSiteFirst', 'Assign this device to a site first') : undefined}
         >
-          {t('admin.tabInspectors', 'Inspectors')}
+          {t('admin.tabInspectors', 'Employees')}
         </button>
         <button
           className={`admin-tab ${tab === 'sites' ? 'active' : ''}`}
@@ -191,12 +192,19 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
     refresh();
   };
 
+  const remove = (i: Inspector) => {
+    if (window.confirm(t('admin.confirmDeleteInspector', 'Permanently delete this employee?'))) {
+      deleteInspector(i.id);
+      refresh();
+    }
+  };
+
   return (
     <>
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
-            {t('admin.addInspector', 'Add')} <em>{t('admin.addInspectorEm', 'inspector')}</em>
+            {t('admin.addInspector', 'Add')} <em>{t('admin.addInspectorEm', 'employee')}</em>
           </h2>
         </div>
         <div className="field-row">
@@ -205,7 +213,6 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={t('admin.inspectorNamePlaceholder', 'e.g. M. Jones')}
               onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>
@@ -215,7 +222,7 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
               onClick={add}
               disabled={!newName.trim()}
             >
-              {t('admin.addInspectorBtn', '+ Add inspector')}
+              {t('admin.addEmployeeBtn', '+ Add employee')}
             </button>
           </div>
         </div>
@@ -224,7 +231,7 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
       <section className="section">
         <div className="section__head">
           <h2 className="section__title">
-            {t('admin.currentInspectors', 'Current')} <em>{t('admin.currentInspectorsEm', 'inspectors')}</em>
+            {t('admin.currentEmployees', 'Current')} <em>{t('admin.currentEmployeesEm', 'employees')}</em>
           </h2>
           <span className="section__meta">
             {t('admin.activeCount', '{count} active', {
@@ -237,17 +244,17 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
           <span className="banner__icon">i</span>
           <div className="banner__body">
             {t(
-              'admin.inspectorsInfo',
-              "Deactivated inspectors stay in past inspection records (so historical attribution is preserved) but don't appear in the dropdown when starting new loads."
+              'admin.employeesInfo',
+              "Deactivated employees stay in past inspection records (so historical attribution is preserved) but don't appear in the dropdown when starting new loads."
             )}
           </div>
         </div>
 
         {inspectors.length === 0 ? (
           <div className="empty">
-            <div className="empty__title">{t('admin.noInspectors', 'No inspectors yet')}</div>
+            <div className="empty__title">{t('admin.noEmployees', 'No employees yet')}</div>
             <div className="empty__sub">
-              {t('admin.noInspectorsSub', 'Add at least one inspector before any load can be started.')}
+              {t('admin.noEmployeesSub', 'Add at least one employee before any load can be started.')}
             </div>
           </div>
         ) : (
@@ -272,11 +279,16 @@ function InspectorsPanel({ siteId }: { siteId: string }) {
                       )}
                     </td>
                     <td className="right">
-                      <button className="btn btn--sm" onClick={() => toggleActive(i)}>
-                        {i.active
-                          ? t('admin.deactivate', 'Deactivate')
-                          : t('admin.reactivate', 'Reactivate')}
-                      </button>
+                      <div className="flex gap-4" style={{ justifyContent: 'flex-end' }}>
+                        <button className="btn btn--sm" onClick={() => toggleActive(i)}>
+                          {i.active
+                            ? t('admin.deactivate', 'Deactivate')
+                            : t('admin.reactivate', 'Reactivate')}
+                        </button>
+                        <button className="btn btn--sm btn--danger" onClick={() => remove(i)}>
+                          {t('admin.delete', 'Delete')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -343,20 +355,18 @@ function SitesPanel({ currentSiteId }: { currentSiteId: string }) {
         </div>
         <div className="field-row">
           <div className="field">
-            <div className="field__label">{t('admin.siteNameLabel', 'Site name')}</div>
+            <div className="field__label">{t('admin.siteNameLabel', 'Site Name')}</div>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={t('admin.siteNamePlaceholder', 'e.g. Memphis Distribution Center')}
-              onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>
           <div className="field">
-            <div className="field__label">{t('admin.addressLabel', 'Address (optional)')}</div>
+            <div className="field__label">{t('admin.siteAddressLabel', 'Address (optional)')}</div>
             <input
               value={newAddress}
               onChange={(e) => setNewAddress(e.target.value)}
-              placeholder={t('admin.addressPlaceholder', '123 Main St, Memphis TN')}
+              onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>
           <div className="field" style={{ alignSelf: 'flex-end' }}>
@@ -511,11 +521,10 @@ function StagingPanel({ siteId }: { siteId: string }) {
         </div>
         <div className="field-row">
           <div className="field">
-            <div className="field__label">{t('admin.locationNameLabel', 'Location name')}</div>
+            <div className="field__label">{t('admin.locationNameLabel', 'Location Name')}</div>
             <input
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              placeholder={t('admin.locationNamePlaceholder', 'e.g. Door 12')}
               onKeyDown={(e) => e.key === 'Enter' && add()}
             />
           </div>

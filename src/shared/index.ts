@@ -55,6 +55,7 @@ export {
   addInspector,
   updateInspector,
   deactivateInspector,
+  deleteInspector,
 } from './services/inspectors';
 
 export {

@@ -21,7 +21,7 @@ export const admin: Record<string, string> = {
     'Cree un sitio abajo y luego vaya a Configuración del dispositivo (la pantalla de inicio lo redirigirá) para asignar este dispositivo a ese sitio.',
 
   // ---- Tabs ----
-  'admin.tabInspectors': 'Inspectores',
+  'admin.tabInspectors': 'Empleados',
   'admin.tabSites': 'Sitios',
   'admin.tabStaging': 'Ubicaciones de preparación',
   'admin.tabArchive': 'Archivo',
@@ -62,24 +62,22 @@ export const admin: Record<string, string> = {
 
   // ---- Inspectors tab ----
   'admin.addInspector': 'Agregar',
-  'admin.addInspectorEm': 'inspector',
+  'admin.addInspectorEm': 'empleado',
   'admin.nameLabel': 'Nombre',
-  'admin.inspectorNamePlaceholder': 'ej. M. Jones',
-  'admin.addInspectorBtn': '+ Agregar inspector',
-  'admin.currentInspectors': 'Inspectores',
-  'admin.currentInspectorsEm': 'actuales',
-  'admin.inspectorsInfo':
-    'Los inspectores desactivados permanecen en los registros de inspecciones anteriores (para conservar el historial), pero no aparecen en la lista al iniciar cargas nuevas.',
-  'admin.noInspectors': 'Aún no hay inspectores',
-  'admin.noInspectorsSub': 'Agregue al menos un inspector antes de iniciar cualquier carga.',
+  'admin.addEmployeeBtn': '+ Agregar empleado',
+  'admin.currentEmployees': 'Empleados',
+  'admin.currentEmployeesEm': 'actuales',
+  'admin.employeesInfo':
+    'Los empleados desactivados permanecen en los registros de inspecciones anteriores (para conservar el historial), pero no aparecen en la lista al iniciar cargas nuevas.',
+  'admin.noEmployees': 'Aún no hay empleados',
+  'admin.noEmployeesSub': 'Agregue al menos un empleado antes de iniciar cualquier carga.',
+  'admin.confirmDeleteInspector': '¿Eliminar a este empleado de forma permanente?',
 
   // ---- Sites tab ----
   'admin.addSite': 'Agregar',
   'admin.addSiteEm': 'sitio',
   'admin.siteNameLabel': 'Nombre del sitio',
-  'admin.siteNamePlaceholder': 'ej. Centro de Distribución Memphis',
-  'admin.addressLabel': 'Dirección (opcional)',
-  'admin.addressPlaceholder': '123 Main St, Memphis TN',
+  'admin.siteAddressLabel': 'Dirección (opcional)',
   'admin.addSiteBtn': '+ Agregar sitio',
   'admin.allSites': 'Todos los',
   'admin.allSitesEm': 'sitios',
@@ -95,7 +93,6 @@ export const admin: Record<string, string> = {
   'admin.stagingInfo':
     'Los inspectores eligen la ubicación de preparación al iniciar una carga nueva. Ejemplos: "Puerta 12", "Bahía 3-A", "Patio Sur". Son propias de cada sitio.',
   'admin.locationNameLabel': 'Nombre de la ubicación',
-  'admin.locationNamePlaceholder': 'ej. Puerta 12',
   'admin.addLocationBtn': '+ Agregar ubicación',
   'admin.currentStaging': 'Ubicaciones de preparación',
   'admin.currentStagingEm': 'actuales',
