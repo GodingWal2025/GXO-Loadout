@@ -802,22 +802,45 @@ function VerifyInboundInner({
       </div>
 
       {/* ===== Bottom Actions ===== */}
-      <div className="flex gap-8 mt-24" style={{ justifyContent: 'flex-end' }}>
-        <button
-          type="button"
-          className="btn btn--ghost"
-          onClick={() => navigate(`/inspection/${inspection.id}/capture-inbound-bol`)}
-        >
-          {t('verifyInbound.backToBol', '← Back to BOL photo')}
-        </button>
-        <button
-          type="button"
-          className="btn btn--accent btn--lg"
-          onClick={confirmAndFinish}
-          disabled={lines.length === 0}
-        >
-          {t('verifyInbound.continueReview', '✓ Review & Complete Inspection')}
-        </button>
+      <div className="flex gap-8 mt-24" style={{ flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <div className="flex gap-8">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => navigate('/')}
+          >
+            {t('verifyInbound.home', 'Home')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--danger"
+            onClick={async () => {
+              if (!window.confirm(t('workspace.archiveConfirm', 'Are you sure you want to archive this?'))) return;
+              const i2 = { ...inspection, inbound, archived: true };
+              await dbSaveInspection(i2);
+              navigate('/');
+            }}
+          >
+            {t('workspace.archive', 'Archive')}
+          </button>
+        </div>
+        <div className="flex gap-8">
+          <button
+            type="button"
+            className="btn btn--ghost"
+            onClick={() => navigate(`/inspection/${inspection.id}/capture-inbound-bol`)}
+          >
+            {t('verifyInbound.backToBol', '← Back to BOL photo')}
+          </button>
+          <button
+            type="button"
+            className="btn btn--accent btn--lg"
+            onClick={confirmAndFinish}
+            disabled={lines.length === 0}
+          >
+            {t('verifyInbound.reviewProgress', 'Review Progress')}
+          </button>
+        </div>
       </div>
 
       {/* Lightbox for damage photos */}
