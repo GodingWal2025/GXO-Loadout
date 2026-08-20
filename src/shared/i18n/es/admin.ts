@@ -90,8 +90,7 @@ export const admin: Record<string, string> = {
   // ---- Staging locations tab ----
   'admin.addStaging': 'Agregar',
   'admin.addStagingEm': 'ubicación de preparación',
-  'admin.stagingInfo':
-    'Los inspectores eligen la ubicación de preparación al iniciar una carga nueva. Ejemplos: "Puerta 12", "Bahía 3-A", "Patio Sur". Son propias de cada sitio.',
+
   'admin.locationNameLabel': 'Nombre de la ubicación',
   'admin.addLocationBtn': '+ Agregar ubicación',
   'admin.currentStaging': 'Ubicaciones de preparación',
