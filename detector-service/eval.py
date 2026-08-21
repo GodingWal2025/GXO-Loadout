@@ -1,107 +1,74 @@
-"""Evaluate a trained checkpoint against a COCO test/validation split."""
+"""Evaluate SAM 3 bag-flap segmentation on the pallet-isolated test split."""
 
 import argparse
 import json
 import os
-import re
 import statistics
 from collections import defaultdict
 from pathlib import Path
 
-from geometry import estimate_layers
-
-
-def pallet_name(filename: str) -> str:
-    stem = Path(filename).stem
-    match = re.search(r"(?:pallet[_ -]?)?(\d+)", stem, re.IGNORECASE)
-    return match.group(1) if match else stem
+from geometry import box_iou, estimate_layers
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset-dir", default="dataset")
     parser.add_argument("--weights", required=True)
-    parser.add_argument("--model-size", default="small")
     parser.add_argument("--output", default="eval-results.json")
     parser.add_argument("--min-exact-layer-accuracy", type=float, default=0.0)
     parser.add_argument("--min-within-one-layer-accuracy", type=float, default=0.0)
-    parser.add_argument("--max-visible-bag-mae", type=float, default=None)
+    parser.add_argument("--max-visible-bag-mae", type=float)
+    parser.add_argument("--min-box-iou", type=float, default=0.0)
     args = parser.parse_args()
+    os.environ["SAM3_CHECKPOINT"] = str(Path(args.weights).resolve())
 
-    os.environ.update({
-        "DETECTOR_BACKEND": "rfdetr",
-        "RFDETR_MODEL_SIZE": args.model_size,
-        "RFDETR_WEIGHTS": args.weights,
-        "RFDETR_CLASS_NAMES": "bag_flap",
-        "RFDETR_BAG_CLASSES": "bag_flap",
-    })
-    from app import MODEL_VERSION, analyze_image, load_image
-
+    from pipeline import PalletVisionPipeline, load_image
+    pipeline = PalletVisionPipeline()
     root = Path(args.dataset_dir)
     split = root / "test"
-    if not (split / "_annotations.coco.json").exists():
-        split = root / "valid"
     data = json.loads((split / "_annotations.coco.json").read_text(encoding="utf-8"))
-
-    annotations = defaultdict(list)
+    expected_by_image: dict[int, list[tuple[float, float, float, float]]] = defaultdict(list)
     for annotation in data.get("annotations", []):
         x, y, width, height = annotation["bbox"]
-        annotations[annotation["image_id"]].append((x, y, x + width, y + height))
+        expected_by_image[annotation["image_id"]].append((x, y, x + width, y + height))
 
     results = []
     for image_info in data.get("images", []):
-        filename = image_info["file_name"]
-        expected_boxes = annotations[image_info["id"]]
-        expected_layers = estimate_layers(expected_boxes)
-        image = load_image((split / filename).read_bytes())
-        prediction = analyze_image(image)
-        results.append({
-            "file": filename,
-            "pallet": pallet_name(filename),
-            "layers": prediction.get("layers"),
-            "visibleBags": prediction.get("estimatedBags"),
-            "expected": expected_layers,
-            "expectedVisibleBags": len(expected_boxes),
-            "confidence": prediction.get("confidence"),
-            "isPalletFace": True,
-        })
+        image = load_image((split / image_info["file_name"]).read_bytes())
+        target = image_info.get("target_pallet_box")
+        if not target:
+            raise ValueError(f"{image_info['file_name']} is missing target_pallet_box")
+        instances = pipeline.propose(image, tuple(target), [], "bag flap")
+        predicted = [(box[0] * image.width, box[1] * image.height, box[2] * image.width, box[3] * image.height)
+                     for box in (item.bbox for item in instances)]
+        expected = expected_by_image[image_info["id"]]
+        best_ious = [max((box_iou(box, prediction) for prediction in predicted), default=0.0) for box in expected]
+        results.append({"file": image_info["file_name"], "palletGroup": image_info["pallet_group_id"],
+                        "layers": estimate_layers(predicted), "expectedLayers": estimate_layers(expected),
+                        "visibleBags": len(predicted), "expectedVisibleBags": len(expected),
+                        "meanBestBoxIou": statistics.mean(best_ious) if best_ious else (1.0 if not predicted else 0.0)})
 
-    layer_errors = [abs(row["layers"] - row["expected"]) for row in results if row["layers"] is not None]
-    count_errors = [abs(row["visibleBags"] - row["expectedVisibleBags"]) for row in results if row["visibleBags"] is not None]
-    per_pallet = defaultdict(list)
-    for row in results:
-        if row["layers"] is not None:
-            per_pallet[row["pallet"]].append(row["layers"])
-    output = {
-        "model": MODEL_VERSION,
-        "samples": 1,
-        "split": split.name,
-        "summary": {
-            "images": len(results),
-            "exactLayerAccuracy": round(sum(error == 0 for error in layer_errors) / len(results), 4) if results else 0,
-            "withinOneLayerAccuracy": round(sum(error <= 1 for error in layer_errors) / len(results), 4) if results else 0,
-            "meanAbsoluteLayerError": round(statistics.mean(layer_errors), 3) if layer_errors else None,
-            "meanAbsoluteVisibleBagError": round(statistics.mean(count_errors), 3) if count_errors else None,
-        },
-        "results": results,
-        "perPallet": dict(per_pallet),
+    layer_errors = [abs(row["layers"] - row["expectedLayers"]) for row in results]
+    count_errors = [abs(row["visibleBags"] - row["expectedVisibleBags"]) for row in results]
+    summary = {
+        "images": len(results),
+        "exactLayerAccuracy": round(sum(error == 0 for error in layer_errors) / len(results), 4) if results else 0,
+        "withinOneLayerAccuracy": round(sum(error <= 1 for error in layer_errors) / len(results), 4) if results else 0,
+        "meanAbsoluteLayerError": round(statistics.mean(layer_errors), 3) if layer_errors else None,
+        "meanAbsoluteVisibleBagError": round(statistics.mean(count_errors), 3) if count_errors else None,
+        "meanBestBoxIou": round(statistics.mean(row["meanBestBoxIou"] for row in results), 4) if results else 0,
     }
-    Path(args.output).write_text(json.dumps(output, indent=2), encoding="utf-8")
-    print(json.dumps(output["summary"], indent=2))
-
+    Path(args.output).write_text(json.dumps({"model": pipeline.version, "split": "test", "summary": summary,
+                                            "results": results}, indent=2), encoding="utf-8")
+    print(json.dumps(summary, indent=2))
     failures = []
-    summary = output["summary"]
-    if summary["exactLayerAccuracy"] < args.min_exact_layer_accuracy:
-        failures.append("exact layer accuracy is below the release threshold")
-    if summary["withinOneLayerAccuracy"] < args.min_within_one_layer_accuracy:
-        failures.append("within-one-layer accuracy is below the release threshold")
-    if args.max_visible_bag_mae is not None and (
-        summary["meanAbsoluteVisibleBagError"] is None
-        or summary["meanAbsoluteVisibleBagError"] > args.max_visible_bag_mae
-    ):
-        failures.append("visible bag mean absolute error is above the release threshold")
+    if summary["exactLayerAccuracy"] < args.min_exact_layer_accuracy: failures.append("exact layer accuracy")
+    if summary["withinOneLayerAccuracy"] < args.min_within_one_layer_accuracy: failures.append("within-one layer accuracy")
+    if args.max_visible_bag_mae is not None and summary["meanAbsoluteVisibleBagError"] > args.max_visible_bag_mae:
+        failures.append("visible-bag MAE")
+    if summary["meanBestBoxIou"] < args.min_box_iou: failures.append("box IoU")
     if failures:
-        raise SystemExit("Quality gate failed: " + "; ".join(failures))
+        raise SystemExit("Quality gate failed: " + ", ".join(failures))
 
 
 if __name__ == "__main__":

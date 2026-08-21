@@ -1,5 +1,5 @@
 // Client wrapper for the server-side pallet bag-count assist. The detector
-// (RF-DETR / OWLv2, see detector-service/) runs behind the Function so its
+// (Cosmos pallet localization + SAM 3 segmentation, see detector-service/) runs behind the Function so its
 // URL/key never reach the browser. It detects bags on the visible face and
 // reports the visible-face count and layer count; the caller multiplies layers
 // by the known bags-per-layer for the pallet total and the verifier confirms.
@@ -11,6 +11,18 @@ import {
 } from './jpegOrientation';
 
 const apiBase = import.meta.env.VITE_API_URL || '';
+
+async function fetchVisionWithBackoff(url: string, init: RequestInit): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch(url, init);
+    if (attempt >= 2 || ![429, 502, 503].includes(response.status)) return response;
+    const retryHeader = Number(response.headers.get('retry-after'));
+    const baseMs = Number.isFinite(retryHeader) && retryHeader > 0
+      ? retryHeader * 1000
+      : Math.min(3000, 1000 * 2 ** attempt);
+    await new Promise((resolve) => setTimeout(resolve, baseMs + Math.random() * 250));
+  }
+}
 
 /** Long edge the pallet face is downscaled to before upload. */
 const MAX_EDGE = 1024;
@@ -38,6 +50,13 @@ export interface PalletCountResult {
   confidence: number | null;
   rationale: string | null;
   modelVersion?: string;
+  needsReview?: boolean;
+  reviewReason?: string | null;
+  /** Normalized xyxy target-pallet region in the original image. */
+  palletBox?: number[];
+  boxes?: number[][];
+  masks?: Array<{ size: [number, number]; counts: string }>;
+  displayPolygons?: number[][][];
 }
 
 export interface LayerConsensus {
@@ -186,36 +205,13 @@ export async function prepareForVision(blob: Blob): Promise<Blob> {
  * face have agreed on an incorrect count. Voting across DIFFERENT faces is what
  * corrects that, which is why each press adds a separate face vote.
  */
-const SAMPLES_PER_PHOTO = 3;
-
 /**
- * Analyze one photo several times and reduce it to a single reading.
- *
- * Returns the consensus layer count with the rest of the fields from the first
- * successful response. Rejects only if EVERY attempt failed, so one flaky
- * request doesn't cost the inspector a retake.
+ * Analyze one photo once. SAM 3 instance segmentation is reduced from located
+ * masks rather than repeated free-form VLM samples; distinct pallet faces and
+ * human confirmation provide the safety check.
  */
 export async function estimatePalletFace(blob: Blob): Promise<PalletCountResult> {
-  const upload = await prepareForVision(blob);
-
-  const settled = await Promise.allSettled(
-    Array.from({ length: SAMPLES_PER_PHOTO }, () => postForAnalysis(upload))
-  );
-  const ok = settled
-    .filter((s): s is PromiseFulfilledResult<PalletCountResult> => s.status === 'fulfilled')
-    .map((s) => s.value);
-
-  if (ok.length === 0) {
-    const first = settled[0];
-    throw first && first.status === 'rejected'
-      ? first.reason
-      : new Error('analyze-pallet-count failed');
-  }
-
-  const layers = consensusLayers(
-    ok.map((r) => r.layers).filter((n): n is number => typeof n === 'number')
-  );
-  return { ...ok[0], layers: layers.value ?? ok[0].layers };
+  return postForAnalysis(await prepareForVision(blob));
 }
 
 /** The four required pallet-face slots, in capture order. */
@@ -304,6 +300,12 @@ export interface AssessedFace {
   boxCount?: number;
   /** False when the model's tally disagrees with the boxes it actually located. */
   countMatchesBoxes?: boolean;
+  needsReview?: boolean;
+  reviewReason?: string | null;
+  palletBox?: number[];
+  masks?: Array<{ size: [number, number]; counts: string }>;
+  displayPolygons?: number[][][];
+  error?: string | null;
 }
 
 export interface PalletAssessment {
@@ -328,6 +330,8 @@ export interface PalletAssessment {
   modelVersion?: string;
   imageCount?: number;
   error?: string;
+  needsReview?: boolean;
+  reviewReason?: string | null;
 }
 
 export interface AssessOptions {
@@ -376,7 +380,7 @@ export async function assessPalletFaces(
     }))
   );
 
-  const res = await fetch(`${apiBase}/api/analyze-pallet-faces`, {
+  const res = await fetchVisionWithBackoff(`${apiBase}/api/analyze-pallet-faces`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -436,7 +440,7 @@ export async function analyzePalletCount(blob: Blob): Promise<PalletCountResult>
 }
 
 async function postForAnalysis(upload: Blob): Promise<PalletCountResult> {
-  const res = await fetch(`${apiBase}/api/analyze-pallet-count`, {
+  const res = await fetchVisionWithBackoff(`${apiBase}/api/analyze-pallet-count`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream' },
     body: upload,

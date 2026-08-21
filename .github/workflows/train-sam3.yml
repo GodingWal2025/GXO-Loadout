@@ -1,0 +1,67 @@
+name: Train SAM 3 bag-flap model
+
+on:
+  workflow_dispatch:
+    inputs:
+      epochs:
+        description: Fine-tuning epochs
+        type: number
+        default: 20
+      batch_size:
+        description: Images per GPU step
+        type: number
+        default: 1
+
+jobs:
+  train:
+    runs-on: [self-hosted, linux, x64, gpu]
+    timeout-minutes: 720
+    defaults:
+      run:
+        working-directory: detector-service
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            detector-service/requirements.txt
+            detector-service/requirements-sam3.txt
+      - name: Install SAM 3 training dependencies
+        run: |
+          git clone https://github.com/facebookresearch/sam3.git sam3-source
+          git -C sam3-source checkout 8f0b7f4d4e7eda2ed606ebde6702c93359ad01da
+          pip install -r requirements.txt -e "./sam3-source[train]" pytest
+      - name: Download reviewed dataset
+        env:
+          DATASET_BLOB_URL: ${{ secrets.DATASET_BLOB_URL }}
+        run: |
+          test -n "$DATASET_BLOB_URL"
+          curl --fail --location "$DATASET_BLOB_URL" --output dataset.zip
+          unzip -q dataset.zip -d dataset-export
+          python prepare_dataset.py --source dataset-export --output dataset
+      - name: Validate pallet-isolated masks
+        run: python validate_dataset.py --dataset-dir dataset --require-test --minimum-images 20
+      - name: Unit tests
+        run: pytest -q
+      - name: Fine-tune SAM 3
+        run: >-
+          python train.py --dataset-dir dataset --output-dir output/sam3
+          --epochs '${{ inputs.epochs }}' --batch-size '${{ inputs.batch_size }}'
+          --sam3-repo ./sam3-source
+      - name: Evaluate release gates
+        run: >-
+          python eval.py --dataset-dir dataset --weights output/sam3/checkpoints/checkpoint.pt
+          --output eval-results.json --min-exact-layer-accuracy 0.85
+          --min-within-one-layer-accuracy 0.95 --max-visible-bag-mae 1.5 --min-box-iou 0.55
+      - name: Upload checkpoint and evaluation
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sam3-bag-flaps-${{ github.run_number }}
+          path: |
+            detector-service/output/sam3/checkpoints/checkpoint.pt
+            detector-service/eval-results.json
+          if-no-files-found: error
+          retention-days: 30

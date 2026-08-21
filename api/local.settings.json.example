@@ -7,6 +7,7 @@
     "LOADOUT_STORAGE_CONNECTION_STRING": "",
     "LOADOUT_TABLE_NAME": "LoadoutRecords",
     "LOADOUT_PHOTO_CONTAINER": "loadout-photos",
+    "LOADOUT_DATASET_CONTAINER": "loadout-datasets",
     "STORAGE_ACCOUNT_NAME": "",
     "STORAGE_ACCOUNT_KEY": "",
 
@@ -19,6 +20,8 @@
     "DOC_INTEL_BOL_MODEL_ID": "",
 
     "DETECTOR_SERVICE_URL": "",
-    "DETECTOR_SERVICE_KEY": ""
+    "DETECTOR_SERVICE_KEY": "",
+    "VISION_ADMIN_KEY": "",
+    "ALLOW_INSECURE_VISION_ADMIN": "false"
   }
 }

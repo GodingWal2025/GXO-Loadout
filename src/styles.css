@@ -49,6 +49,38 @@
   --font-sans:   'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* Bag-count labeling console */
+.bag-label-page { max-width: 1500px; }
+.bag-label-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; align-items: start; }
+.bag-label-sidebar, .bag-label-workspace { border: 1px solid var(--rule-soft); border-radius: 8px; background: var(--surface); padding: 14px; }
+.bag-label-groups, .bag-label-photos { display: flex; flex-direction: column; gap: 7px; margin-top: 12px; }
+.bag-label-group { width: 100%; display: flex; justify-content: space-between; text-align: left; padding: 10px; border: 1px solid var(--rule-soft); border-radius: 6px; background: var(--paper); }
+.bag-label-group.active, .bag-label-photo.active { border-color: var(--accent); background: var(--surface-tint); }
+.bag-label-group small, .bag-label-photo small { color: var(--ink-faint); }
+.bag-label-subhead { margin-top: 20px; }
+.bag-label-photo { border: 1px solid var(--rule-soft); border-radius: 6px; padding: 7px; }
+.bag-label-photo > button { width: 100%; border: 0; background: transparent; display: flex; justify-content: space-between; text-align: left; padding: 3px; }
+.bag-label-photo select { width: 100%; margin-top: 5px; }
+.bag-label-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.bag-label-toolbar .btn.active { outline: 2px solid var(--accent); }
+.bag-label-reviewed { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.bag-label-canvas-wrap { position: relative; min-height: 280px; display: grid; place-items: center; background: #111820; border-radius: 7px; overflow: hidden; }
+.bag-label-canvas { display: block; max-width: 100%; cursor: crosshair; touch-action: none; }
+.bag-label-canvas.is-busy { opacity: .65; }
+.bag-label-canvas-busy { position: absolute; inset: auto auto 16px; background: rgba(0,0,0,.8); color: white; padding: 8px 12px; border-radius: 999px; }
+.bag-label-proposals { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin-top: 12px; }
+.bag-label-proposal { display: flex; justify-content: space-between; align-items: center; border: 1px solid #50a7ff; padding: 8px; border-radius: 6px; }
+.bag-label-proposal.accepted { border-color: #2ca66f; }
+.bag-label-proposal.rejected { opacity: .5; border-color: var(--danger); }
+.vision-face-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:8px; margin-top:8px; }
+.vision-face-overlay { position:relative; margin:0; overflow:hidden; border:1px solid var(--rule-soft); border-radius:8px; background:#111; }
+.vision-face-overlay img { display:block; width:100%; height:auto; }
+.vision-face-overlay svg { position:absolute; inset:0 0 22px; width:100%; height:calc(100% - 22px); }
+.vision-face-overlay__pallet { fill:rgba(38,208,124,.05); stroke:#26d07c; stroke-width:.008; vector-effect:non-scaling-stroke; }
+.vision-face-overlay__flap { fill:rgba(255,190,52,.28); stroke:#ffbe34; stroke-width:.004; vector-effect:non-scaling-stroke; }
+.vision-face-overlay figcaption { min-height:22px; padding:4px 6px; color:#fff; font-size:10px; background:#222; }
+@media (max-width: 900px) { .bag-label-layout { grid-template-columns: 1fr; } }
+
 /* ── Reset & Typography ────────────────── */
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
 
