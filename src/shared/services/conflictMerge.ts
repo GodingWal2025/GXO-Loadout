@@ -1,6 +1,6 @@
 // Deterministic Multi-Device Conflict Merge Policies for Loadout
 
-import type { Inspection, InspectionPhoto, PalletInspection, InspectionStatus } from '../types/inspection';
+import type { Inspection, InspectionPhoto, PalletInspection, InspectionStatus, Picklist } from '../types/inspection';
 import type { InventoryItem } from '../types/inventory';
 
 const STATUS_PRIORITY: Record<InspectionStatus, number> = {
@@ -94,6 +94,25 @@ export function mergePallets(localPallets: PalletInspection[] = [], remotePallet
 }
 
 /**
+ * Merge picklist pages and lines without dropping a page captured by another
+ * device. Generated line ids are stable after capture, so they are the safest
+ * deduplication key; local edits win when both records contain the same line.
+ */
+export function mergePicklists(local: Picklist, remote: Picklist): Picklist {
+  const remoteLines = remote.lineItems || [];
+  const localLines = local.lineItems || [];
+  const lineItems = new Map(remoteLines.map((line) => [line.id, line]));
+  for (const line of localLines) lineItems.set(line.id, line);
+
+  return {
+    ...remote,
+    ...local,
+    photoIds: Array.from(new Set([...(remote.photoIds || []), ...(local.photoIds || [])])),
+    lineItems: Array.from(lineItems.values()),
+  };
+}
+
+/**
  * Deterministically merge two conflicting inspection records.
  * Ensures no pallet scans, photos, or line items are lost during concurrent multi-device writes.
  */
@@ -110,7 +129,7 @@ export function mergeInspection(local: Inspection, remote: Inspection): Inspecti
     status: resolveStatus(local.status, remote.status),
     startedAt: local.startedAt || remote.startedAt || new Date().toISOString(),
     pallets: mergePallets(local.pallets, remote.pallets),
-    picklist: local.picklist || remote.picklist,
+    picklist: mergePicklists(local.picklist, remote.picklist),
     bol: local.bol || remote.bol,
     staging: {
       ...(remote.staging || {}),

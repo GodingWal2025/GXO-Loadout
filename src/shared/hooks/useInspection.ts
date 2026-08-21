@@ -20,6 +20,7 @@ import type {
 } from '../types/inspection';
 import { emptySuggestable, getPhotoRotation, isPackagingLine, picklistHasOcr } from '../types/inspection';
 import { expectedBags } from '../rules/uomRules';
+import { normalizeBatchCode } from '../rules/batchCodeMatching';
 import { dbSaveInspection } from '../services/db';
 
 export function emptyInspection(siteId: string, type: InspectionType = 'outbound'): Inspection {
@@ -165,7 +166,7 @@ export function recomputeTallies(state: Inspection): Inspection {
   const tally: Record<string, number> = {};
   for (const pallet of state.pallets) {
     for (const section of pallet.batchSections) {
-      const code = section.batchCode.value;
+      const code = normalizeBatchCode(section.batchCode.value);
       const count = section.actualBagCount.value;
       if (code && typeof count === 'number') {
         tally[code] = (tally[code] || 0) + count;
@@ -192,7 +193,7 @@ export function recomputeTallies(state: Inspection): Inspection {
   const lastLineForCode: Record<string, number> = {};
   state.picklist.lineItems.forEach((li, i) => {
     if (li.cancelled) return;
-    const code = li.batchCode.value;
+    const code = normalizeBatchCode(li.batchCode.value);
     if (code) lastLineForCode[code] = i;
   });
 
@@ -210,7 +211,7 @@ export function recomputeTallies(state: Inspection): Inspection {
         fulfilled: true,
       };
     }
-    const batch = li.batchCode.value;
+    const batch = normalizeBatchCode(li.batchCode.value);
     const expected = expectedByLine[i];
     let actual = 0;
     if (batch) {
@@ -228,9 +229,11 @@ export function recomputeTallies(state: Inspection): Inspection {
   const pallets = state.pallets.map((p) => ({
     ...p,
     batchSections: p.batchSections.map((bs) => {
-      const code = bs.batchCode.value;
+      const code = normalizeBatchCode(bs.batchCode.value);
       if (!code) return bs;
-      const lineItem = lineItems.find((li) => li.batchCode.value === code);
+      const lineItem = lineItems.find(
+        (li) => normalizeBatchCode(li.batchCode.value) === code
+      );
       return {
         ...bs,
         expectedBagCount: lineItem

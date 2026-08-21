@@ -110,6 +110,16 @@ describe('recomputeTallies — one batch code across several picklist lines', ()
     expect(result.picklist.lineItems.map((li) => li.actualQuantity)).toEqual([40, 25]);
     expect(result.picklist.lineItems.map((li) => li.fulfilled)).toEqual([true, false]);
   });
+
+  it('reconciles an existing pallet when a missed picklist page is added later', () => {
+    const result = recomputeTallies(
+      state([line('P18\u00a0GP43N8', 'BG', 40)], [section('p18\u200bgp43n8', 40)])
+    );
+
+    expect(result.picklist.lineItems[0].actualQuantity).toBe(40);
+    expect(result.picklist.lineItems[0].fulfilled).toBe(true);
+    expect(result.pallets[0].batchSections[0].expectedBagCount).toBe(40);
+  });
 });
 
 // ============================================================

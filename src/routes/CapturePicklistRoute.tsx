@@ -4,6 +4,7 @@ import {
   analyzePicklistPhoto,
   compressPhoto,
   explodePicklistLines,
+  recomputeTallies,
 } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -170,12 +171,12 @@ export function CapturePicklistRoute() {
         console.warn('[picklist-ocr] extraction skipped:', err);
       }
 
-      const updated: Inspection = {
+      const updated = recomputeTallies({
         ...inspection,
         picklist: updatedPicklist,
         bol: updatedBol,
         lastEditedAt: new Date().toISOString(),
-      };
+      });
       await dbSaveInspection(updated);
       setInspection(updated);
     } finally {

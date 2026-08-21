@@ -4,7 +4,7 @@
 // summary, and the per-pallet detail table. Generated fully client-side with
 // jsPDF so it works offline and on iPad PWAs.
 
-import type { Inspection } from '../shared';
+import { normalizeBatchCode, type Inspection } from '../shared';
 import { dbListInventoryItems } from '../shared/services/db';
 
 export async function downloadInspectionPdf(inspection: Inspection): Promise<void> {
@@ -174,7 +174,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
 
   // Batch codes are matched case-insensitively — scanned/OCR'd codes are often
   // mixed-case while inventory/picklist store them uppercase.
-  const norm = (s: string) => s.trim().toUpperCase();
+  const norm = normalizeBatchCode;
 
   // Product name lookup from picklist
   const productByBatch: Record<string, string> = {};

@@ -6,7 +6,7 @@ import { SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, InspectionPhoto, BatchSection, PalletType } from '../shared';
-import { PALLET_TYPES, ConfirmModal } from '../shared';
+import { PALLET_TYPES, ConfirmModal, normalizeBatchCode } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import {
   assessPalletFaces,
@@ -346,8 +346,9 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const palletUom = useMemo(() => {
     for (const section of pallet.batchSections) {
       if (section.batchCode?.value) {
+        const sectionCode = normalizeBatchCode(section.batchCode.value);
         const li = inspection.picklist.lineItems.find(
-          (item) => item.batchCode.value === section.batchCode.value
+          (item) => normalizeBatchCode(item.batchCode.value) === sectionCode
         );
         if (li?.uom) return li.uom;
       }
@@ -366,8 +367,11 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
 
   // For each section, compute how much more is "available" (i.e., remaining on picklist)
   const remainingForBatch = (batchCode: string | null) => {
-    if (!batchCode) return null;
-    const lineItem = inspection.picklist.lineItems.find((li) => li.batchCode.value === batchCode);
+    const normalizedBatch = normalizeBatchCode(batchCode);
+    if (!normalizedBatch) return null;
+    const lineItem = inspection.picklist.lineItems.find(
+      (li) => normalizeBatchCode(li.batchCode.value) === normalizedBatch
+    );
     if (!lineItem) return null;
     const expected = lineItem.expectedQuantity.value || 0;
     // Total already counted across all pallets except this one
@@ -375,7 +379,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
     inspection.pallets.forEach((p, idx) => {
       if (idx === palletIndex) return;
       p.batchSections.forEach((bs) => {
-        if (bs.batchCode.value === batchCode) {
+        if (normalizeBatchCode(bs.batchCode.value) === normalizedBatch) {
           countedElsewhere += bs.actualBagCount.value || 0;
         }
       });
@@ -407,7 +411,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const returnDuplicateBatchWarning = (() => {
     if (!isReturns || totalActualOnPallet >= 60) return null;
     for (const bs of pallet.batchSections) {
-      const batchCode = bs.batchCode.value;
+      const batchCode = normalizeBatchCode(bs.batchCode.value);
       if (!batchCode) continue;
 
       for (let otherIdx = 0; otherIdx < inspection.pallets.length; otherIdx++) {
@@ -421,7 +425,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
 
         if (otherPalletTotal < 60) {
           const hasSameBatch = otherPallet.batchSections.some(
-            (obs) => obs.batchCode.value === batchCode
+            (obs) => normalizeBatchCode(obs.batchCode.value) === batchCode
           );
           if (hasSameBatch) {
             return t(
@@ -1022,17 +1026,20 @@ function BatchSectionRow({
   const mismatch = expected > 0 && actual !== null && actual !== expected;
 
   const isUnlistedOnPicklist = useMemo(() => {
-    const code = (section.batchCode.value || '').trim().toUpperCase();
+    const code = normalizeBatchCode(section.batchCode.value);
     if (!code || isReturns) return false;
     if (!picklistLineItems || picklistLineItems.length === 0) return false;
     return !picklistLineItems.some(
-      (li) => (li.batchCode.value || '').trim().toUpperCase() === code
+      (li) => normalizeBatchCode(li.batchCode.value) === code
     );
   }, [picklistLineItems, section.batchCode.value, isReturns]);
 
   const sectionUom = useMemo(() => {
     if (!section.batchCode.value) return undefined;
-    const li = picklistLineItems.find((item) => item.batchCode.value === section.batchCode.value);
+    const code = normalizeBatchCode(section.batchCode.value);
+    const li = picklistLineItems.find(
+      (item) => normalizeBatchCode(item.batchCode.value) === code
+    );
     return li?.uom;
   }, [picklistLineItems, section.batchCode.value]);
 

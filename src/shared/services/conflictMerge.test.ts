@@ -143,6 +143,49 @@ describe('Deterministic Multi-Device Conflict Merge Policy', () => {
     expect(merged.status).toBe('COMPLETED');
   });
 
+  it('preserves picklist pages and line items added on different devices', () => {
+    const base = {
+      id: 'insp-picklist-merge',
+      type: 'outbound',
+      siteId: 'site-1',
+      status: 'IN_PROGRESS',
+      startedAt: '2026-08-13T10:00:00.000Z',
+      flaggedItemsCount: 0,
+      picklist: {
+        photoIds: [],
+        loadNumber: { value: 'LOAD-1', source: 'manual' },
+        shipDate: { value: '2026-08-13', source: 'manual' },
+        lineItems: [],
+      },
+      bol: { photoIds: [], lineItems: [], deliveries: [] },
+      staging: {} as Inspection['staging'],
+      pallets: [],
+    } as Inspection;
+    const makeLine = (id: string, batch: string) => ({
+      id,
+      batchCode: { value: batch, source: 'ml' as const, confidence: 0.9 },
+      sku: { value: 'SKU-1', source: 'ml' as const, confidence: 0.9 },
+      description: { value: 'Product', source: 'ml' as const, confidence: 0.9 },
+      expectedQuantity: { value: 40, source: 'ml' as const, confidence: 0.9 },
+      uom: 'BG' as const,
+      actualQuantity: 0,
+      fulfilled: false,
+    });
+    const local: Inspection = {
+      ...base,
+      picklist: { ...base.picklist, photoIds: ['page-1'], lineItems: [makeLine('line-1', 'BATCH-1')] },
+    };
+    const remote: Inspection = {
+      ...base,
+      picklist: { ...base.picklist, photoIds: ['page-2'], lineItems: [makeLine('line-2', 'BATCH-2')] },
+    };
+
+    const merged = mergeInspection(local, remote);
+
+    expect(merged.picklist.photoIds).toEqual(['page-2', 'page-1']);
+    expect(merged.picklist.lineItems.map((line) => line.id)).toEqual(['line-2', 'line-1']);
+  });
+
   it('merges inventory items keeping newer timestamp and description', () => {
     const invLocal: InventoryItem & { _rev?: number } = {
       id: 'item-1',
