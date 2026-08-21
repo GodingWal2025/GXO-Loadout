@@ -142,6 +142,7 @@ function Shell({ children }: { children: ReactNode }) {
               className="topbar__status"
               onClick={() => setShowSyncModal(true)}
               title={syncState.error || t('sync.clickForDetails', 'Click for sync & device safety details')}
+              aria-label={syncState.error || t('sync.clickForDetails', 'Click for sync & device safety details')}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -155,13 +156,15 @@ function Shell({ children }: { children: ReactNode }) {
               }}
             >
               <span className={`topbar__status-dot ${syncState.syncing ? 'topbar__status-dot--syncing' : syncState.error ? 'topbar__status-dot--offline' : ''}`} />
-              {syncState.syncing
-                ? t('shell.syncing', 'Syncing…')
-                : syncState.pending
-                  ? t('shell.pendingSync', '{count} pending', { count: syncState.pending })
-                  : syncState.error
-                    ? t('shell.offline', 'Offline')
-                    : t('shell.savedToServer', 'Saved to server')}
+              <span className="topbar__status-text">
+                {syncState.syncing
+                  ? t('shell.syncing', 'Syncing…')
+                  : syncState.pending
+                    ? t('shell.pendingSync', '{count} pending', { count: syncState.pending })
+                    : syncState.error
+                      ? t('shell.offline', 'Offline')
+                      : t('shell.savedToServer', 'Saved to server')}
+              </span>
             </button>
             <SyncRefreshButton />
             <LanguageToggle />
