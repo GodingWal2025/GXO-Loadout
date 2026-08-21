@@ -40,12 +40,71 @@ export type StoredRecord = Record<string, unknown> & {
 export type RecordEntity = TableEntity & {
   recordId: string;
   payload: string;
+  payloadChunkCount?: number;
   recordUpdatedAt?: string;
   updatedAt: string;
   version: number;
   deleted: boolean;
   siteId?: string;
 };
+
+// Azure Table Storage limits each UTF-16 string property to 64 KiB (roughly
+// 32K characters). Keep chunks comfortably below that limit and reserve room
+// in the 1 MiB entity limit for keys, timestamps, and other properties.
+export const RECORD_PAYLOAD_CHUNK_CHARACTERS = 24_000;
+export const MAX_RECORD_PAYLOAD_UTF16_BYTES = 768 * 1024;
+
+type RecordPayloadProperties = Record<string, string | number> & {
+  payload: string;
+  payloadChunkCount: number;
+};
+
+export function encodeRecordPayload(payload: string): RecordPayloadProperties {
+  const properties = {} as RecordPayloadProperties;
+  const chunks: string[] = [];
+
+  for (let offset = 0; offset < payload.length;) {
+    let end = Math.min(offset + RECORD_PAYLOAD_CHUNK_CHARACTERS, payload.length);
+    // Do not split an emoji or other supplementary character's surrogate pair.
+    if (
+      end < payload.length &&
+      end > offset &&
+      payload.charCodeAt(end - 1) >= 0xd800 &&
+      payload.charCodeAt(end - 1) <= 0xdbff &&
+      payload.charCodeAt(end) >= 0xdc00 &&
+      payload.charCodeAt(end) <= 0xdfff
+    ) {
+      end -= 1;
+    }
+    chunks.push(payload.slice(offset, end));
+    offset = end;
+  }
+
+  if (chunks.length === 0) chunks.push('');
+  properties.payload = chunks[0];
+  properties.payloadChunkCount = chunks.length;
+  for (let index = 1; index < chunks.length; index += 1) {
+    properties[`payload${index}`] = chunks[index];
+  }
+  return properties;
+}
+
+export function decodeRecordPayload(entity: Pick<RecordEntity, 'payload' | 'payloadChunkCount'> & Record<string, unknown>): string {
+  const chunkCount = entity.payloadChunkCount ?? 1;
+  if (!Number.isInteger(chunkCount) || chunkCount < 1) {
+    throw new Error('Stored record has an invalid payload chunk count');
+  }
+
+  let payload = entity.payload;
+  for (let index = 1; index < chunkCount; index += 1) {
+    const chunk = entity[`payload${index}`];
+    if (typeof chunk !== 'string') {
+      throw new Error(`Stored record is missing payload chunk ${index}`);
+    }
+    payload += chunk;
+  }
+  return payload;
+}
 
 let tableReady: Promise<TableClient> | null = null;
 let containerReady: Promise<ContainerClient> | null = null;
@@ -252,7 +311,7 @@ function recordTimestamp(kind: string, record: StoredRecord): string {
 }
 
 function parseEntity(entity: RecordEntity): StoredRecord {
-  const parsed = JSON.parse(entity.payload) as StoredRecord;
+  const parsed = JSON.parse(decodeRecordPayload(entity)) as StoredRecord;
   parsed._rev = typeof entity.version === 'number' ? entity.version : 1;
   if (entity.deleted) {
     parsed.deleted = true;
@@ -351,7 +410,7 @@ export async function putRecord(request: HttpRequest, context: InvocationContext
     }
 
     const payload = JSON.stringify(record);
-    if (Buffer.byteLength(payload, 'utf8') > 900_000) {
+    if (Buffer.byteLength(payload, 'utf16le') > MAX_RECORD_PAYLOAD_UTF16_BYTES) {
       return { status: 413, jsonBody: { error: 'Record is too large' } };
     }
 
@@ -397,7 +456,7 @@ export async function putRecord(request: HttpRequest, context: InvocationContext
       partitionKey: kind,
       rowKey,
       recordId: id,
-      payload,
+      ...encodeRecordPayload(payload),
       recordUpdatedAt: incomingUpdatedAt,
       updatedAt: new Date().toISOString(),
       version: nextVersion,

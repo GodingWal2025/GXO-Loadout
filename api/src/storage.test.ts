@@ -3,6 +3,11 @@ import { validateRecordSchema } from './validation';
 import { validateMediaSignature, MAX_PHOTO_SIZE_BYTES } from './middleware/mediaValidation';
 import { checkRateLimit, resetRateLimits } from './middleware/rateLimit';
 import { extractDeviceAuth } from './middleware/auth';
+import {
+  decodeRecordPayload,
+  encodeRecordPayload,
+  RECORD_PAYLOAD_CHUNK_CHARACTERS,
+} from './storage';
 
 describe('API Storage Engine & Handler Unit Tests', () => {
   beforeEach(() => {
@@ -31,6 +36,37 @@ describe('API Storage Engine & Handler Unit Tests', () => {
       const res = validateRecordSchema('inspections', record);
       expect(res.valid).toBe(false);
       expect(res.errors.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Azure Table record payload storage', () => {
+    it('keeps legacy single-property records readable', () => {
+      expect(decodeRecordPayload({ payload: '{"id":"legacy"}' })).toBe('{"id":"legacy"}');
+    });
+
+    it('splits and restores inspection payloads larger than one Azure string property', () => {
+      const payload = JSON.stringify({
+        id: 'large-inspection',
+        notes: 'pallet-data-'.repeat(8_000),
+        inspector: '👷'.repeat(2_000),
+      });
+
+      const encoded = encodeRecordPayload(payload);
+
+      expect(encoded.payloadChunkCount).toBeGreaterThan(1);
+      expect(encoded.payload.length).toBeLessThanOrEqual(RECORD_PAYLOAD_CHUNK_CHARACTERS);
+      for (let index = 1; index < encoded.payloadChunkCount; index += 1) {
+        expect(String(encoded[`payload${index}`]).length).toBeLessThanOrEqual(RECORD_PAYLOAD_CHUNK_CHARACTERS);
+      }
+      expect(decodeRecordPayload(encoded)).toBe(payload);
+      expect(JSON.parse(decodeRecordPayload(encoded))).toMatchObject({ id: 'large-inspection' });
+    });
+
+    it('rejects incomplete chunked records instead of returning corrupted data', () => {
+      expect(() => decodeRecordPayload({
+        payload: '{"id":',
+        payloadChunkCount: 2,
+      })).toThrow('missing payload chunk 1');
     });
   });
 
