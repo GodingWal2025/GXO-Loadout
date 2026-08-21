@@ -299,9 +299,21 @@ export async function dbListSyncQueue(): Promise<SyncQueueItem[]> {
   return db.getAllFromIndex('syncQueue', 'by-createdAt');
 }
 
-export async function dbDeleteSyncQueueItem(id: string): Promise<void> {
+export async function dbDeleteSyncQueueItem(id: string, expectedItem?: SyncQueueItem): Promise<void> {
   const db = await getDB();
-  await db.delete('syncQueue', id);
+  if (!expectedItem) {
+    await db.delete('syncQueue', id);
+    return;
+  }
+
+  // A newer save can replace this queue id while the older HTTP request is in
+  // flight. Only acknowledge the exact version that was uploaded; otherwise
+  // completing the old request would silently discard the newer inspection.
+  const tx = db.transaction('syncQueue', 'readwrite');
+  const store = tx.objectStore('syncQueue');
+  const current = await store.get(id);
+  if (current && JSON.stringify(current) === JSON.stringify(expectedItem)) await store.delete(id);
+  await tx.done;
 }
 
 export async function dbRetrySyncQueueItem(item: SyncQueueItem): Promise<void> {
