@@ -1,4 +1,24 @@
 {
+  "routes": [
+    {
+      "route": "/admin/bag-count-console",
+      "allowedRoles": ["admin", "vision-admin"]
+    },
+    {
+      "route": "/api/datasets/*",
+      "allowedRoles": ["admin", "vision-admin"]
+    },
+    {
+      "route": "/api/pallet-vision/*",
+      "allowedRoles": ["admin", "vision-admin"]
+    }
+  ],
+  "responseOverrides": {
+    "401": {
+      "redirect": "/.auth/login/aad?post_login_redirect_uri=.referrer",
+      "statusCode": 302
+    }
+  },
   "navigationFallback": {
     "rewrite": "/index.html",
     "exclude": [

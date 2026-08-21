@@ -1,6 +1,9 @@
-# Base service deps, shared by both detection backends.
-# Backend-specific deps live in requirements-<backend>.txt so the image only
-# carries the one it runs (rfdetr and transformers each pull a large torch tree).
+# Runtime dependencies for the Cosmos + SAM 3 pallet-vision API.
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pillow>=10.0.0
+pydantic>=2.10.0
+httpx>=0.28.0
+numpy>=1.26.0
+opencv-python-headless>=4.10.0
+pycocotools>=2.0.8

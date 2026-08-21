@@ -5,6 +5,7 @@ import { checkRateLimit } from './middleware/rateLimit';
 import { validateMediaSignature, MAX_PHOTO_SIZE_BYTES } from './middleware/mediaValidation';
 import { extractDeviceAuth, logAudit } from './middleware/auth';
 import './training';
+import { timingSafeEqual } from 'node:crypto';
 
 // Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
 // App settings (never shipped to the client) so picklist/BOL images are read
@@ -773,21 +774,21 @@ export async function analyzeBol(request: HttpRequest, context: InvocationContex
 }
 
 // ---------------------------------------------------------------------------
-// Pallet bag-count assist (RF-DETR / OWLv2 detector-service)
+// Pallet bag-count assist (Cosmos + SAM 3 vision service)
 //
-// DETECTOR_SERVICE_URL points at the Apache-2.0 detector-service (see
-// detector-service/): RF-DETR in production once fine-tuned, OWLv2 as the
-// train-free zero-shot bootstrap. Its URL and (optional) key live in Function
+// DETECTOR_SERVICE_URL points at the private pallet-vision service (see
+// detector-service/). Its URL and key live in Function
 // App settings, so they never reach the browser. The service detects bags on the
 // visible pallet face and returns the JSON contract the client consumes; the
 // client multiplies layers by the known bags-per-layer and the verifier confirms.
 // ---------------------------------------------------------------------------
 
-// RF-DETR / OWLv2 detection backend (detector-service/). When DETECTOR_SERVICE_URL
+// Cosmos / SAM 3 vision backend (detector-service/). When DETECTOR_SERVICE_URL
 // is set, the service runs object detection on the pallet face and returns the
 // JSON contract, so the Function just forwards the image bytes.
 const detectorServiceUrl = (process.env.DETECTOR_SERVICE_URL || "").trim().replace(/\/+$/, "");
 const detectorServiceKey = (process.env.DETECTOR_SERVICE_KEY || "").trim();
+const visionAdminKey = (process.env.VISION_ADMIN_KEY || "").trim();
 const MAX_DETECTOR_IMAGE_BYTES = 2 * 1024 * 1024;
 
 type DetectorConfig = { ok: true; url: string } | { ok: false; error: string };
@@ -805,6 +806,86 @@ function validateDetectorUrl(raw: string): DetectorConfig {
         return { ok: true, url: url.toString().replace(/\/+$/, "") };
     } catch {
         return { ok: false, error: "DETECTOR_SERVICE_URL is not a valid absolute URL" };
+    }
+}
+
+function hasVisionAdminAccess(request: HttpRequest): boolean {
+    const principal = request.headers.get('x-ms-client-principal');
+    if (principal) {
+        try {
+            const decoded = JSON.parse(Buffer.from(principal, 'base64').toString('utf8')) as { userRoles?: string[] };
+            if (decoded.userRoles?.some((role) => role === 'admin' || role === 'vision-admin')) return true;
+        } catch {
+            return false;
+        }
+    }
+    const supplied = request.headers.get('x-admin-key') || '';
+    if (visionAdminKey && supplied && Buffer.byteLength(supplied) === Buffer.byteLength(visionAdminKey)) {
+        return timingSafeEqual(Buffer.from(supplied), Buffer.from(visionAdminKey));
+    }
+    return process.env.ALLOW_INSECURE_VISION_ADMIN === 'true';
+}
+
+function visionHeaders(contentType = 'application/json'): Record<string, string> {
+    const headers: Record<string, string> = { 'Content-Type': contentType };
+    if (detectorServiceKey) headers.Authorization = `Bearer ${detectorServiceKey}`;
+    return headers;
+}
+
+function encodedImageBytes(dataUrl: unknown): number {
+    if (typeof dataUrl !== 'string') return -1;
+    const match = /^data:image\/[a-zA-Z0-9.+-]+;base64,([a-zA-Z0-9+/=]+)$/.exec(dataUrl);
+    if (!match) return -1;
+    return Math.floor(match[1].length * 0.75);
+}
+
+function enforceVisionRateLimit(request: HttpRequest, context: InvocationContext): HttpResponseInit | null {
+    const auth = extractDeviceAuth(request);
+    const result = checkRateLimit(`vision:${auth.deviceId || auth.clientIp}`, { maxRequestsPerMinute: 60 });
+    if (result.warning) context.warn(result.warning);
+    if (result.allowed) return null;
+    logAudit(context, 'VISION_RATE_LIMITED', {
+        deviceId: auth.deviceId,
+        siteId: auth.siteId,
+        status: 429,
+        error: result.warning,
+    });
+    return {
+        status: 429,
+        headers: { 'Retry-After': String(result.retryAfterSeconds || 60) },
+        jsonBody: { error: 'Pallet vision rate limit exceeded', retryAfterSeconds: result.retryAfterSeconds },
+    };
+}
+
+async function proxyVisionJson(
+    path: string,
+    payload: unknown,
+    context: InvocationContext,
+    timeoutMs = 40_000
+): Promise<HttpResponseInit> {
+    const detector = validateDetectorUrl(detectorServiceUrl);
+    if (!detector.ok) return { status: 501, jsonBody: { error: 'Pallet vision not configured', detail: detector.error } };
+    try {
+        const response = await fetch(`${detector.url}${path}`, {
+            method: 'POST',
+            headers: visionHeaders(),
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(timeoutMs),
+        });
+        const text = await response.text();
+        const body = text ? JSON.parse(text) : {};
+        if (!response.ok) {
+            context.warn(`Vision ${path} returned ${response.status}`);
+            return {
+                status: response.status === 429 ? 429 : response.status === 503 ? 503 : 502,
+                jsonBody: body,
+                headers: response.headers.get('retry-after') ? { 'Retry-After': response.headers.get('retry-after')! } : undefined,
+            };
+        }
+        return { status: 200, jsonBody: body };
+    } catch (error: any) {
+        context.error(`Vision ${path} request failed`, error);
+        return { status: 502, jsonBody: { error: error?.name === 'TimeoutError' ? 'Vision request timed out' : 'Vision service unavailable' } };
     }
 }
 
@@ -854,7 +935,7 @@ export function extractJsonObject(text: string): any | null {
     return last;
 }
 
-// Forward the raw pallet-face bytes to the RF-DETR/OWLv2 detection service,
+// Forward the raw pallet-face bytes to the Cosmos/SAM 3 vision service,
 // which already returns the pallet-count JSON contract.
 async function analyzeWithDetector(request: HttpRequest, context: InvocationContext, targetUrl: string): Promise<HttpResponseInit> {
     const buffer = Buffer.from(await request.arrayBuffer());
@@ -914,11 +995,7 @@ async function analyzeFacesWithDetector(
     targetUrl: string,
     context: InvocationContext
 ): Promise<HttpResponseInit> {
-    const endpoint = targetUrl.endsWith("/analyze") ? targetUrl : `${targetUrl}/analyze`;
-    const headers: Record<string, string> = { "Content-Type": "application/octet-stream" };
-    if (detectorServiceKey) headers["Authorization"] = `Bearer ${detectorServiceKey}`;
-
-    const outcomes = await Promise.all(images.map(async (img, i) => {
+    const validated = images.map((img, i) => {
         const url = typeof img?.dataUrl === "string" ? img.dataUrl : "";
         const match = /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s.exec(url);
         if (!match) return { ok: false as const, index: i, slotKey: img?.slotKey, error: "invalid image" };
@@ -927,68 +1004,75 @@ async function analyzeFacesWithDetector(
         if (buffer.length > MAX_DETECTOR_IMAGE_BYTES) {
             return { ok: false as const, index: i, slotKey: img?.slotKey, error: "image too large" };
         }
-        try {
-            const resp = await fetch(endpoint, {
-                method: "POST",
-                headers,
-                body: buffer,
-                signal: AbortSignal.timeout(40_000),
-            });
-            if (!resp.ok) return { ok: false as const, index: i, slotKey: img?.slotKey, error: `HTTP ${resp.status}` };
-            return { ok: true as const, index: i, slotKey: img?.slotKey, result: await resp.json() as any };
-        } catch (e) {
-            context.log(`Error calling detector for face ${i}:`, e);
-            return { ok: false as const, index: i, slotKey: img?.slotKey, error: "detector unavailable" };
-        }
-    }));
-
-    const successful = outcomes.filter((outcome) => outcome.ok);
-    const faces = outcomes.map((outcome) => {
-        if (!outcome.ok) {
-            return { index: outcome.index, slotKey: outcome.slotKey ?? `face_${outcome.index}`, bagFlaps: null, layers: null, error: outcome.error };
-        }
-        const bags = typeof outcome.result.estimatedBags === "number" ? outcome.result.estimatedBags : null;
-        return {
-            index: outcome.index,
-            slotKey: outcome.slotKey ?? `face_${outcome.index}`,
-            bagFlaps: bags,
-            layers: outcome.result.layers ?? null,
-            isPalletFace: true,
-            flapBoxes: outcome.result.boxes ?? [],
-            boxCount: bags,
-            countMatchesBoxes: true,
-        };
+        return { ok: true as const, index: i, slotKey: img?.slotKey, dataUrl: url };
     });
-    const visibleBagTotal = successful.reduce(
-        (sum, outcome) => sum + (typeof outcome.result.estimatedBags === "number" ? outcome.result.estimatedBags : 0),
-        0
-    );
-    const confidences = successful
-        .map((outcome) => outcome.result.confidence)
-        .filter((value): value is number => typeof value === "number");
+    const invalid = validated.filter((item) => !item.ok);
+    if (invalid.length) return { status: 400, jsonBody: { error: 'Invalid face images', faces: invalid } };
 
-    return {
-        status: 200,
-        jsonBody: {
-            success: successful.length > 0,
-            faces,
-            visibleBagTotal: successful.length ? visibleBagTotal : null,
-            visibleBagTotalFromBoxes: successful.length ? visibleBagTotal : null,
-            estimatedPalletTotal: null,
-            gaps: successful.some((outcome) => outcome.result.gaps === true),
-            damage: successful.some((outcome) => outcome.result.damage === true),
-            topLayerFull: successful.length > 0 && successful.every((outcome) => outcome.result.topLayerFull !== false),
-            confidence: confidences.length ? confidences.reduce((a, b) => a + b, 0) / confidences.length : null,
-            modelVersion: successful[0]?.result.modelVersion ?? null,
-            imageCount: images.length,
-            failedFaces: outcomes.length - successful.length,
-        },
-    };
+    const endpoint = targetUrl.endsWith('/analyze-faces') ? targetUrl : `${targetUrl}/analyze-faces`;
+    try {
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: visionHeaders(),
+            body: JSON.stringify({ images: validated.map(({ index, slotKey, dataUrl }) => ({ index, slotKey, dataUrl })) }),
+            signal: AbortSignal.timeout(40_000),
+        });
+        const result = await response.json() as any;
+        if (!response.ok) {
+            return {
+                status: response.status === 429 ? 429 : response.status === 503 ? 503 : 502,
+                jsonBody: result,
+                headers: response.headers.get('retry-after') ? { 'Retry-After': response.headers.get('retry-after')! } : undefined,
+            };
+        }
+        return { status: 200, jsonBody: result };
+    } catch (error) {
+        context.error('Batched pallet-face request failed', error);
+        return { status: 502, jsonBody: { error: 'Vision service unavailable' } };
+    }
+}
+
+export async function proposePalletFlaps(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    if (!hasVisionAdminAccess(request)) return { status: 401, jsonBody: { error: 'Vision admin authentication required' } };
+    const body = await request.json().catch(() => null) as any;
+    const bytes = encodedImageBytes(body?.image);
+    if (bytes <= 0 || bytes > MAX_DETECTOR_IMAGE_BYTES || !Array.isArray(body?.targetPalletBox)) {
+        return { status: 400, jsonBody: { error: 'Expected image data URL and targetPalletBox' } };
+    }
+    return proxyVisionJson('/propose-flaps', body, context);
+}
+
+export async function locatePallet(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    if (!hasVisionAdminAccess(request)) return { status: 401, jsonBody: { error: 'Vision admin authentication required' } };
+    const body = await request.json().catch(() => null) as any;
+    const bytes = encodedImageBytes(body?.image);
+    if (bytes <= 0 || bytes > MAX_DETECTOR_IMAGE_BYTES) {
+        return { status: 400, jsonBody: { error: 'Expected an image data URL under 2 MB' } };
+    }
+    return proxyVisionJson('/locate-pallet', body, context);
+}
+
+export async function palletVisionHealth(_request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const detector = validateDetectorUrl(detectorServiceUrl);
+    if (!detector.ok) return { status: 501, jsonBody: { ready: false, error: detector.error } };
+    try {
+        const response = await fetch(`${detector.url}/health`, {
+            headers: detectorServiceKey ? { Authorization: `Bearer ${detectorServiceKey}` } : {},
+            signal: AbortSignal.timeout(2_000),
+        });
+        const body = await response.json();
+        return { status: response.ok && body?.ready !== false ? 200 : 503, jsonBody: body };
+    } catch (error) {
+        context.warn('Vision health probe failed', error);
+        return { status: 503, jsonBody: { ready: false, error: 'Vision service unavailable' } };
+    }
 }
 
 
 
 export async function analyzePalletCount(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const limited = enforceVisionRateLimit(request, context);
+    if (limited) return limited;
     const detector = validateDetectorUrl(detectorServiceUrl);
     if (!detector.ok) {
         return {
@@ -1016,7 +1100,7 @@ export async function analyzePalletCount(request: HttpRequest, context: Invocati
 // ---------------------------------------------------------------------------
 // Multi-face pallet assessment (detector-service).
 //
-// A separate endpoint from analyze-pallet-count: it runs the RF-DETR/OWLv2
+// A separate endpoint from analyze-pallet-count: it runs the pallet-vision
 // detector over each captured face in turn and sums the per-face visible-bag
 // counts into one assessment body. A detector sees only the outer faces, so the
 // total is a visible-face cross-check, not the pallet total; the client still
@@ -1030,6 +1114,8 @@ const MAX_ASSESS_IMAGES = 5;
 
 
 export async function analyzePalletFaces(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+    const limited = enforceVisionRateLimit(request, context);
+    if (limited) return limited;
     try {
         const body = (await request.json().catch(() => null)) as any;
         const images: any[] = Array.isArray(body?.images) ? body.images : [];
@@ -1064,12 +1150,21 @@ export async function analyzePalletFaces(request: HttpRequest, context: Invocati
 export async function health(_request: HttpRequest, _context: InvocationContext): Promise<HttpResponseInit> {
     const detector = validateDetectorUrl(detectorServiceUrl);
     const storage = await probeSharedStorage();
+    let vision: any = detector.ok ? { status: 'degraded' } : { status: 'unconfigured', error: detector.error };
+    if (detector.ok) {
+        try {
+            const response = await fetch(`${detector.url}/health`, { signal: AbortSignal.timeout(2_000) });
+            const body = await response.json();
+            vision = { status: response.ok && body?.ready !== false ? 'ready' : 'degraded', model: body?.model };
+        } catch { vision = { status: 'degraded' }; }
+    }
     return {
         status: storage.available ? 200 : 503,
         jsonBody: {
             ok: storage.available,
             storage: { mode: "shared-server", ...storage },
             documentIntelligence: Boolean(docIntelEndpoint && docIntelKey),
+            vision,
             detector: detector.ok
                 ? { configured: true }
                 : { configured: false, error: detector.error },
@@ -1106,4 +1201,25 @@ app.http('analyze-pallet-faces', {
     methods: ['POST'],
     authLevel: 'anonymous',
     handler: analyzePalletFaces
+});
+
+app.http('propose-pallet-flaps', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    route: 'pallet-vision/propose-flaps',
+    handler: proposePalletFlaps,
+});
+
+app.http('locate-pallet', {
+    methods: ['POST'],
+    authLevel: 'anonymous',
+    route: 'pallet-vision/locate-pallet',
+    handler: locatePallet,
+});
+
+app.http('pallet-vision-health', {
+    methods: ['GET'],
+    authLevel: 'anonymous',
+    route: 'pallet-vision/health',
+    handler: palletVisionHealth,
 });

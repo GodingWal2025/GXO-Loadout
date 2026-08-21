@@ -1,9 +1,17 @@
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { TableClient, TableEntity } from '@azure/data-tables';
-import { BlobServiceClient, ContainerClient } from '@azure/storage-blob';
+import {
+  BlobSASPermissions,
+  BlobServiceClient,
+  ContainerClient,
+  SASProtocol,
+  StorageSharedKeyCredential,
+  generateBlobSASQueryParameters,
+} from '@azure/storage-blob';
 import { validateRecordSchema } from './validation';
 import { validateMediaSignature, MAX_PHOTO_SIZE_BYTES } from './middleware/mediaValidation';
 import { extractDeviceAuth, logAudit } from './middleware/auth';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 
 const legacyStorageAccountName = (process.env.STORAGE_ACCOUNT_NAME || '').trim().toLowerCase();
 const legacyStorageAccountKey = (process.env.STORAGE_ACCOUNT_KEY || '').trim();
@@ -18,6 +26,8 @@ const connectionString = (
 ).trim();
 const tableName = (process.env.LOADOUT_TABLE_NAME || 'LoadoutRecords').trim();
 const photoContainerName = (process.env.LOADOUT_PHOTO_CONTAINER || 'loadout-photos').trim();
+const datasetContainerName = (process.env.LOADOUT_DATASET_CONTAINER || 'loadout-datasets').trim();
+const visionAdminKey = (process.env.VISION_ADMIN_KEY || '').trim();
 const allowedKinds = new Set(['inspections', 'inventory', 'sites', 'inspectors', 'staging']);
 
 export type StoredRecord = Record<string, unknown> & {
@@ -38,6 +48,7 @@ export type RecordEntity = TableEntity & {
 
 let tableReady: Promise<TableClient> | null = null;
 let containerReady: Promise<ContainerClient> | null = null;
+let datasetContainerReady: Promise<ContainerClient> | null = null;
 
 export function isSharedStorageConfigured(): boolean {
   return Boolean(connectionString);
@@ -125,6 +136,104 @@ export async function getPhotoContainer(): Promise<ContainerClient> {
     });
   }
   return containerReady;
+}
+
+async function getDatasetContainer(): Promise<ContainerClient> {
+  if (!datasetContainerReady) {
+    datasetContainerReady = (async () => {
+      const service = BlobServiceClient.fromConnectionString(requireConnectionString());
+      const container = service.getContainerClient(datasetContainerName);
+      await container.createIfNotExists();
+      return container;
+    })().catch((error) => {
+      datasetContainerReady = null;
+      throw error;
+    });
+  }
+  return datasetContainerReady;
+}
+
+function hasAdminRole(request: HttpRequest): boolean {
+  const principal = request.headers.get('x-ms-client-principal');
+  if (principal) {
+    try {
+      const decoded = JSON.parse(Buffer.from(principal, 'base64').toString('utf8')) as { userRoles?: string[] };
+      if (decoded.userRoles?.some((role) => role === 'admin' || role === 'vision-admin')) return true;
+    } catch {
+      return false;
+    }
+  }
+  const provided = request.headers.get('x-admin-key') || '';
+  if (visionAdminKey && provided && Buffer.byteLength(provided) === Buffer.byteLength(visionAdminKey)) {
+    return timingSafeEqual(Buffer.from(provided), Buffer.from(visionAdminKey));
+  }
+  return process.env.ALLOW_INSECURE_VISION_ADMIN === 'true';
+}
+
+function datasetSharedKey(): { accountName: string; credential: StorageSharedKeyCredential } | null {
+  if (!legacyStorageAccountName || !legacyStorageAccountKey) return null;
+  return {
+    accountName: legacyStorageAccountName,
+    credential: new StorageSharedKeyCredential(legacyStorageAccountName, legacyStorageAccountKey),
+  };
+}
+
+async function createDatasetSas(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  if (!hasAdminRole(request)) return { status: 401, jsonBody: { error: 'Vision admin authentication required' } };
+  const key = datasetSharedKey();
+  if (!key) {
+    return { status: 501, jsonBody: { error: 'Dataset SAS requires STORAGE_ACCOUNT_NAME and STORAGE_ACCOUNT_KEY' } };
+  }
+  try {
+    const body = await request.json() as { size?: number; sha256?: string; contentType?: string };
+    const size = Number(body?.size);
+    const sha256 = String(body?.sha256 || '').toLowerCase();
+    if (!Number.isFinite(size) || size <= 0 || size > 2 * 1024 * 1024 * 1024 || !/^[a-f0-9]{64}$/.test(sha256)) {
+      return { status: 400, jsonBody: { error: 'Invalid dataset size or SHA-256' } };
+    }
+    const container = await getDatasetContainer();
+    const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, 'Z');
+    const blobName = `v${stamp}/${randomUUID()}.zip`;
+    const expiresOn = new Date(Date.now() + 15 * 60_000);
+    const sas = generateBlobSASQueryParameters({
+      containerName: datasetContainerName,
+      blobName,
+      permissions: BlobSASPermissions.parse('cw'),
+      startsOn: new Date(Date.now() - 60_000),
+      expiresOn,
+      contentType: body.contentType || 'application/zip',
+      protocol: SASProtocol.Https,
+    }, key.credential).toString();
+    const uploadUrl = `${container.getBlockBlobClient(blobName).url}?${sas}`;
+    return { status: 200, jsonBody: { uploadUrl, blobName, expiresAt: expiresOn.toISOString() } };
+  } catch (error) {
+    context.error('Unable to create dataset SAS', error);
+    return { status: 503, jsonBody: { error: 'Dataset upload service unavailable' } };
+  }
+}
+
+async function finalizeDataset(request: HttpRequest, context: InvocationContext): Promise<HttpResponseInit> {
+  if (!hasAdminRole(request)) return { status: 401, jsonBody: { error: 'Vision admin authentication required' } };
+  try {
+    const body = await request.json() as { blobName?: string; size?: number; sha256?: string };
+    const blobName = String(body?.blobName || '');
+    const size = Number(body?.size);
+    const sha256 = String(body?.sha256 || '').toLowerCase();
+    if (!/^v\d{8}T\d{6}Z\/[a-f0-9-]+\.zip$/.test(blobName) || !/^[a-f0-9]{64}$/.test(sha256)) {
+      return { status: 400, jsonBody: { error: 'Invalid dataset finalization payload' } };
+    }
+    const blob = (await getDatasetContainer()).getBlockBlobClient(blobName);
+    const properties = await blob.getProperties();
+    if (properties.contentLength !== size || properties.metadata?.sha256 !== sha256) {
+      return { status: 409, jsonBody: { error: 'Uploaded dataset size or digest metadata does not match' } };
+    }
+    await blob.setTags({ state: 'ready', sha256, finalizedAt: new Date().toISOString() });
+    return { status: 200, jsonBody: { blobName, size, sha256, state: 'ready' } };
+  } catch (error: any) {
+    if (error?.statusCode === 404) return { status: 404, jsonBody: { error: 'Dataset upload not found' } };
+    context.error('Unable to finalize dataset', error);
+    return { status: 503, jsonBody: { error: 'Dataset finalization failed' } };
+  }
 }
 
 function safeRowKey(id: string): string {
@@ -398,4 +507,18 @@ app.http('shared-photos', {
   authLevel: 'anonymous',
   route: 'photos/{photoId}',
   handler: photos,
+});
+
+app.http('dataset-upload-sas', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'datasets/sas',
+  handler: createDatasetSas,
+});
+
+app.http('dataset-upload-finalize', {
+  methods: ['POST'],
+  authLevel: 'anonymous',
+  route: 'datasets/finalize',
+  handler: finalizeDataset,
 });

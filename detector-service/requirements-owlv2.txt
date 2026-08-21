@@ -1,9 +1,0 @@
-# Demo/bootstrap backend: OWLv2 open-vocabulary detection (Apache-2.0).
-# No fine-tuned weights needed — it detects from text prompts.
-#
-# CPU-only torch keeps the image ~2GB smaller than the default CUDA build; install
-# with the PyTorch CPU index:
-#   pip install -r requirements-zeroshot.txt --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.4.0
-torchvision>=0.19.0
-transformers>=4.45.0

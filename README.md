@@ -116,7 +116,7 @@ the primary count and the verifier confirms it — the model is an assist, not t
 source of truth, because sagging bags occlude each other badly enough that exact
 visual counting is unreliable even for people.
 
-Both endpoints proxy to **one** backend, the self-hosted detector in
+The endpoints proxy to **one** backend, the self-hosted vision service in
 [`detector-service/`](detector-service/), and return **501** if it is not
 configured so the app degrades cleanly to manual layer entry:
 
@@ -125,21 +125,13 @@ DETECTOR_SERVICE_URL = http://<host>:<port>   # the detector-service /analyze en
 DETECTOR_SERVICE_KEY = <optional bearer key>  # only if the service sets DETECTOR_SERVICE_KEY
 ```
 
-### The detector (Apache-2.0, no copyleft)
+### Pallet vision
 
-The service runs one of two interchangeable, Apache-2.0-licensed detection backends
-(`DETECTOR_BACKEND`) — both safe to call from this closed-source app:
-
-- **RF-DETR Small** (`rfdetr`, production default) — the best starting balance of
-  accuracy, inference time, and training cost. The COCO base
-  has no *bag* class, so it needs a checkpoint **fine-tuned on labeled pallet
-  photos** before it counts anything. See [`detector-service/README.md`](detector-service/README.md).
-- **OWLv2** (`owlv2`, wiring/pre-labeling only) — works without training data, but
-  measured counts on shrink-wrapped seed pallets were not reliable enough for use.
-
-> AGPL-licensed detectors such as Ultralytics YOLO were deliberately **not** used:
-> serving them over HTTP would trip AGPL's network clause and obligate open-sourcing
-> the service. RF-DETR and OWLv2 are Apache-2.0 and carry no such requirement.
+**NVIDIA Cosmos Reason 2** first isolates the intended pallet from background
+pallets and bags. **SAM 3**, fine-tuned on the accepted `bag flap` masks, then
+segments only that pallet crop. Ambiguous localization, a degraded service, or
+fewer than three valid faces produces `needsReview` instead of an automatic count.
+See [`detector-service/README.md`](detector-service/README.md).
 
 ### Honest limits
 
@@ -149,16 +141,13 @@ client still does `layers × bags-per-layer` for the real number and the verifie
 confirms it. Train a single `bag_flap` class first; keep damage checks in the human
 inspection workflow rather than weakening the counting dataset with extra classes.
 
-The **detector is currently switched off** and the console no longer exposes it.
-`DETECTOR_SERVICE_URL` is unset, `/api/analyze-pallet-*` return 501, and the app
-degrades to manual layer entry exactly as designed. The service, the endpoints,
-and the training action all remain in the repo — nothing here was deleted, so
-turning it back on is a matter of training a checkpoint and setting the app
-setting. Until then [`/bag-count-console.html`](https://white-meadow-0dc31e50f.7.azurestaticapps.net/bag-count-console.html)
-is purely a training-data tool: **Collect → Review → Label**.
-
-The manual **Train RF-DETR** GitHub Action validates the dataset, trains the chosen
-model size, evaluates the held-out split, and publishes checkpoint/results artifacts.
+Admins use `/admin/bag-count-console` to keep each pallet's photos in one group,
+verify the Cosmos pallet ROI, accept SAM 3 masks, and publish a versioned dataset.
+The **Train SAM 3 bag-flap model** action rejects split leakage and missing masks,
+fine-tunes on a GPU runner, and publishes the checkpoint and evaluation report.
+The existing `/bag-count-console.html` Collect/Review/Label workflow remains
+available for floor collection. Production counting stays fail-safe and manual
+whenever `DETECTOR_SERVICE_URL` is unset or the GPU service reports degraded.
 
 ### Client-side image prep
 

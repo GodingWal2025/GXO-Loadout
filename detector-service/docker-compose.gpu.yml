@@ -1,0 +1,42 @@
+services:
+  pallet-vision:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      SAM3_CHECKPOINT: /workspace/models/sam3/bag-flap/current/model.pt
+      COSMOS_URL: http://cosmos:8000/v1/chat/completions
+      COSMOS_MODEL: ${COSMOS_MODEL:-nvidia/cosmos-reason2-2b}
+      DETECTOR_SERVICE_KEY: ${DETECTOR_SERVICE_KEY}
+      MAX_QUEUE_DEPTH: "4"
+      COSMOS_WARMUP_TIMEOUT_SECONDS: "600"
+    volumes:
+      - /workspace/models:/workspace/models:ro
+      - /workspace/huggingface:/root/.cache/huggingface
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["1"]
+              capabilities: [gpu]
+    shm_size: 16gb
+
+  # Deploy the NVIDIA Cosmos Reason 2 vLLM/NIM image appropriate to the VPS.
+  # It is deliberately private to this Compose network; never publish port 8000.
+  cosmos:
+    image: ${COSMOS_IMAGE}
+    restart: unless-stopped
+    environment:
+      NGC_API_KEY: ${NGC_API_KEY}
+    volumes:
+      - /workspace/nim-cache:/opt/nim/.cache
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["0"]
+              capabilities: [gpu]
+    shm_size: 32gb

@@ -1,73 +1,51 @@
-"""
-Fine-tune RF-DETR on pallet-bag photos.
-
-RF-DETR trains on a COCO-format dataset (the "COCO" export option in Roboflow),
-NOT a YOLO data.yaml. Expected layout under --dataset-dir:
-
-    dataset/
-      train/ _annotations.coco.json  + image files
-      valid/ _annotations.coco.json  + image files
-      test/  _annotations.coco.json  + image files   (optional)
-
-Label one class "bag_flap". The class order in the COCO
-categories becomes the class_id order; pass the SAME order as RFDETR_CLASS_NAMES to
-detector-service so names line up at inference time.
-
-Usage:
-    python train.py --dataset-dir ./pallet-bags-coco --model-size small --epochs 100 --batch-size 4
-    # -> best checkpoint at <output-dir>/checkpoint_best.pth
-    # then run the service with:
-    #   RFDETR_WEIGHTS=output/checkpoint_best.pth RFDETR_CLASS_NAMES=bag,gap,damage
-"""
+"""Launch the pinned official SAM 3 trainer with the GXO mask configuration."""
 
 import argparse
 import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
-from rfdetr_model import SUPPORTED_MODEL_SIZES, create_rfdetr_model
+from validate_dataset import validate_dataset
 
 
 def main() -> None:
-    p = argparse.ArgumentParser(description="Fine-tune RF-DETR on pallet-bag photos.")
-    p.add_argument("--dataset-dir", required=True,
-                   help="COCO-format dataset dir (train/ valid/ [test/] with _annotations.coco.json)")
-    p.add_argument("--output-dir", default="output", help="where checkpoints are written")
-    p.add_argument("--model-size", choices=SUPPORTED_MODEL_SIZES, default="small",
-                   help="small is the recommended accuracy/speed starting point")
-    p.add_argument("--epochs", type=int, default=100)
-    p.add_argument("--batch-size", type=int, default=4)
-    p.add_argument("--grad-accum-steps", type=int, default=4,
-                   help="effective batch = batch-size x grad-accum-steps")
-    p.add_argument("--lr", type=float, default=1e-4)
-    p.add_argument("--resolution", type=int, default=None,
-                   help="inference/train resolution, multiple of 56 (default: model default)")
-    args = p.parse_args()
+    parser = argparse.ArgumentParser(description="Fine-tune SAM 3 on reviewed bag-flap masks")
+    parser.add_argument("--dataset-dir", required=True)
+    parser.add_argument("--output-dir", default="output/sam3")
+    parser.add_argument("--epochs", type=int, default=20)
+    parser.add_argument("--batch-size", type=int, default=1)
+    parser.add_argument("--grad-accum-steps", type=int, default=4)
+    parser.add_argument("--num-gpus", type=int, default=1)
+    parser.add_argument("--workers", type=int, default=4)
+    parser.add_argument("--sam3-repo", default=os.environ.get("SAM3_REPO", "./sam3-source"),
+                        help="pinned upstream SAM 3 source checkout (training configs are not in its wheel)")
+    args = parser.parse_args()
+    dataset_dir = Path(args.dataset_dir).resolve()
+    output_dir = Path(args.output_dir).resolve()
+    validate_dataset(dataset_dir, require_test=True, minimum_images=1)
 
-    if not os.path.isdir(os.path.join(args.dataset_dir, "train")):
-        raise SystemExit(
-            f"'{args.dataset_dir}/train' not found. Export from Roboflow as 'COCO' "
-            "and point --dataset-dir at the unzipped folder."
-        )
-
-    kwargs = {}
-    if args.resolution:
-        kwargs["resolution"] = args.resolution
-
-    model = create_rfdetr_model(args.model_size, **kwargs)
-    model.train(
-        dataset_dir=args.dataset_dir,
-        epochs=args.epochs,
-        batch_size=args.batch_size,
-        grad_accum_steps=args.grad_accum_steps,
-        lr=args.lr,
-        output_dir=args.output_dir,
-    )
-
-    best = os.path.join(args.output_dir, "checkpoint_best.pth")
-    print(f"\nDone. Best checkpoint: {best}")
-    print("Serve it with:")
-    print(f"  RFDETR_MODEL_SIZE={args.model_size} RFDETR_WEIGHTS={best} \\")
-    print("  RFDETR_CLASS_NAMES=bag_flap RFDETR_BAG_CLASSES=bag_flap \\")
-    print("    uvicorn app:app --port 8080")
+    sam3_repo = Path(args.sam3_repo).resolve()
+    package_config = sam3_repo / "sam3" / "train" / "configs" / "gxo_bag_flaps.yaml"
+    official_base = sam3_repo / "sam3" / "train" / "configs" / "roboflow_v100" / "roboflow_v100_full_ft_100_images.yaml"
+    if not official_base.is_file():
+        raise SystemExit("--sam3-repo must point to the pinned SAM 3 source checkout with training configs")
+    shutil.copy2(Path(__file__).parent / "configs" / "gxo_bag_flaps.yaml", package_config)
+    env = os.environ.copy()
+    env.update({
+        "GXO_DATASET_DIR": dataset_dir.as_posix(),
+        "GXO_OUTPUT_DIR": output_dir.as_posix(),
+        "GXO_EPOCHS": str(args.epochs),
+        "GXO_BATCH_SIZE": str(args.batch_size),
+        "GXO_GRAD_ACCUM": str(args.grad_accum_steps),
+        "GXO_TRAIN_WORKERS": str(args.workers),
+        "PYTHONPATH": str(sam3_repo) + os.pathsep + env.get("PYTHONPATH", ""),
+    })
+    command = [sys.executable, "-m", "sam3.train.train", "-c", "configs/gxo_bag_flaps",
+               "--use-cluster", "0", "--num-gpus", str(args.num_gpus)]
+    subprocess.run(command, env=env, check=True)
+    print(f"SAM 3 training complete. Checkpoints: {output_dir / 'checkpoints'}")
 
 
 if __name__ == "__main__":

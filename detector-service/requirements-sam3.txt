@@ -1,0 +1,3 @@
+# Pinned SAM 3 source revision. Checkpoint access is gated separately through
+# Hugging Face; set SAM3_CHECKPOINT to the mounted local model.pt path.
+sam3 @ git+https://github.com/facebookresearch/sam3.git@8f0b7f4d4e7eda2ed606ebde6702c93359ad01da

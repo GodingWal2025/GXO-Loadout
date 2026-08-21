@@ -1,0 +1,70 @@
+# @package _global_
+defaults:
+  - roboflow_v100/roboflow_v100_full_ft_100_images
+  - _self_
+
+paths:
+  roboflow_vl_100_root: ${oc.env:GXO_DATASET_DIR}
+  experiment_log_dir: ${oc.env:GXO_OUTPUT_DIR}
+
+roboflow_train:
+  num_images: null
+  supercategory: .
+  loss:
+    _target_: sam3.train.loss.sam3_loss.Sam3LossWrapper
+    matcher: ${scratch.matcher}
+    o2m_weight: 2.0
+    o2m_matcher: {_target_: sam3.train.matcher.BinaryOneToManyMatcher, alpha: 0.3, threshold: 0.4, topk: 4}
+    use_o2m_matcher_on_o2m_aux: false
+    loss_fns_find:
+      - _target_: sam3.train.loss.loss_fns.Boxes
+        weight_dict: {loss_bbox: 5.0, loss_giou: 2.0}
+      - _target_: sam3.train.loss.loss_fns.IABCEMdetr
+        weak_loss: false
+        weight_dict: {loss_ce: 20.0, presence_loss: 20.0}
+        pos_weight: 10.0
+        alpha: 0.25
+        gamma: 2
+        use_presence: true
+        pos_focal: false
+        pad_n_queries: 200
+        pad_scale_pos: 1.0
+      - _target_: sam3.train.loss.loss_fns.Masks
+        focal_alpha: 0.25
+        focal_gamma: 2.0
+        weight_dict: {loss_mask: 200.0, loss_dice: 10.0}
+        compute_aux: false
+    loss_fn_semantic_seg: null
+    scale_by_find_batch_size: ${scratch.scale_by_find_batch_size}
+
+scratch:
+  enable_segmentation: true
+  max_data_epochs: ${oc.decode:${oc.env:GXO_EPOCHS,20}}
+  num_train_workers: ${oc.decode:${oc.env:GXO_TRAIN_WORKERS,4}}
+  train_batch_size: ${oc.decode:${oc.env:GXO_BATCH_SIZE,1}}
+  gradient_accumulation_steps: ${oc.decode:${oc.env:GXO_GRAD_ACCUM,4}}
+
+trainer:
+  skip_saving_ckpts: false
+  max_epochs: ${oc.decode:${oc.env:GXO_EPOCHS,20}}
+  val_epoch_freq: 1
+  data:
+    val:
+      dataset:
+        img_folder: ${paths.roboflow_vl_100_root}/valid/
+        ann_file: ${paths.roboflow_vl_100_root}/valid/_annotations.coco.json
+  meters:
+    val:
+      roboflow100:
+        detection:
+          iou_type: segm
+          pred_file_evaluators:
+            - _target_: sam3.eval.coco_eval_offline.CocoEvaluatorOfflineWithPredFileEvaluators
+              gt_path: ${paths.roboflow_vl_100_root}/valid/_annotations.coco.json
+              tide: false
+              iou_type: segm
+
+launcher: {num_nodes: 1, gpus_per_node: 1, experiment_log_dir: '${paths.experiment_log_dir}'}
+submitit:
+  use_cluster: false
+  job_array: null

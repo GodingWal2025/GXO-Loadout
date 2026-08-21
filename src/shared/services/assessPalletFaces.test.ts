@@ -139,7 +139,7 @@ describe('assessPalletFaces', () => {
     expect(body.wantInterior).toBe(true); // unspecified stays on
   });
 
-  it('throws on a non-2xx so the caller can fall back to the per-face path', async () => {
+  it('throws on a non-2xx so the caller can require manual review', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => ({ ok: false, status: 501 }) as Response)

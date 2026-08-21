@@ -24,7 +24,7 @@ const SetupRoute = lazy(() => import('./routes/SetupRoute').then((m) => ({ defau
 const CaptureReturnsStagingRoute = lazy(() => import('./routes/CaptureReturnsStagingRoute').then((m) => ({ default: m.CaptureReturnsStagingRoute })));
 const InventoryRoute = lazy(() => import('./routes/InventoryRoute').then((m) => ({ default: m.InventoryRoute })));
 const InvestigationRoute = lazy(() => import('./routes/InvestigationRoute').then((m) => ({ default: m.InvestigationRoute })));
-
+const BagCountConsoleRoute = lazy(() => import('./routes/BagCountConsoleRoute').then((m) => ({ default: m.BagCountConsoleRoute })));
 
 import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
 import { LanguageToggle } from './shared/components/LanguageToggle';
@@ -74,6 +74,7 @@ export default function App() {
             {/* Admin area - password gated, dashboard lives inside */}
             <Route path="/admin" element={<AdminGate><AdminRoute /></AdminGate>} />
             <Route path="/admin/dashboard" element={<AdminGate><DashboardRoute /></AdminGate>} />
+            <Route path="/admin/bag-count-console" element={<AdminGate><BagCountConsoleRoute /></AdminGate>} />
           </Routes>
           </Suspense>
         </Shell>
