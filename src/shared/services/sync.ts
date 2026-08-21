@@ -20,6 +20,7 @@ import {
   dbListInventoryItems,
   dbListSyncQueue,
   dbMarkPhotoUploaded,
+  dbMakeSyncQueueItemReady,
   dbRetrySyncQueueItem,
   type SharedRecordKind,
   type SyncQueueItem,
@@ -59,7 +60,9 @@ const CACHE_EVENTS: Record<keyof typeof CACHE_KEYS, string> = {
   staging: 'loadout-staging-locations-updated',
 };
 const MIGRATION_KEY = 'loadout.shared-storage.migrated.v1';
-const CURSOR_KEY_PREFIX = 'loadout.sync.cursor.';
+// v2 cursors track server receipt time rather than device-authored timestamps.
+// Changing the prefix deliberately performs one full pull on existing devices.
+const CURSOR_KEY_PREFIX = 'loadout.sync.cursor.v2.';
 const LAST_SYNCED_KEY = 'loadout.sync.lastSyncedAt';
 
 const MIN_INTERVAL_MS = 15_000;  // 15 seconds active interval
@@ -271,7 +274,7 @@ async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promis
 
   let continuationToken: string | undefined = undefined;
   let totalPulled = 0;
-  let latestServerTime: string | undefined = undefined;
+  let syncWatermark: string | undefined = undefined;
 
   let localById = new Map<string, Record<string, any>>();
   if (kind === 'inspections') {
@@ -303,7 +306,9 @@ async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promis
     const body = await response.json();
     const records: Record<string, any>[] = Array.isArray(body?.resources) ? body.resources : [];
     continuationToken = body?.continuationToken || undefined;
-    if (body?.serverTime) latestServerTime = body.serverTime;
+    // Keep the first page's query-start watermark across pagination so a
+    // record written between pages is guaranteed to appear on the next poll.
+    if (!syncWatermark && body?.serverTime) syncWatermark = body.serverTime;
 
     for (const record of records) {
       if (!record?.id || pendingIds.has(`record:${kind}:${record.id}`)) continue;
@@ -315,15 +320,20 @@ async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promis
     }
   } while (continuationToken);
 
-  if (latestServerTime && typeof localStorage !== 'undefined') {
-    localStorage.setItem(cursorKey, latestServerTime);
+  if (syncWatermark && typeof localStorage !== 'undefined') {
+    localStorage.setItem(cursorKey, syncWatermark);
   }
 
   return totalPulled;
 }
 
-async function performSync(): Promise<void> {
-  const queueBefore = await dbListSyncQueue();
+async function performSync(forceRetry = false): Promise<void> {
+  await migrateExistingLocalData();
+  let queueBefore = await dbListSyncQueue();
+  if (forceRetry) {
+    await Promise.all(queueBefore.map(dbMakeSyncQueueItemReady));
+    queueBefore = await dbListSyncQueue();
+  }
   const recordsBefore = queueBefore.filter((item) => item.operation === 'put-record').length;
   const photosBefore = queueBefore.filter((item) => item.operation === 'upload-photo').length;
 
@@ -338,7 +348,6 @@ async function performSync(): Promise<void> {
     return;
   }
 
-  await migrateExistingLocalData();
   emit({
     syncing: true,
     error: undefined,
@@ -385,11 +394,18 @@ async function performSync(): Promise<void> {
   const kinds: SharedRecordKind[] = ['sites', 'inspectors', 'staging', 'inspections', 'inventory'];
 
   let pulledChanges = 0;
+  const pullFailures: FailedSyncItem[] = [];
   for (const kind of kinds) {
     try {
       pulledChanges += await pullKind(kind, pendingIds);
-    } catch (e) {
-      console.warn(`Pull failed for kind: ${kind}`, e);
+    } catch (error) {
+      console.warn(`Pull failed for kind: ${kind}`, error);
+      pullFailures.push({
+        id: `pull:${kind}`,
+        type: kind,
+        error: error instanceof Error ? error.message : 'Download failed',
+        retryCount: 0,
+      });
     }
   }
 
@@ -411,9 +427,9 @@ async function performSync(): Promise<void> {
     pending,
     pendingRecords,
     pendingPhotos,
-    failedItems: failedList,
-    lastSyncedAt: new Date().toISOString(),
-    error: pending ? 'Waiting to retry' : undefined,
+    failedItems: [...failedList, ...pullFailures],
+    lastSyncedAt: pullFailures.length === 0 ? new Date().toISOString() : state.lastSyncedAt,
+    error: pullFailures[0]?.error || (pending ? 'Waiting to retry' : undefined),
   });
 }
 
@@ -430,11 +446,11 @@ function scheduleNextAdaptiveSync(): void {
   }, currentIntervalMs);
 }
 
-export function syncNow(): Promise<void> {
+export function syncNow(options: { forceRetry?: boolean } = {}): Promise<void> {
   // Any explicit sync resets interval to active
   currentIntervalMs = MIN_INTERVAL_MS;
   if (!activeSync) {
-    activeSync = performSync()
+    activeSync = performSync(options.forceRetry === true)
       .catch(async (error) => {
         const q = await dbListSyncQueue();
         emit({
@@ -463,6 +479,13 @@ export function startSharedStorageSync(): () => void {
     }
   };
 
+  // iPadOS may freeze and later restore a standalone PWA from its page cache.
+  // `pageshow` reliably wakes sync even when no focus event is dispatched.
+  const handlePageShow = () => {
+    currentIntervalMs = MIN_INTERVAL_MS;
+    void syncNow();
+  };
+
   const handleSyncRequest = () => {
     currentIntervalMs = MIN_INTERVAL_MS;
     void syncNow();
@@ -471,12 +494,14 @@ export function startSharedStorageSync(): () => void {
   window.addEventListener('online', handleSyncRequest);
   window.addEventListener('focus', handleSyncRequest);
   window.addEventListener('visibilitychange', handleVisibility);
+  window.addEventListener('pageshow', handlePageShow);
   window.addEventListener('loadout-sync-request', handleSyncRequest);
 
   return () => {
     window.removeEventListener('online', handleSyncRequest);
     window.removeEventListener('focus', handleSyncRequest);
     window.removeEventListener('visibilitychange', handleVisibility);
+    window.removeEventListener('pageshow', handlePageShow);
     window.removeEventListener('loadout-sync-request', handleSyncRequest);
     if (syncTimeoutId) clearTimeout(syncTimeoutId);
   };

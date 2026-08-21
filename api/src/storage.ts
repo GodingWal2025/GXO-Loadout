@@ -40,6 +40,7 @@ export type StoredRecord = Record<string, unknown> & {
 export type RecordEntity = TableEntity & {
   recordId: string;
   payload: string;
+  recordUpdatedAt?: string;
   updatedAt: string;
   version: number;
   deleted: boolean;
@@ -275,12 +276,15 @@ export async function listRecords(request: HttpRequest, context: InvocationConte
   const limit = isNaN(limitParam) ? 500 : Math.min(500, Math.max(1, limitParam));
 
   try {
+    // Use the query start as the delta watermark. A write arriving while this
+    // page is being read will then be included in the next poll, not skipped.
+    const syncWatermark = new Date().toISOString();
     const table = await getTable();
     let filter = `PartitionKey eq '${kind}'`;
     if (since) {
       // Escape single quotes for OData filter
       const safeSince = since.replace(/'/g, "''");
-      filter += ` and updatedAt gt '${safeSince}'`;
+      filter += ` and updatedAt ge '${safeSince}'`;
     }
 
     const records: StoredRecord[] = [];
@@ -307,7 +311,7 @@ export async function listRecords(request: HttpRequest, context: InvocationConte
       jsonBody: {
         resources: records,
         continuationToken: nextContinuationToken,
-        serverTime: new Date().toISOString(),
+        serverTime: syncWatermark,
       },
     };
   } catch (error) {
@@ -366,8 +370,10 @@ export async function putRecord(request: HttpRequest, context: InvocationContext
     if (existingEntity) {
       nextVersion = (existingEntity.version || 0) + 1;
 
-      // Optimistic concurrency check: if existing record is newer than incoming
-      if (existingEntity.updatedAt > incomingUpdatedAt) {
+      // Compare business-record timestamps for conflict handling. `updatedAt`
+      // is server receipt time and is reserved for reliable delta polling.
+      const existingRecordUpdatedAt = existingEntity.recordUpdatedAt || existingEntity.updatedAt;
+      if (existingRecordUpdatedAt > incomingUpdatedAt) {
         logAudit(context, 'PUT_RECORD_CONFLICT', {
           deviceId: auth.deviceId,
           siteId: auth.siteId,
@@ -392,7 +398,8 @@ export async function putRecord(request: HttpRequest, context: InvocationContext
       rowKey,
       recordId: id,
       payload,
-      updatedAt: incomingUpdatedAt,
+      recordUpdatedAt: incomingUpdatedAt,
+      updatedAt: new Date().toISOString(),
       version: nextVersion,
       deleted: record.deleted === true,
       siteId: typeof record.siteId === 'string' ? record.siteId : undefined,

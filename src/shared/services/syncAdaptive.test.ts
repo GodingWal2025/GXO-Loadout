@@ -54,17 +54,22 @@ describe('Adaptive Sync Engine & Delta Polling', () => {
   });
 
   it('performs delta sync sending stored since cursor when present', async () => {
-    mockStorage.setItem('loadout.sync.cursor.inspections', '2026-08-13T10:00:00.000Z');
+    mockStorage.setItem('loadout.sync.cursor.v2.inspections', '2026-08-13T10:00:00.000Z');
     mockStorage.setItem('loadout.deviceConfig', JSON.stringify({ siteId: 'site-alpha', deviceId: 'dev-1' }));
 
+    let inspectionPages = 0;
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
       const urlStr = String(url);
       if (urlStr.includes('/api/records/inspections')) {
+        inspectionPages++;
         expect(urlStr).toContain('since=2026-08-13T10%3A00%3A00.000Z');
         expect(urlStr).toContain('siteId=site-alpha');
         return new Response(JSON.stringify({
           resources: [],
-          serverTime: '2026-08-13T11:00:00.000Z',
+          continuationToken: inspectionPages === 1 ? 'next-page' : undefined,
+          serverTime: inspectionPages === 1
+            ? '2026-08-13T11:00:00.000Z'
+            : '2026-08-13T12:00:00.000Z',
         }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
       return new Response(JSON.stringify({ resources: [] }), {
@@ -76,7 +81,23 @@ describe('Adaptive Sync Engine & Delta Polling', () => {
     await syncNow();
 
     expect(fetchSpy).toHaveBeenCalled();
-    expect(mockStorage.getItem('loadout.sync.cursor.inspections')).toBe('2026-08-13T11:00:00.000Z');
+    expect(inspectionPages).toBe(2);
+    expect(mockStorage.getItem('loadout.sync.cursor.v2.inspections')).toBe('2026-08-13T11:00:00.000Z');
+  });
+
+  it('does not report a successful sync when a download fails', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ error: 'Storage unavailable' }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      })
+    );
+
+    await syncNow();
+
+    const state = getSyncState();
+    expect(state.error).toContain('Record download failed');
+    expect(state.failedItems?.some((item) => item.id.startsWith('pull:'))).toBe(true);
   });
 
   it('handles 409 conflict by merging with remote and re-syncing without losing edits', async () => {
