@@ -59,7 +59,10 @@ const CACHE_EVENTS: Record<keyof typeof CACHE_KEYS, string> = {
   inspectors: 'loadout-inspectors-updated',
   staging: 'loadout-staging-locations-updated',
 };
-const MIGRATION_KEY = 'loadout.shared-storage.migrated.v1';
+// v2 deliberately requeues every durable local record once. Older builds
+// could lose the queue entry when a newer inspection replaced an in-flight
+// upload, leaving the full inspection stranded only on that iPad.
+const MIGRATION_KEY = 'loadout.shared-storage.migrated.v2';
 // v2 cursors track server receipt time rather than device-authored timestamps.
 // Changing the prefix deliberately performs one full pull on existing devices.
 const CURSOR_KEY_PREFIX = 'loadout.sync.cursor.v2.';
