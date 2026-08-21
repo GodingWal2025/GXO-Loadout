@@ -114,6 +114,61 @@ describe('Adaptive Sync Engine & Delta Polling', () => {
     expect(received).toEqual(remote);
   });
 
+  it('uploads a newer inspection save that replaces an in-flight queue item', async () => {
+    const inspection = {
+      id: 'insp-inflight-replacement',
+      type: 'outbound',
+      siteId: 'site-alpha',
+      status: 'IN_PROGRESS',
+      startedAt: '2026-08-13T10:00:00.000Z',
+      flaggedItemsCount: 0,
+      picklist: {} as any,
+      bol: {} as any,
+      staging: {} as any,
+      pallets: [],
+      lastEditedAt: '2026-08-13T10:01:00.000Z',
+    } as Inspection;
+    await dbEnqueueRecord('inspections', inspection);
+
+    let releaseFirstPut!: () => void;
+    const firstPutBlocked = new Promise<void>((resolve) => { releaseFirstPut = resolve; });
+    let firstPutStarted!: () => void;
+    const firstPutSeen = new Promise<void>((resolve) => { firstPutStarted = resolve; });
+    const uploadedPalletCounts: number[] = [];
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, options?: RequestInit) => {
+      const body = options?.body ? JSON.parse(String(options.body)) : undefined;
+      if (options?.method === 'PUT' && body?.id === inspection.id) {
+        uploadedPalletCounts.push(body.pallets.length);
+        if (uploadedPalletCounts.length === 1) {
+          firstPutStarted();
+          await firstPutBlocked;
+        }
+        return new Response(JSON.stringify({ record: body }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return new Response(JSON.stringify({ resources: [], serverTime: new Date().toISOString() }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    });
+
+    const firstSync = syncNow();
+    await firstPutSeen;
+    await dbEnqueueRecord('inspections', {
+      ...inspection,
+      pallets: [{ palletNumber: 1 } as any],
+      lastEditedAt: '2026-08-13T10:02:00.000Z',
+    });
+    const rerun = syncNow();
+    releaseFirstPut();
+    await Promise.all([firstSync, rerun]);
+
+    expect(uploadedPalletCounts).toEqual([0, 1]);
+  });
+
   it('does not report a successful sync when a download fails', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response(JSON.stringify({ error: 'Storage unavailable' }), {

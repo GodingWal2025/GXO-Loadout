@@ -71,6 +71,7 @@ const MIN_INTERVAL_MS = 15_000;  // 15 seconds active interval
 const MAX_INTERVAL_MS = 120_000; // 2 minutes maximum idle backoff
 
 let activeSync: Promise<void> | null = null;
+let rerunRequested = false;
 let syncTimeoutId: number | undefined;
 let currentIntervalMs = MIN_INTERVAL_MS;
 
@@ -214,7 +215,7 @@ async function pushItem(item: SyncQueueItem): Promise<void> {
   if (item.operation === 'upload-photo') {
     const blob = await dbGetPhotoBlob(item.photoId);
     if (!blob) {
-      await dbDeleteSyncQueueItem(item.id);
+      await dbDeleteSyncQueueItem(item.id, item);
       return;
     }
     const response = await fetch(`/api/photos/${encodeURIComponent(item.photoId)}`, {
@@ -228,7 +229,7 @@ async function pushItem(item: SyncQueueItem): Promise<void> {
     });
     if (!response.ok) throw new SyncHttpError(response.status, 'Photo upload failed');
     await dbMarkPhotoUploaded(item.photoId);
-    await dbDeleteSyncQueueItem(item.id);
+    await dbDeleteSyncQueueItem(item.id, item);
     return;
   }
 
@@ -248,7 +249,7 @@ async function pushItem(item: SyncQueueItem): Promise<void> {
   if (response.status === 409) {
     const body = await response.json();
     const remoteRecord = body?.record;
-    await dbDeleteSyncQueueItem(item.id);
+    await dbDeleteSyncQueueItem(item.id, item);
 
     if (remoteRecord) {
       if (item.kind === 'inspections') {
@@ -271,7 +272,7 @@ async function pushItem(item: SyncQueueItem): Promise<void> {
   }
 
   if (!response.ok) throw new SyncHttpError(response.status, 'Record save failed');
-  await dbDeleteSyncQueueItem(item.id);
+  await dbDeleteSyncQueueItem(item.id, item);
 }
 
 async function pullKind(kind: SharedRecordKind, pendingIds: Set<string>): Promise<number> {
@@ -456,9 +457,18 @@ function scheduleNextAdaptiveSync(): void {
 export function syncNow(options: { forceRetry?: boolean } = {}): Promise<void> {
   // Any explicit sync resets interval to active
   currentIntervalMs = MIN_INTERVAL_MS;
-  if (!activeSync) {
-    activeSync = performSync(options.forceRetry === true)
-      .catch(async (error) => {
+  if (activeSync) {
+    rerunRequested = true;
+    return activeSync;
+  }
+
+  activeSync = (async () => {
+    let forceRetry = options.forceRetry === true;
+    do {
+      rerunRequested = false;
+      try {
+        await performSync(forceRetry);
+      } catch (error) {
         const q = await dbListSyncQueue();
         emit({
           syncing: false,
@@ -467,11 +477,12 @@ export function syncNow(options: { forceRetry?: boolean } = {}): Promise<void> {
           pendingPhotos: q.filter((i) => i.operation === 'upload-photo').length,
           error: error instanceof Error ? error.message : 'Sync failed',
         });
-      })
-      .finally(() => {
-        activeSync = null;
-      });
-  }
+      }
+      forceRetry = false;
+    } while (rerunRequested);
+  })().finally(() => {
+    activeSync = null;
+  });
   return activeSync;
 }
 
