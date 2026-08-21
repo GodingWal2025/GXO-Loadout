@@ -64,6 +64,8 @@ const MIGRATION_KEY = 'loadout.shared-storage.migrated.v1';
 // Changing the prefix deliberately performs one full pull on existing devices.
 const CURSOR_KEY_PREFIX = 'loadout.sync.cursor.v2.';
 const LAST_SYNCED_KEY = 'loadout.sync.lastSyncedAt';
+const DEVICE_CONFIG_KEY = 'inspection.device.config';
+const SYNC_DEVICE_ID_KEY = 'loadout.sync.deviceId.v1';
 
 const MIN_INTERVAL_MS = 15_000;  // 15 seconds active interval
 const MAX_INTERVAL_MS = 120_000; // 2 minutes maximum idle backoff
@@ -122,7 +124,7 @@ export function getSyncState(): SyncState {
 
 function getActiveSiteId(): string | undefined {
   try {
-    const raw = localStorage.getItem('loadout.deviceConfig');
+    const raw = localStorage.getItem(DEVICE_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed?.siteId) return String(parsed.siteId);
@@ -135,11 +137,16 @@ function getActiveSiteId(): string | undefined {
 
 function getDeviceId(): string {
   try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem('loadout.deviceConfig') : null;
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (parsed?.deviceId) return String(parsed.deviceId);
-    }
+    const existing = typeof localStorage !== 'undefined'
+      ? localStorage.getItem(SYNC_DEVICE_ID_KEY)
+      : null;
+    if (existing) return existing;
+
+    const generated = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? `device-${crypto.randomUUID()}`
+      : `device-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(SYNC_DEVICE_ID_KEY, generated);
+    return generated;
   } catch {
     // ignore
   }

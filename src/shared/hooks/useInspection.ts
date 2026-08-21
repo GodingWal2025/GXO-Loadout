@@ -1,6 +1,6 @@
 import { generateId } from '../utils/uuid';
 import { transitionInspection } from '../state/inspectionMachine';
-import { useEffect, useReducer } from 'react';
+import { useEffect, useReducer, useRef } from 'react';
 import type {
   Inspection,
   InspectionType,
@@ -769,12 +769,41 @@ function reducer(state: Inspection, action: Action): Inspection {
 
 export function useInspection(initial: Inspection) {
   const [inspection, dispatch] = useReducer(reducer, initial);
+  // Mounting a screen is a read, not an edit. Saving the initial snapshot here
+  // used to give stale iPad data a fresh timestamp and overwrite newer work
+  // from another device.
+  const hasMounted = useRef(false);
+  const remoteHydration = useRef<Inspection | null>(null);
 
   useEffect(() => {
+    if (!hasMounted.current) {
+      hasMounted.current = true;
+      return;
+    }
+    if (remoteHydration.current === inspection) {
+      remoteHydration.current = null;
+      return;
+    }
     dbSaveInspection(inspection).catch((err) =>
       console.error('Failed to save inspection', err)
     );
   }, [inspection]);
+
+  useEffect(() => {
+    const applyRemoteUpdate = (event: Event) => {
+      const remote = (event as CustomEvent<Inspection>).detail;
+      if (!remote || remote.id !== initial.id) return;
+
+      // This record was already written to IndexedDB by the sync engine. Load
+      // it into the open screen without writing it back into the upload queue.
+      remoteHydration.current = remote;
+      dispatch({ type: 'LOAD', inspection: remote });
+    };
+
+    window.addEventListener('loadout-remote-inspection-updated', applyRemoteUpdate);
+    return () =>
+      window.removeEventListener('loadout-remote-inspection-updated', applyRemoteUpdate);
+  }, [initial.id]);
 
   return { inspection, dispatch };
 }

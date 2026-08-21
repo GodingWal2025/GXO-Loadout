@@ -55,15 +55,17 @@ describe('Adaptive Sync Engine & Delta Polling', () => {
 
   it('performs delta sync sending stored since cursor when present', async () => {
     mockStorage.setItem('loadout.sync.cursor.v2.inspections', '2026-08-13T10:00:00.000Z');
-    mockStorage.setItem('loadout.deviceConfig', JSON.stringify({ siteId: 'site-alpha', deviceId: 'dev-1' }));
+    mockStorage.setItem('inspection.device.config', JSON.stringify({ siteId: 'site-alpha' }));
 
     let inspectionPages = 0;
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any) => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (url: any, options?: RequestInit) => {
       const urlStr = String(url);
       if (urlStr.includes('/api/records/inspections')) {
         inspectionPages++;
         expect(urlStr).toContain('since=2026-08-13T10%3A00%3A00.000Z');
         expect(urlStr).toContain('siteId=site-alpha');
+        expect(new Headers(options?.headers).get('x-loadout-site-id')).toBe('site-alpha');
+        expect(new Headers(options?.headers).get('x-loadout-device-id')).toMatch(/^device-/);
         return new Response(JSON.stringify({
           resources: [],
           continuationToken: inspectionPages === 1 ? 'next-page' : undefined,
@@ -83,6 +85,33 @@ describe('Adaptive Sync Engine & Delta Polling', () => {
     expect(fetchSpy).toHaveBeenCalled();
     expect(inspectionPages).toBe(2);
     expect(mockStorage.getItem('loadout.sync.cursor.v2.inspections')).toBe('2026-08-13T11:00:00.000Z');
+    expect(mockStorage.getItem('loadout.sync.deviceId.v1')).toMatch(/^device-/);
+  });
+
+  it('notifies an open inspection screen when a remote update is applied', async () => {
+    const remote = {
+      id: 'insp-remote-event',
+      type: 'outbound',
+      siteId: 'site-alpha',
+      status: 'IN_PROGRESS',
+      startedAt: '2026-08-13T10:00:00.000Z',
+      flaggedItemsCount: 0,
+      picklist: {} as any,
+      bol: {} as any,
+      staging: {} as any,
+      pallets: [],
+      lastEditedAt: '2026-08-13T10:05:00.000Z',
+    } as Inspection;
+    let received: Inspection | undefined;
+    const handler = (event: Event) => {
+      received = (event as CustomEvent<Inspection>).detail;
+    };
+    window.addEventListener('loadout-remote-inspection-updated', handler);
+
+    await dbApplyRemoteInspection(remote);
+
+    window.removeEventListener('loadout-remote-inspection-updated', handler);
+    expect(received).toEqual(remote);
   });
 
   it('does not report a successful sync when a download fails', async () => {

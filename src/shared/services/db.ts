@@ -331,6 +331,9 @@ export async function dbMarkPhotoUploaded(photoId: string): Promise<void> {
 export async function dbApplyRemoteInspection(inspection: Inspection): Promise<void> {
   const db = await getDB();
   await db.put('inspections', inspection);
+  window.dispatchEvent(
+    new CustomEvent<Inspection>('loadout-remote-inspection-updated', { detail: inspection })
+  );
   window.dispatchEvent(new CustomEvent('loadout-data-updated'));
 }
 
