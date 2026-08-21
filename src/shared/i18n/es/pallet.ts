@@ -133,6 +133,9 @@ export const pallet: Record<string, string> = {
   'tally.barOver': 'Excedente de {count}',
   'tally.barNeeded': '{count} requeridas',
   'tally.barMore': '{count} más',
+  'tally.batchesComplete': '{complete} de {total} lotes completos',
+  'tally.showBatches': 'Mostrar {count} lotes',
+  'tally.hideBatches': 'Ocultar detalles de lotes',
 
   // ---- Inspection workspace: header ----
   'workspace.palletsCount': '{count} tarimas',

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type { Picklist, PalletInspection, HandoffEntry, InspectionType } from '../shared';
 import { expectedBags, isPackagingLine, picklistHasOcr } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
@@ -94,6 +95,7 @@ export function RunningTallyHeader({
   inspectionType,
 }: Props) {
   const t = useT();
+  const [expandedOverride, setExpandedOverride] = useState<boolean | null>(null);
 
   if (!picklist.lineItems || picklist.lineItems.length === 0) return null;
 
@@ -133,9 +135,15 @@ export function RunningTallyHeader({
   const totalActual = activeLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
   const allFulfilled =
     activeLineItems.length > 0 && activeLineItems.every((li) => li.fulfilled);
+  const completedBatches = activeLineItems.filter((li) => li.fulfilled).length;
+  const expanded = expandedOverride ?? activeLineItems.length <= 6;
+  const totalPct = totalExpected ? Math.min(100, (totalActual / totalExpected) * 100) : 0;
+  const toggleLabel = expanded
+    ? t('tally.hideBatches', 'Hide batch details')
+    : t('tally.showBatches', 'Show {count} batches', { count: activeLineItems.length });
 
   return (
-    <div className="tally">
+    <div className={`tally ${expanded ? 'is-expanded' : 'is-collapsed'} ${allFulfilled ? 'is-complete' : ''}`}>
       <div className="tally__inner">
         <div className="tally__total">
           <div className="tally__total-lbl">
@@ -188,7 +196,34 @@ export function RunningTallyHeader({
           )}
         </div>
 
-        <div className="tally__bars">
+        <div className="tally__summary">
+          <div className="tally__summary-label">
+            {t('tally.batchesComplete', '{complete} of {total} batches complete', {
+              complete: completedBatches,
+              total: activeLineItems.length,
+            })}
+          </div>
+          <div className="tally__summary-track" aria-hidden="true">
+            <div style={{ width: `${totalPct}%` }} />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="tally__toggle"
+          aria-expanded={expanded}
+          aria-controls="running-tally-batches"
+          aria-label={toggleLabel}
+          onClick={() => setExpandedOverride(!expanded)}
+        >
+          <span>{toggleLabel}</span>
+          <span className="tally__toggle-icon" aria-hidden="true">⌄</span>
+        </button>
+      </div>
+
+      {expanded && (
+        <div id="running-tally-batches" className="tally__details">
+          <div className="tally__bars">
           {activeLineItems.map((li) => {
             const expected = bagsExpected(li);
             const actual = li.actualQuantity;
@@ -316,8 +351,9 @@ export function RunningTallyHeader({
               </div>
             );
           })}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
