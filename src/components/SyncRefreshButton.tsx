@@ -30,7 +30,7 @@ export function SyncRefreshButton() {
     if (state === 'checking') return;
     window.clearTimeout(timerRef.current);
     setState('checking');
-    await syncNow();
+    await syncNow({ forceRetry: true });
     const ready = await checkForAppUpdate();
     setUpdateReady(ready);
     window.dispatchEvent(new CustomEvent('loadout-data-updated'));

@@ -315,6 +315,13 @@ export async function dbRetrySyncQueueItem(item: SyncQueueItem): Promise<void> {
   });
 }
 
+export async function dbMakeSyncQueueItemReady(item: SyncQueueItem): Promise<void> {
+  const db = await getDB();
+  if (!item.nextAttemptAt) return;
+  const { nextAttemptAt: _nextAttemptAt, ...ready } = item;
+  await db.put('syncQueue', ready as SyncQueueItem);
+}
+
 export async function dbMarkPhotoUploaded(photoId: string): Promise<void> {
   const db = await getDB();
   const photo = await db.get('photoBlobs', photoId);

@@ -16,6 +16,7 @@ import App from './App';
 import './styles.css';
 import { runResetIfNeeded } from './services/appReset';
 import { startSharedStorageSync } from './shared/services/sync';
+import { requestPersistentAppStorage } from './shared/services/storagePersistence';
 
 // Wipe stale data from prior versions before app loads. Once this resolves,
 // IndexedDB and localStorage are guaranteed to be at the current schema.
@@ -26,4 +27,5 @@ runResetIfNeeded().then(() => {
     </React.StrictMode>
   );
   startSharedStorageSync();
+  void requestPersistentAppStorage();
 });

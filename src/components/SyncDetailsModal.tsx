@@ -22,7 +22,7 @@ export function SyncDetailsModal({ onClose }: Props) {
   const handleManualSync = async () => {
     setIsTriggering(true);
     try {
-      await syncNow();
+      await syncNow({ forceRetry: true });
     } finally {
       setIsTriggering(false);
     }

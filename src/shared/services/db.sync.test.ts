@@ -14,6 +14,8 @@ describe('shared-storage offline queue', () => {
       dbHardDeleteInspection,
       dbListAllInspections,
       dbListSyncQueue,
+      dbMakeSyncQueueItemReady,
+      dbRetrySyncQueueItem,
       dbSaveInspection,
       dbSavePhotoBlob,
       getDB,
@@ -42,6 +44,14 @@ describe('shared-storage offline queue', () => {
     ]);
     const db = await getDB();
     expect((await db.get('photoBlobs', 'photo-sync-test'))?.uploaded).toBe(false);
+
+    const photoQueueItem = queue.find((item) => item.id === 'photo:photo-sync-test')!;
+    await dbRetrySyncQueueItem(photoQueueItem);
+    const delayed = (await dbListSyncQueue()).find((item) => item.id === photoQueueItem.id)!;
+    expect(delayed.nextAttemptAt).toBeDefined();
+    await dbMakeSyncQueueItemReady(delayed);
+    const ready = (await dbListSyncQueue()).find((item) => item.id === photoQueueItem.id)!;
+    expect(ready.nextAttemptAt).toBeUndefined();
 
     await dbHardDeleteInspection(inspection.id);
     expect((await dbGetInspection(inspection.id))?.deleted).toBe(true);

@@ -12,6 +12,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        navigateFallbackDenylist: [/^\/api\//],
         // Excel import is a rarely used admin feature and is almost 1 MB by
         // itself. Load it on demand instead of slowing every PWA install.
         globIgnores: ['**/exceljs*.js'],
@@ -21,9 +24,14 @@ export default defineConfig({
         name: 'GXO Loadout',
         short_name: 'Loadout',
         description: 'Loadout inspection and returns app',
+        id: '/',
+        scope: '/',
+        lang: 'en-US',
+        categories: ['business', 'productivity'],
         theme_color: '#1c1917',
         background_color: '#ffffff',
         display: 'standalone',
+        display_override: ['standalone', 'minimal-ui'],
         orientation: 'any',
         start_url: '/',
         icons: [

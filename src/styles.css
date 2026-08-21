@@ -95,6 +95,13 @@ html, body, #root {
   -webkit-tap-highlight-color: transparent;
 }
 
+html { min-height: -webkit-fill-available; }
+body {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  overscroll-behavior-y: none;
+}
+
 .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; font-feature-settings: 'tnum' 1; }
 .tnum { font-variant-numeric: tabular-nums; }
 
@@ -159,6 +166,7 @@ h4, h5, h6 {
 
 .app-shell {
   min-height: 100%;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   padding-bottom: var(--safe-bottom);
@@ -301,9 +309,9 @@ h4, h5, h6 {
   display: flex;
   align-items: center;
   justify-content: center;
-  /* 40px min target: this gets tapped with gloves on */
-  width: 40px;
-  height: 32px;
+  /* iPadOS and gloved operators both benefit from a full 44px touch target. */
+  width: 44px;
+  height: 44px;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-sm);
@@ -418,7 +426,7 @@ h4, h5, h6 {
 main {
   max-width: var(--max-w);
   margin: 0 auto;
-  padding: 24px;
+  padding: 24px max(24px, var(--safe-right)) calc(24px + var(--safe-bottom)) max(24px, var(--safe-left));
   width: 100%;
 }
 
@@ -983,7 +991,7 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  padding: max(16px, var(--safe-top)) max(16px, var(--safe-right)) max(16px, var(--safe-bottom)) max(16px, var(--safe-left));
 }
 .modal {
   background: var(--surface);
@@ -993,7 +1001,8 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
   padding: 24px;
   max-width: 480px;
   width: 100%;
-  max-height: 90vh;
+  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px);
+  -webkit-overflow-scrolling: touch;
   overflow-y: auto;
 }
 .modal__title {
@@ -1069,14 +1078,26 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
 
 /* iPad-specific adjustments */
 @media (min-width: 768px) {
-  main { padding: 32px; }
+  main { padding: 32px max(32px, var(--safe-right)) calc(32px + var(--safe-bottom)) max(32px, var(--safe-left)); }
   .page-head__title { font-size: 48px; }
+}
+
+/* Keep the complete sync controls usable in iPad portrait and split view. */
+@media (min-width: 641px) and (max-width: 1024px) {
+  .topbar__inner { padding-left: max(16px, var(--safe-left)); padding-right: max(16px, var(--safe-right)); gap: 10px; }
+  .topbar__wordmark, .topbar__site-label { display: none; }
+  .topbar__nav a, .topbar__nav button { padding-inline: 8px; }
+  .topbar__right { gap: 8px; }
+}
+
+@media (pointer: coarse) {
+  .btn, .topbar__status, .lang-toggle__btn { min-height: 44px; }
 }
 
 /* Mobile adjustments */
 @media (max-width: 640px) {
   .topbar__nav { display: none; }
-  main { padding: 16px; }
+  main { padding: 16px max(16px, var(--safe-right)) calc(16px + var(--safe-bottom)) max(16px, var(--safe-left)); }
   .page-head { margin-bottom: 20px; }
   .page-head__title { font-size: 32px; }
 }
