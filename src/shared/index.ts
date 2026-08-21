@@ -65,7 +65,7 @@ export {
 } from './services/resolvePhotoUrls';
 
 // Hooks
-export { useInspection, emptyInspection } from './hooks/useInspection';
+export { useInspection, emptyInspection, recomputeTallies } from './hooks/useInspection';
 export { usePhotoUrl } from './hooks/usePhotoUrl';
 export { useInspectionMode, isInspectionLocked } from './hooks/useInspectionMode';
 export type { Action } from './hooks/useInspection';
@@ -77,7 +77,7 @@ export { transitionPallet } from './state/palletMachine';
 export type { PalletEvent } from './state/palletMachine';
 
 // Rules
-export { isBatchCodeValid } from './rules/batchCodeMatching';
+export { isBatchCodeValid, normalizeBatchCode } from './rules/batchCodeMatching';
 export { validatePhotoQuality } from './rules/photoQuality';
 export { isValidStopSticker } from './rules/stopStickerValidation';
 export { isInspectionComplete } from './rules/inspectionCompletion';

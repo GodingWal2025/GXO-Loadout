@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import type { Inspection } from '../shared';
+import { normalizeBatchCode, type Inspection } from '../shared';
 import type { InventoryItem } from '../shared/types/inventory';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { dbListInventoryItems } from '../shared/services/db';
@@ -54,7 +54,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   // the source of truth for descriptions; the picklist fills in any gaps.
   // Codes are matched case-insensitively (scanned codes are often mixed-case).
   const batchInfoMap = useMemo(() => {
-    const norm = (s: string) => s.trim().toUpperCase();
+    const norm = normalizeBatchCode;
     const map: Record<string, { sku: string; description: string }> = {};
     for (const li of inspection.picklist?.lineItems ?? []) {
       const code = norm(li.batchCode.value || '');
@@ -104,7 +104,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
       const delInfo = p.deliveryId ? deliveryMap[p.deliveryId] : undefined;
       for (const bs of p.batchSections) {
         const code = bs.batchCode.value || '';
-        const info = batchInfoMap[code.trim().toUpperCase()];
+        const info = batchInfoMap[normalizeBatchCode(code)];
         rows.push({
           palletNumber: p.palletNumber,
           palletType: p.palletType,
@@ -170,7 +170,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   const picklistBatchCodes = useMemo(() => {
     return new Set(
       (inspection.picklist?.lineItems ?? [])
-        .map((li) => (li.batchCode.value || '').trim().toUpperCase())
+        .map((li) => normalizeBatchCode(li.batchCode.value))
         .filter(Boolean)
     );
   }, [inspection.picklist?.lineItems]);
@@ -178,7 +178,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   const unlistedBatchesCount = useMemo(() => {
     let count = 0;
     for (const code of uniqueBatches) {
-      if (!picklistBatchCodes.has(code.trim().toUpperCase())) {
+      if (!picklistBatchCodes.has(normalizeBatchCode(code))) {
         count++;
       }
     }
@@ -321,7 +321,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                 </thead>
                 <tbody>
                   {filtered.map((r, i) => {
-                    const isUnlisted = Boolean(r.batchCode) && !picklistBatchCodes.has(r.batchCode.trim().toUpperCase());
+                    const isUnlisted = Boolean(r.batchCode) && !picklistBatchCodes.has(normalizeBatchCode(r.batchCode));
                     return (
                       <tr key={i}>
                         <td className="mono fw-500">#{r.palletNumber}</td>

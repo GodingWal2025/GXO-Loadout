@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
-import { PALLET_TYPES, expectedBags, ConfirmModal, UndoToast, isPackagingLine, picklistHasOcr } from '../shared';
+import { PALLET_TYPES, expectedBags, ConfirmModal, UndoToast, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
@@ -844,8 +844,9 @@ function DeliveryGroup({
                 else {
                   for (const bs of p.batchSections) {
                     if (bs.batchCode.value) {
+                      const batchCode = normalizeBatchCode(bs.batchCode.value);
                       const li = lineItems?.find(
-                        (item: any) => item.batchCode.value === bs.batchCode.value
+                        (item: any) => normalizeBatchCode(item.batchCode.value) === batchCode
                       );
                       if (li?.uom) {
                         uomCode = li.uom;

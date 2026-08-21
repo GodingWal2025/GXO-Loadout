@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Picklist, PalletInspection, HandoffEntry, InspectionType } from '../shared';
-import { expectedBags, isPackagingLine, picklistHasOcr } from '../shared';
+import { expectedBags, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
 export interface InspectorColorTheme {
@@ -243,7 +243,8 @@ export function RunningTallyHeader({
             const batchPallets = pallets.filter((p) =>
               p.batchSections.some(
                 (bs) =>
-                  bs.batchCode.value === li.batchCode.value && (bs.actualBagCount.value || 0) > 0
+                  normalizeBatchCode(bs.batchCode.value) === normalizeBatchCode(li.batchCode.value) &&
+                  (bs.actualBagCount.value || 0) > 0
               )
             );
 

@@ -1,4 +1,4 @@
-import { generateId, emptySuggestable, PICKLIST_UOM_OPTIONS, parsePackInfo, dbListInventoryItems } from '../shared';
+import { generateId, emptySuggestable, normalizeBatchCode, PICKLIST_UOM_OPTIONS, parsePackInfo, dbListInventoryItems } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection } from '../shared';
@@ -353,18 +353,18 @@ function PicklistLineItems({
   );
 
   const inventoryBatches = new Set(
-    inventory.map((item) => (item.batch || '').trim().toUpperCase()).filter(Boolean)
+    inventory.map((item) => normalizeBatchCode(item.batch)).filter(Boolean)
   );
 
   const unlistedScannedBatches = Array.from(
     new Set(
       pallets
         .flatMap((p) => p.batchSections)
-        .map((bs) => (bs.batchCode?.value || '').trim().toUpperCase())
+        .map((bs) => normalizeBatchCode(bs.batchCode?.value))
         .filter(
           (code): code is string =>
             Boolean(code) &&
-            !lineItems.some((li) => (li.batchCode?.value || '').trim().toUpperCase() === code)
+            !lineItems.some((li) => normalizeBatchCode(li.batchCode?.value) === code)
         )
     )
   );
@@ -414,7 +414,7 @@ function PicklistLineItems({
       ) : (
         <div className="delivery-list">
           {lineItems.map((li, index) => {
-            const batchCode = (li.batchCode.value || '').trim().toUpperCase();
+            const batchCode = normalizeBatchCode(li.batchCode.value);
             const notInInventory =
               Boolean(batchCode) &&
               inventoryBatches.size > 0 &&

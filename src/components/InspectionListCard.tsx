@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import type { Inspection } from '../shared';
+import { normalizeBatchCode } from '../shared';
 import { expectedBags, isPackagingLine, picklistHasOcr } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT, type TranslateFn } from '../shared/i18n/LanguageContext';
@@ -33,10 +34,10 @@ export function InspectionListCard({ inspection }: Props) {
 
   const hasUnlistedBatch = inspection.pallets.some((p) =>
     p.batchSections.some((bs) => {
-      const code = bs.batchCode?.value?.trim().toUpperCase();
+      const code = normalizeBatchCode(bs.batchCode?.value);
       if (!code) return false;
       return !inspection.picklist.lineItems.some(
-        (li) => (li.batchCode?.value || '').trim().toUpperCase() === code
+        (li) => normalizeBatchCode(li.batchCode?.value) === code
       );
     })
   );
