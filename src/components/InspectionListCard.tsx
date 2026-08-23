@@ -1,9 +1,8 @@
 import { Link } from 'react-router-dom';
 import type { Inspection } from '../shared';
-import { normalizeBatchCode } from '../shared';
-import { expectedBags, isPackagingLine, picklistHasOcr } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT, type TranslateFn } from '../shared/i18n/LanguageContext';
+import { buildInspectionListCardModel } from './inspectionListCardModel';
 
 interface Props {
   inspection: Inspection;
@@ -18,47 +17,8 @@ export function InspectionListCard({ inspection }: Props) {
     retag: t('listCard.typeRetag', 'Retag'),
     discard: t('listCard.typeDiscard', 'Discard'),
   };
-  // For outbound + OCR, packaging SKUs are excluded from completion counts.
-  const excludePackaging =
-    inspection.type === 'outbound' && picklistHasOcr(inspection.picklist);
-  const productLineItems = excludePackaging
-    ? inspection.picklist.lineItems.filter((li) => !isPackagingLine(li))
-    : inspection.picklist.lineItems;
-
-  const totalExpected = productLineItems.reduce(
-    (sum, li) => sum + expectedBags(li.uom, li.expectedQuantity.value, li.description.value),
-    0
-  );
-  const totalActual = productLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
-  const pct = totalExpected > 0 ? Math.round((totalActual / totalExpected) * 100) : 0;
-
-  const hasUnlistedBatch = inspection.pallets.some((p) =>
-    p.batchSections.some((bs) => {
-      const code = normalizeBatchCode(bs.batchCode?.value);
-      if (!code) return false;
-      return !inspection.picklist.lineItems.some(
-        (li) => normalizeBatchCode(li.batchCode?.value) === code
-      );
-    })
-  );
-
+  const card = buildInspectionListCardModel(inspection);
   const isInbound = inspection.type === 'inbound';
-  const inboundLines = inspection.inbound?.lineItems || [];
-  const inboundReceived = inboundLines.reduce(
-    (sum, li) => sum + (Number(li.qtyReceived?.value) || 0),
-    0
-  );
-  const inboundDamaged = inboundLines.reduce(
-    (sum, li) => sum + (Number(li.qtyDamaged?.value) || 0),
-    0
-  );
-
-  const loadNum =
-    inspection.inbound?.bolNumber.value ||
-    inspection.picklist.loadNumber.value ||
-    inspection.bol.loadNumber.value ||
-    inspection.returnsBol?.bolNumber.value ||
-    inspection.id.slice(0, 8);
   const startedBy = inspection.startedBy || t('listCard.unknownInspector', 'Unknown');
   const lastEdited = inspection.lastEditedAt ? timeAgo(inspection.lastEditedAt, t) : '';
 
@@ -78,15 +38,15 @@ export function InspectionListCard({ inspection }: Props) {
         <div>
           <div className="flex gap-8">
             <span className="pill pill--neutral">{typeLabels[inspection.type]}</span>
-            <div className="card__title mono">#{loadNum}</div>
-            {hasUnlistedBatch && (
+            <div className="card__title mono">#{card.loadNumber}</div>
+            {card.hasUnlistedBatch && (
               <span className="pill pill--warn" style={{ fontSize: 11 }}>
                 ⚠ {t('listCard.unlistedBatch', 'Unlisted batch')}
               </span>
             )}
-            {isInbound && inboundDamaged > 0 && (
+            {isInbound && card.inboundDamaged > 0 && (
               <span className="pill pill--danger" style={{ fontSize: 11 }}>
-                ⚑ {t('verifyInbound.damagedBadge', '{count} Damaged', { count: inboundDamaged })}
+                ⚑ {t('verifyInbound.damagedBadge', '{count} Damaged', { count: card.inboundDamaged })}
               </span>
             )}
           </div>
@@ -120,19 +80,19 @@ export function InspectionListCard({ inspection }: Props) {
         </div>
       </div>
 
-      {isInbound && inboundLines.length > 0 && (
+      {isInbound && card.inboundLines.length > 0 && (
         <>
           <div className="row-between mb-8 mt-8">
             <span className="small soft">
-              {inboundLines.length} {t('verifyInbound.summaryLines', 'Items Logged')} · {inboundReceived} {t('verifyInbound.summaryReceived', 'Total Received')}
+              {card.inboundLines.length} {t('verifyInbound.summaryLines', 'Items Logged')} · {card.inboundReceived} {t('verifyInbound.summaryReceived', 'Total Received')}
             </span>
           </div>
           <div className="flex small soft mt-8" style={{ gap: '14px', flexWrap: 'wrap' }}>
-            {inboundLines.slice(0, 4).map((li) => (
+            {card.inboundLines.slice(0, 4).map((li) => (
               <span key={li.id}>
-                <span className="mono">{li.batch.value || '—'}</span>{' '}
-                <strong style={{ color: (Number(li.qtyDamaged.value) || 0) > 0 ? 'var(--danger)' : 'var(--ink)' }}>
-                  {li.qtyReceived.value ?? 0} {li.uom}
+                <span className="mono">{li.batch || '—'}</span>{' '}
+                <strong style={{ color: li.qtyDamaged > 0 ? 'var(--danger)' : 'var(--ink)' }}>
+                  {li.qtyReceived} {li.uom}
                 </strong>
               </span>
             ))}
@@ -140,33 +100,33 @@ export function InspectionListCard({ inspection }: Props) {
         </>
       )}
 
-      {!isInbound && totalExpected > 0 && (
+      {!isInbound && card.totalExpected > 0 && (
         <>
           <div className="row-between mb-8 mt-8">
             <span className="small soft">
               {t('listCard.palletsBags', '{pallets} pallets · {actual} of {expected} bags', {
-                pallets: inspection.pallets.length,
-                actual: totalActual,
-                expected: totalExpected,
+                pallets: inspection.pallets?.length ?? 0,
+                actual: card.totalActual,
+                expected: card.totalExpected,
               })}
             </span>
             <span className="small fw-500" style={{ color: 'var(--accent)' }}>
-              {pct}%
+              {card.percentComplete}%
             </span>
           </div>
           <div className="progress progress--thin">
-            <div className="progress__bar" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+            <div className="progress__bar" style={{ width: `${Math.min(100, Math.max(0, card.percentComplete))}%` }} />
           </div>
         </>
       )}
 
-      {!isInbound && productLineItems.length > 0 && (
+      {!isInbound && card.productLines.length > 0 && (
         <div className="flex small soft mt-8" style={{ gap: '14px', flexWrap: 'wrap' }}>
-          {productLineItems.slice(0, 4).map((li) => (
+          {card.productLines.slice(0, 4).map((li) => (
             <span key={li.id}>
-              <span className="mono">{li.batchCode.value || '—'}</span>{' '}
+              <span className="mono">{li.batchCode || '—'}</span>{' '}
               <strong style={{ color: li.fulfilled ? 'var(--success)' : 'var(--ink)' }}>
-                {li.actualQuantity} / {expectedBags(li.uom, li.expectedQuantity.value, li.description.value)}
+                {li.actualQuantity} / {li.expectedQuantity}
               </strong>
             </span>
           ))}
