@@ -14,7 +14,14 @@ export default defineConfig({
       workbox: {
         cleanupOutdatedCaches: true,
         clientsClaim: true,
-        navigateFallbackDenylist: [/^\/api\//],
+        // These standalone routes must reach the network instead of being
+        // replaced by the React app shell. The bag-count console owns its own
+        // HTML, scripts, and IndexedDB-backed offline queue.
+        navigateFallbackDenylist: [
+          /^\/api\//,
+          /^\/bag-count-console\.html$/,
+          /^\/admin\/bag-count-console\/?$/,
+        ],
         // Excel import is a rarely used admin feature and is almost 1 MB by
         // itself. Load it on demand instead of slowing every PWA install.
         globIgnores: ['**/exceljs*.js'],
