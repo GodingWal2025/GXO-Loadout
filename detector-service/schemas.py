@@ -4,6 +4,8 @@ from pydantic import BaseModel, Field, field_validator
 
 
 NormalizedBox = tuple[float, float, float, float]
+NormalizedPoint = tuple[float, float]
+NormalizedQuad = tuple[NormalizedPoint, NormalizedPoint, NormalizedPoint, NormalizedPoint]
 
 
 def validate_xyxy(value: NormalizedBox) -> NormalizedBox:
@@ -63,5 +65,13 @@ class LocatePalletResult(BaseModel):
     multiplePalletsVisible: bool = False
     targetAmbiguous: bool = False
     targetSelectionReason: str | None = None
+    primaryFace: str | None = None
+    primaryFaceQuad: NormalizedQuad | None = None
+    secondaryFacesVisible: list[str] = Field(default_factory=list)
+    yawDegrees: float | None = None
+    pitchDegrees: float | None = None
+    faceVisibility: float | None = None
+    geometryConfidence: float | None = None
+    safeToRectify: bool = False
     reviewReason: str | None = None
     modelVersion: str

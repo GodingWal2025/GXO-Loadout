@@ -41,7 +41,7 @@ async def lifespan(_: FastAPI):
     try:
         pipeline = await asyncio.to_thread(PalletVisionPipeline)
         warm_image = Image.new("RGB", (512, 512), "white")
-        await asyncio.to_thread(pipeline.sam3.segment, warm_image, "bag flap", [])
+        await asyncio.to_thread(pipeline.warm_up_counter, warm_image)
         deadline = time.monotonic() + float(os.environ.get("COSMOS_WARMUP_TIMEOUT_SECONDS", "600"))
         while True:
             location = await pipeline.locate(warm_image)
@@ -129,20 +129,19 @@ async def analyze_faces(body: AnalyzeFacesRequest, authorization: Optional[str] 
         faces = []
         for (item, image), location in zip(images, locations):
             if location.ambiguous or not location.box:
-                result = {"success": False, "layers": None, "estimatedBags": None,
-                          "needsReview": True, "reviewReason": location.reason or "Ambiguous pallet",
-                          "isPalletFace": False, "palletBox": list(location.box) if location.box else None,
-                          "boxes": [], "masks": [], "displayPolygons": [], "maskCount": 0}
+                result = require_pipeline().unresolved_result(location)
             else:
-                instances = await asyncio.to_thread(require_pipeline().propose, image, location.box, [], "bag flap")
-                result = require_pipeline().reduce_instances(image, location.box, instances)
+                result = await asyncio.to_thread(require_pipeline().count_located, image, location)
             faces.append({"index": item.index, "slotKey": item.slotKey,
                           "bagFlaps": result.get("estimatedBags"), "layers": result.get("layers"),
                           "isPalletFace": result.get("isPalletFace", False), "needsReview": result.get("needsReview", False),
                           "reviewReason": result.get("reviewReason"), "flapBoxes": result.get("boxes", []),
                           "palletBox": result.get("palletBox"), "boxCount": result.get("maskCount", 0),
                           "masks": result.get("masks", []), "displayPolygons": result.get("displayPolygons", []),
-                          "countMatchesBoxes": True, "error": None})
+                          "countMatchesBoxes": True, "countingInput": result.get("countingInput"),
+                          "geometry": result.get("geometry"), "rectification": result.get("rectification"),
+                          "abComparison": result.get("abComparison"),
+                          "counterHeads": result.get("counterHeads"), "error": None})
     valid = [face for face in faces if not face["needsReview"] and face["layers"] is not None]
     layer_counts: dict[int, int] = {}
     for face in valid:
@@ -185,5 +184,13 @@ async def locate_pallet(body: LocatePalletRequest, authorization: Optional[str] 
             "targetPalletBox": list(location.box) if location.box else None,
             "confidence": location.confidence, "multiplePalletsVisible": location.multiple_visible,
             "targetAmbiguous": location.ambiguous, "targetSelectionReason": location.selection_reason,
+            "primaryFace": location.primary_face,
+            "primaryFaceQuad": ([list(point) for point in location.primary_face_quad]
+                                if location.primary_face_quad else None),
+            "secondaryFacesVisible": list(location.secondary_faces_visible),
+            "yawDegrees": location.yaw_degrees, "pitchDegrees": location.pitch_degrees,
+            "faceVisibility": location.visibility,
+            "geometryConfidence": location.geometry_confidence,
+            "safeToRectify": location.safe_to_rectify,
             "reviewReason": location.reason, "modelVersion": require_pipeline().cosmos.version,
             "telemetry": telemetry(started)}

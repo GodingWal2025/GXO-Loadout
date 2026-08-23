@@ -2,10 +2,13 @@
 
 This GPU service replaces the former detector with a two-stage pipeline:
 
-1. NVIDIA Cosmos Reason 2 returns one normalized `xyxy` box for the pallet that
-   overlaps the center capture guide. It may report ambiguity instead of guessing.
-2. SAM 3 crops that ROI, segments `bag flap` instances, rejects masks whose
-   centroid is outside the verified pallet, removes overlaps, and estimates rows.
+1. NVIDIA Cosmos Reason 2 returns the target pallet, primary visible face, face
+   quadrilateral, orientation, visibility, and geometry confidence.
+2. When the geometry gates pass, OpenCV rectifies only that face into a canonical
+   front-facing image. Adjacent visible faces are excluded from the counting input.
+3. SAM 3 segments `bag flap` instances on the canonical image. Its masks are
+   inverse-warped to source-image coordinates for the existing browser overlays.
+4. Unsafe or failed rectification automatically uses the former raw ROI crop path.
 
 The Azure Function sends all four face images in one `/analyze-faces` request.
 Cosmos localization runs concurrently; SAM 3 inference is serialized through one
@@ -39,6 +42,10 @@ Important environment values:
 | `COSMOS_URL` | OpenAI-compatible Cosmos chat-completions URL |
 | `COSMOS_MODEL` | Cosmos model identifier |
 | `COSMOS_MIN_CONFIDENCE` | Below this, localization requires review; provisional default `0.70` |
+| `COSMOS_MIN_GEOMETRY_CONFIDENCE` | Minimum geometry confidence for rectification; default `0.70` |
+| `PALLET_MIN_FACE_VISIBILITY` | Minimum visible fraction of the selected face; default `0.55` |
+| `PALLET_MAX_RECTIFY_SKEW` | Maximum normalized edge-length skew; default `0.70` |
+| `PALLET_RECTIFICATION_MODE` | `prefer` (default), `off` (raw control), or `shadow` (run and report both) |
 | `DETECTOR_SERVICE_KEY` | Required bearer secret outside explicit stub tests |
 | `MAX_QUEUE_DEPTH` | Maximum waiting/in-flight requests; default `4` |
 | `SAM3_STUB_MODE` | Contract tests only; never production |
@@ -48,10 +55,14 @@ Important environment values:
 
 - `GET /health` is an unauthenticated readiness probe and contains no secrets.
 - `POST /analyze-faces` accepts all captured face data URLs and returns the legacy
-  counting fields plus ROI, masks, display polygons, telemetry, and `needsReview`.
+  counting fields plus ROI, masks, display polygons, geometry, rectification,
+  A/B comparison telemetry, and `needsReview`.
 - `POST /propose-flaps` accepts an image, verified target ROI, optional positive
   prompt boxes, and returns SAM 3 proposals for the admin console.
 - `POST /locate-pallet` runs Cosmos alone for admin ROI verification.
+- Count responses expose a model-neutral `counterHeads` boundary (`densityCount`,
+  `bagCenters`, `countClass`, and confidence) reserved for the later DINOv3
+  specialist. SAM 3 leaves those specialist values empty while retaining masks.
 - `POST /analyze` retains the raw-image compatibility contract.
 
 All POST routes require `Authorization: Bearer <DETECTOR_SERVICE_KEY>`.

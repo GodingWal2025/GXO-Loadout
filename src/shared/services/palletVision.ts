@@ -38,6 +38,43 @@ const MAX_EDGE = 1024;
  */
 const MAX_UPLOAD_BYTES = 128 * 1024;
 
+export interface PalletGeometryMetadata {
+  primaryFace?: 'front' | 'left' | 'right' | null;
+  primaryFaceQuad?: number[][] | null;
+  secondaryFacesVisible?: string[];
+  yawDegrees?: number | null;
+  pitchDegrees?: number | null;
+  faceVisibility?: number | null;
+  geometryConfidence?: number | null;
+  safeToRectify: boolean;
+}
+
+export interface RectificationMetadata {
+  mode: 'off' | 'prefer' | 'shadow';
+  applied: boolean;
+  fallbackReason?: string | null;
+  canonicalSize?: [number, number] | null;
+  homography?: number[][] | null;
+}
+
+export interface CountAbComparison {
+  enabled: boolean;
+  executed: boolean;
+  rawCount?: number | null;
+  rectifiedCount?: number | null;
+  countDelta?: number | null;
+  rawLatencyMs?: number | null;
+  rectifiedLatencyMs?: number | null;
+}
+
+export interface SpecialistCounterHeads {
+  densityCount?: number | null;
+  bagCenters?: number[][];
+  countClass?: number | null;
+  consensusCount?: number | null;
+  confidence?: number | null;
+}
+
 export interface PalletCountResult {
   success: boolean;
   /** Number of stacked layers the model saw (drives layers × bags-per-layer). */
@@ -57,6 +94,11 @@ export interface PalletCountResult {
   boxes?: number[][];
   masks?: Array<{ size: [number, number]; counts: string }>;
   displayPolygons?: number[][][];
+  countingInput?: 'raw' | 'rectified' | null;
+  geometry?: PalletGeometryMetadata | null;
+  rectification?: RectificationMetadata | null;
+  abComparison?: CountAbComparison | null;
+  counterHeads?: SpecialistCounterHeads | null;
 }
 
 export interface LayerConsensus {
@@ -305,6 +347,11 @@ export interface AssessedFace {
   palletBox?: number[];
   masks?: Array<{ size: [number, number]; counts: string }>;
   displayPolygons?: number[][][];
+  countingInput?: 'raw' | 'rectified' | null;
+  geometry?: PalletGeometryMetadata | null;
+  rectification?: RectificationMetadata | null;
+  abComparison?: CountAbComparison | null;
+  counterHeads?: SpecialistCounterHeads | null;
   error?: string | null;
 }
 
