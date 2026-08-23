@@ -69,7 +69,7 @@ All POST routes require `Authorization: Bearer <DETECTOR_SERVICE_KEY>`.
 
 ## Dataset and training
 
-Use `/admin/bag-count-console` in the web app. Each real pallet is one group, and
+Use `/bag-count-console.html` in the web app. Each real pallet is one group, and
 the deterministic split is assigned at group level. Uploads are EXIF-normalized,
 deduplicated by SHA-256, and exported with a target pallet box and accepted COCO
 RLE masks. A reviewed zero-flap photo is a valid negative example.

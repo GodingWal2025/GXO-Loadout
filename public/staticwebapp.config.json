@@ -2,7 +2,8 @@
   "routes": [
     {
       "route": "/admin/bag-count-console",
-      "allowedRoles": ["admin", "vision-admin"]
+      "redirect": "/bag-count-console.html",
+      "statusCode": 302
     },
     {
       "route": "/api/datasets/*",

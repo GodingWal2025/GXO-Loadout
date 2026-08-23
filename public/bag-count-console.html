@@ -407,7 +407,7 @@
     <span class="scan-dot" aria-hidden="true"></span>
     <div class="wordmark">
       <b>Bag-Count Console</b>
-      <span class="tag">GXO · training data</span>
+      <span class="tag">GXO · canonical data &amp; vision</span>
     </div>
     <div class="grow"></div>
     <button class="iconbtn" id="themeBtn" title="Toggle theme">◐ Theme</button>
@@ -553,19 +553,16 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       <div class="stack">
         <div class="card">
           <div class="hd">
-            <span class="eyebrow">Multi-View Pallet Inference (Meta SAM 3 + NVIDIA Cosmos Reasoner)</span>
+            <span class="eyebrow">Rectified Pallet-Face Pipeline (Cosmos + OpenCV + SAM 3)</span>
           </div>
           <div class="bd stack">
-            <p class="lead" style="margin:0">Live test harness — sends 4 side photos to the GPU detector service running NVIDIA Cosmos Reasoner (structural reasoning) + Meta SAM 3 (bag-flap segmentation) with recipe reconciliation.</p>
+            <p class="lead" style="margin:0">Live test harness — Cosmos selects one primary pallet face, OpenCV rectifies it when safe, and SAM 3 counts only the canonical face. Unsafe geometry automatically uses the existing raw-image path.</p>
 
             <div class="row" style="align-items:flex-end;gap:10px">
-              <label style="flex:1;min-width:260px"><span class="fld">GPU Endpoint URL <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">Vast.ai or local</span></span>
-                <div style="display:flex;gap:8px;align-items:center">
-                  <input type="text" id="testEndpointUrl" class="mono" placeholder="https://your-vast-instance:8000" style="flex:1">
-                  <span class="status" id="testEndpointStatus" style="white-space:nowrap">⏳ not checked</span>
-                </div>
-              </label>
-              <button class="btn ghost" id="testPingBtn" style="height:37px">🏓 Ping</button>
+              <div style="flex:1;min-width:260px"><span class="fld">Managed vision service <span class="hint" style="text-transform:none;letter-spacing:0;font-weight:400">same protected endpoint used by Loadout</span></span>
+                <span class="status" id="testEndpointStatus" style="white-space:nowrap">⏳ checking</span>
+              </div>
+              <button class="btn ghost" id="testPingBtn" style="height:37px">↻ Check service</button>
             </div>
 
             <div class="row" style="align-items:flex-end">
@@ -591,22 +588,22 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <span class="mono" id="testLatency" style="font-size:11px;color:var(--faint)"></span>
           </div>
           <div class="bd stack">
-            <!-- 3 Complementary Evidence Sources Cards -->
+            <!-- Rectified counting pipeline evidence -->
             <div class="tiles" style="grid-template-columns:repeat(auto-fit, minmax(280px, 1fr))">
-              <div class="tile" style="border-left:4px solid var(--accent)">
-                <div class="eyebrow" style="color:var(--accent-ink)">1 · Meta SAM 3 Visible Evidence</div>
-                <div class="v mono" id="testSamFlaps">— <small>visible flaps</small></div>
-                <div class="l" id="testSamBreakdown">Per face: front: —, right: —, back: —, left: —</div>
-              </div>
               <div class="tile" style="border-left:4px solid #8e44ad">
-                <div class="eyebrow" style="color:#8e44ad">2 · NVIDIA Cosmos Structural</div>
-                <div class="v mono" id="testVlmTotal">— <small>est. bags</small></div>
-                <div class="l" id="testVlmBreakdown">Layers: — · Partial top: — · Regular: —</div>
+                <div class="eyebrow" style="color:#8e44ad">1 · Cosmos Pallet Geometry</div>
+                <div class="v mono" id="testVlmTotal">— <small>safe faces</small></div>
+                <div class="l" id="testVlmBreakdown">Primary face: — · Geometry confidence: —</div>
               </div>
               <div class="tile" style="border-left:4px solid var(--ok)">
-                <div class="eyebrow" style="color:var(--ok)">3 · Recipe Reconciliation</div>
-                <div class="v mono" id="testRecipeTotal">— <small>reconciled bags</small></div>
-                <div class="l" id="testRecipeBreakdown">Decision: — · Confidence: — · Discrepancy: —</div>
+                <div class="eyebrow" style="color:var(--ok)">2 · OpenCV Rectification</div>
+                <div class="v mono" id="testRecipeTotal">— <small>canonical faces</small></div>
+                <div class="l" id="testRecipeBreakdown">Fallback: — · A/B comparison: —</div>
+              </div>
+              <div class="tile" style="border-left:4px solid var(--accent)">
+                <div class="eyebrow" style="color:var(--accent-ink)">3 · Counter Evidence</div>
+                <div class="v mono" id="testSamFlaps">— <small>visible flaps</small></div>
+                <div class="l" id="testSamBreakdown">SAM 3 active · DINOv3 specialist heads reserved</div>
               </div>
             </div>
 
@@ -1570,38 +1567,25 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     renderTestSlots();
   });
 
-  /* ---- GPU endpoint persistence ---- */
-  const savedEndpoint = store.get("bcc-gpu-endpoint") || "";
-  if ($("#testEndpointUrl")) $("#testEndpointUrl").value = savedEndpoint;
-  $("#testEndpointUrl")?.addEventListener("input", e => store.set("bcc-gpu-endpoint", e.target.value.trim()));
-
-  function normalizeEndpointUrl(url) {
-    if (!url) return "";
-    let clean = url.trim().replace(/\/+$/, "");
-    if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-      clean = "http://" + clean;
-    }
-    return clean;
-  }
-
+  /* ---- managed vision service (credentials stay in the Azure Function) ---- */
   async function pingGpuEndpoint() {
-    const rawUrl = $("#testEndpointUrl")?.value.trim();
     const badge = $("#testEndpointStatus");
-    if (!rawUrl) { badge.textContent = "⏳ enter URL"; badge.style.color = "var(--faint)"; return; }
-    const url = normalizeEndpointUrl(rawUrl);
     badge.textContent = "⏳ pinging…"; badge.style.color = "var(--faint)";
     try {
-      const r = await fetch(url + "/api/v1/health", { mode: "cors" });
+      const r = await fetch("/api/health", { cache: "no-store" });
       const j = await r.json();
-      badge.textContent = "✓ " + (j.gpu_0 || "connected"); badge.style.color = "var(--ok)";
+      const ready = r.ok && j.vision?.status === "ready";
+      badge.textContent = ready
+        ? `✓ ready${j.vision?.model ? " · " + j.vision.model : ""}`
+        : `⚠ ${j.vision?.status || "unavailable"}`;
+      badge.style.color = ready ? "var(--ok)" : "var(--warn)";
     } catch (e) {
-      const isHttpsToHttp = location.protocol === "https:" && url.startsWith("http:");
-      badge.textContent = isHttpsToHttp ? "✕ blocked (mixed content)" : "✕ offline";
+      badge.textContent = "✕ offline";
       badge.style.color = "var(--crit)";
     }
   }
   $("#testPingBtn")?.addEventListener("click", pingGpuEndpoint);
-  if (savedEndpoint) setTimeout(pingGpuEndpoint, 600);
+  setTimeout(pingGpuEndpoint, 600);
 
   /* ---- helper: blob → base64 data string ---- */
   function blobToBase64(blob) {
@@ -1618,10 +1602,6 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
   }
 
   $("#testRunBtn")?.addEventListener("click", async () => {
-    const rawUrl = $("#testEndpointUrl")?.value.trim();
-    if (!rawUrl) { alert("Enter the GPU Endpoint URL first (e.g. http://38.58.188.42:33865)"); return; }
-    const gpuUrl = normalizeEndpointUrl(rawUrl);
-
     const sideRoles = ["FRONT", "RIGHT", "BACK", "LEFT"];
     const missing = sideRoles.filter(r => !testPhotos[r]);
     if (missing.length) { alert(`Missing required side photos: ${missing.join(", ")}`); return; }
@@ -1635,22 +1615,17 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
 
     const t0 = performance.now();
     try {
-      // Encode all 4 sides as base64
-      const images = {};
-      for (const role of sideRoles) {
-        images[role.toLowerCase()] = await blobToBase64(testPhotos[role].blob);
-      }
+      const images = sideRoles.map(role => ({
+        slotKey: role,
+        dataUrl: testPhotos[role].dataUrl
+      }));
 
-      // Send SKU (if known) — vision model must determine bags per layer and layer count autonomously
-      const sku = $("#testSkuInput")?.value.trim() || "STANDARD";
-      const recipe = { sku };
+      statusEl.innerHTML = `<span>⏳ Selecting and rectifying each primary pallet face, then running the counter…</span>`;
 
-      statusEl.innerHTML = `<span>⏳ Running vision inference on GPU 0 (NVIDIA Cosmos Reasoner) + GPU 1 (Meta SAM 3)…</span>`;
-
-      const resp = await fetch(gpuUrl + "/api/v1/analyze-pallet", {
+      const resp = await fetch("/api/analyze-pallet-faces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ images, recipe })
+        body: JSON.stringify({ images })
       });
 
       if (!resp.ok) {
@@ -1667,62 +1642,61 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     } catch (err) {
       statusEl.className = "banner err";
       const msg = err.message || String(err);
-      if (msg.includes("Failed to fetch") && location.protocol === "https:" && gpuUrl.startsWith("http:")) {
-        statusEl.innerHTML = `<b>Mixed Content / Connection Blocked:</b><br>` +
-          `Your browser is on an HTTPS page (<code>${location.origin}</code>) and blocked the request to plain HTTP (<code>${escapeHtml(gpuUrl)}</code>).<br><br>` +
-          `<b>Fix options:</b><br>` +
-          `1. In Chrome address bar, click the <b>Site Settings</b> (left of URL) → set <b>Insecure content</b> to <i>Allow</i>, then reload.<br>` +
-          `2. Or test locally via <code>http://localhost:5173/bag-count-console.html</code>.`;
-      } else {
-        statusEl.innerHTML = `<b>Inference error:</b> ${escapeHtml(msg)}`;
-      }
+      statusEl.innerHTML = `<b>Inference unavailable:</b> ${escapeHtml(msg)}<br><span class="hint">Uploaded training records and this device's offline queue are unchanged. Configure the managed detector service, then retry.</span>`;
     }
   });
 
   function renderTestResults(data, elapsed) {
-    // New v2 response shape: { success, analysis, vlm_raw, sam_flaps }
-    const analysis = data.analysis || {};
-    const vlm = data.vlm_raw || {};
-    const samFlaps = data.sam_flaps || {};
+    const faces = Array.isArray(data.faces) ? data.faces : [];
+    const safeFaces = faces.filter(f => f.geometry?.safeToRectify);
+    const rectifiedFaces = faces.filter(f => f.rectification?.applied);
+    const rawFaces = faces.filter(f => f.countingInput === "raw");
+    const abFaces = faces.filter(f => f.abComparison?.executed);
+    const validFaces = faces.filter(f => !f.needsReview && !f.error);
 
     // Decision badge
     const badge = $("#testDecisionBadge");
-    const decision = (analysis.decision || "ACCEPT").toUpperCase();
+    const decision = data.needsReview ? "REVIEW" : (data.success ? "READY" : "UNRESOLVED");
     badge.textContent = decision;
     badge.className = "status";
-    badge.style.background = decision === "ACCEPT" ? "var(--ok-soft)" : decision === "REJECT" ? "var(--crit-soft)" : "var(--warn-soft)";
-    badge.style.color = decision === "ACCEPT" ? "var(--ok)" : decision === "REJECT" ? "var(--crit)" : "var(--warn)";
+    badge.style.background = decision === "READY" ? "var(--ok-soft)" : decision === "UNRESOLVED" ? "var(--crit-soft)" : "var(--warn-soft)";
+    badge.style.color = decision === "READY" ? "var(--ok)" : decision === "UNRESOLVED" ? "var(--crit)" : "var(--warn)";
     badge.style.borderColor = "transparent";
 
     // Latency
     if ($("#testLatency")) $("#testLatency").textContent = elapsed ? `${elapsed}s` : "";
 
-    // SAM tile
-    const totalFlaps = Object.values(samFlaps).reduce((a, b) => a + (b||0), 0);
+    // Cosmos geometry tile
+    const confidences = safeFaces.map(f => f.geometry?.geometryConfidence).filter(v => typeof v === "number");
+    const avgGeometry = confidences.length ? confidences.reduce((a,b) => a+b, 0) / confidences.length : null;
+    const primaryFaces = [...new Set(faces.map(f => f.geometry?.primaryFace).filter(Boolean))];
+    $("#testVlmTotal").innerHTML = `${safeFaces.length}/${faces.length || 4} <small>safe faces</small>`;
+    $("#testVlmBreakdown").textContent = `Primary: ${primaryFaces.join(", ") || "—"} · Avg geometry: ${avgGeometry == null ? "—" : Math.round(avgGeometry * 100) + "%"} · ${validFaces.length} resolved`;
+
+    // OpenCV rectification and shadow-mode A/B tile
+    const fallbackReasons = [...new Set(rawFaces.map(f => f.rectification?.fallbackReason).filter(Boolean))];
+    const deltas = abFaces.map(f => f.abComparison?.countDelta).filter(v => typeof v === "number");
+    $("#testRecipeTotal").innerHTML = `${rectifiedFaces.length}/${faces.length || 4} <small>canonical faces</small>`;
+    $("#testRecipeBreakdown").textContent = `Raw fallback: ${rawFaces.length}${fallbackReasons.length ? " (" + fallbackReasons.join(", ") + ")" : ""} · A/B: ${abFaces.length ? deltas.map(v => (v > 0 ? "+" : "") + v).join(", ") : "not executed"}`;
+
+    // Active counter and future specialist boundary
+    const totalFlaps = typeof data.visibleBagTotalFromBoxes === "number"
+      ? data.visibleBagTotalFromBoxes
+      : faces.reduce((sum, f) => sum + (Number(f.boxCount) || Number(f.bagFlaps) || 0), 0);
     $("#testSamFlaps").innerHTML = `${totalFlaps} <small>visible flaps</small>`;
-    $("#testSamBreakdown").textContent = `Front: ${samFlaps.front ?? "—"}, Right: ${samFlaps.right ?? "—"}, Back: ${samFlaps.back ?? "—"}, Left: ${samFlaps.left ?? "—"}`;
-
-    // VLM tile
-    const vlmTotal = vlm.structuralTotalEstimate ?? analysis.computed_total ?? "—";
-    $("#testVlmTotal").innerHTML = `${vlmTotal} <small>est. bags</small>`;
-    const vlmFaces = vlm.layerCountByFace || analysis.face_layer_breakdown || {};
-    $("#testVlmBreakdown").textContent = `Consensus: ${vlm.consensusLayers ?? analysis.consensus_layers ?? "—"} layers · Partial: ${vlm.partialTopCountEstimate ?? analysis.partial_top_count ?? 0} · Irregular: ${(vlm.irregularStack || analysis.irregular_stack) ? "YES" : "No"}`;
-
-    // Reconciliation tile
-    $("#testRecipeTotal").innerHTML = `${analysis.computed_total ?? "—"} <small>reconciled bags</small>`;
-    $("#testRecipeBreakdown").textContent = `Decision: ${decision} · Confidence: ${analysis.confidence ? (analysis.confidence * 100).toFixed(0) + "%" : "—"} · Discrepancy: ${analysis.discrepancy ?? "—"}`;
+    const specialistActive = faces.some(f => {
+      const h = f.counterHeads || {};
+      return h.densityCount != null || (h.bagCenters || []).length || h.countClass != null;
+    });
+    $("#testSamBreakdown").textContent = faces.map(f => `${f.slotKey || "face"}: ${f.boxCount ?? f.bagFlaps ?? "—"} (${f.countingInput || "unresolved"})`).join(" · ") + ` · Specialist heads: ${specialistActive ? "active" : "reserved for DINOv3"}`;
 
     // Explanation banner
     const expBanner = $("#testExplanationBanner");
-    const codes = analysis.reason_codes || [];
-    if (codes.length) {
-      expBanner.style.display = "block";
-      const decClass = decision === "ACCEPT" ? "ok" : decision === "REJECT" ? "err" : "";
-      expBanner.className = "banner " + decClass;
-      expBanner.innerHTML = `<b>${decision}:</b> ${analysis.computed_total} computed vs ${analysis.expected_total} expected<div style="margin-top:4px" class="chips">${codes.map(c => chip(c, decision === "ACCEPT" ? "ok" : "warn")).join(" ")}</div>`;
-    } else {
-      expBanner.style.display = "none";
-    }
+    expBanner.style.display = "block";
+    expBanner.className = `banner ${decision === "READY" ? "ok" : ""}`;
+    expBanner.innerHTML = decision === "READY"
+      ? `<b>Rectified pipeline completed.</b> ${rectifiedFaces.length} face(s) used canonical images; ${rawFaces.length} used the safe raw fallback.`
+      : `<b>Human review required.</b> ${escapeHtml(data.reviewReason || "One or more pallet faces were unresolved.")}`;
 
     // Face grid
     const grid = $("#testFaceGrid");
@@ -1730,9 +1704,11 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     ["FRONT", "RIGHT", "BACK", "LEFT"].forEach(role => {
       const p = testPhotos[role];
       if (!p) return;
-      const faceLower = role.toLowerCase();
-      const layers = vlmFaces[faceLower] ?? analysis.consensus_layers ?? "—";
-      const flaps = samFlaps[faceLower] ?? "—";
+      const face = faces.find(f => String(f.slotKey || "").toUpperCase() === role) || {};
+      const layers = face.layers ?? "—";
+      const flaps = face.boxCount ?? face.bagFlaps ?? "—";
+      const input = face.countingInput === "rectified" ? "canonical" : face.countingInput === "raw" ? "raw fallback" : "review";
+      const geometry = face.geometry || {};
       const card = document.createElement("div");
       card.className = "face";
       card.innerHTML = `
@@ -1740,6 +1716,8 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
         <div class="meta">
           <div class="kv"><span>${roleLabel(role)}</span><span class="n">${layers}<small> layers</small></span></div>
           <div class="kv"><span class="hint">SAM flaps</span><span class="mono" style="font-size:13px">${flaps}</span></div>
+          <div class="kv"><span class="hint">Counting input</span><span class="mono" style="font-size:11px">${input}</span></div>
+          <div class="kv"><span class="hint">Geometry</span><span class="mono" style="font-size:11px">${geometry.geometryConfidence == null ? "—" : Math.round(geometry.geometryConfidence * 100) + "%"}</span></div>
         </div>`;
       grid.appendChild(card);
     });
