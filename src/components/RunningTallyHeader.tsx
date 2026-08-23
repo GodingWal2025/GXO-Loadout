@@ -136,6 +136,9 @@ export function RunningTallyHeader({
   const allFulfilled =
     activeLineItems.length > 0 && activeLineItems.every((li) => li.fulfilled);
   const completedBatches = activeLineItems.filter((li) => li.fulfilled).length;
+  const overageCount = activeLineItems.filter(
+    (li) => bagsExpected(li) > 0 && li.actualQuantity > bagsExpected(li)
+  ).length;
   const expanded = expandedOverride ?? activeLineItems.length <= 6;
   const totalPct = totalExpected ? Math.min(100, (totalActual / totalExpected) * 100) : 0;
   const toggleLabel = expanded
@@ -197,11 +200,18 @@ export function RunningTallyHeader({
         </div>
 
         <div className="tally__summary">
-          <div className="tally__summary-label">
-            {t('tally.batchesComplete', '{complete} of {total} batches complete', {
-              complete: completedBatches,
-              total: activeLineItems.length,
-            })}
+          <div className="tally__summary-labels">
+            <div className="tally__summary-label">
+              {t('tally.batchesComplete', '{complete} of {total} batches complete', {
+                complete: completedBatches,
+                total: activeLineItems.length,
+              })}
+            </div>
+            {overageCount > 0 && (
+              <span className="pill pill--danger tally__issue-flag">
+                ⚑ {t('tally.orderFlagged', 'Order flagged — quantity issue')}
+              </span>
+            )}
           </div>
           <div className="tally__summary-track" aria-hidden="true">
             <div style={{ width: `${totalPct}%` }} />

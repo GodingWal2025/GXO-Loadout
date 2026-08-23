@@ -5,6 +5,7 @@ import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Inspection } from '../types/inspection';
 import { emptySuggestable } from '../types/inspection';
 import type { InventoryItem } from '../types/inventory';
+import { countInspectionFlags } from '../rules/inspectionFlags';
 
 interface InspectionDB extends DBSchema {
   inspections: {
@@ -119,9 +120,8 @@ function migrateInspection(inspection: Inspection | undefined): Inspection | und
     inspection = { ...inspection, bol: { ...inspection.bol, lineItems: [] } };
   }
 
-  if (!inspection.picklist?.lineItems?.length) return inspection;
   let changed = false;
-  const lineItems = inspection.picklist.lineItems.map((line) => {
+  const lineItems = (inspection.picklist?.lineItems || []).map((line) => {
     if (line.sku !== undefined && line.description !== undefined) return line;
     changed = true;
     const legacy = line.productName;
@@ -133,9 +133,13 @@ function migrateInspection(inspection: Inspection | undefined): Inspection | und
     };
   });
 
-  return changed
+  const migrated = changed
     ? { ...inspection, picklist: { ...inspection.picklist, lineItems } }
     : inspection;
+  const flaggedItemsCount = countInspectionFlags(migrated);
+  return migrated.flaggedItemsCount === flaggedItemsCount
+    ? migrated
+    : { ...migrated, flaggedItemsCount };
 }
 
 export async function dbGetInspection(id: string): Promise<Inspection | undefined> {
@@ -145,13 +149,16 @@ export async function dbGetInspection(id: string): Promise<Inspection | undefine
 
 export async function dbListAllInspections(): Promise<Inspection[]> {
   const db = await getDB();
-  return (await db.getAll('inspections')).filter((inspection) => !inspection.deleted);
+  return (await db.getAll('inspections'))
+    .map((inspection) => migrateInspection(inspection) as Inspection)
+    .filter((inspection) => !inspection.deleted);
 }
 
 export async function dbListInspectionsForSite(siteId: string): Promise<Inspection[]> {
   const db = await getDB();
   const inspections = await db.getAllFromIndex('inspections', 'by-site', siteId);
   return inspections
+    .map((inspection) => migrateInspection(inspection) as Inspection)
     .filter((inspection) => !inspection.archived && !inspection.deleted)
     .sort((a, b) => (b.lastEditedAt || '').localeCompare(a.lastEditedAt || ''));
 }

@@ -14,6 +14,7 @@ import {
   useCameraCapture,
   emptySuggestable,
   SuggestableField,
+  AlphanumericInput,
   StepBackLink,
   ImageQualityModal,
   PhotoLightbox,
@@ -567,13 +568,12 @@ function VerifyInboundInner({
                   <div className="field-row" style={{ marginBottom: 12 }}>
                     <div className="field" style={{ flex: 1.1 }}>
                       <div className="field__label">{t('verifyInbound.colBatch', 'Batch')} *</div>
-                      <input
-                        type="text"
+                      <AlphanumericInput
                         className="mono"
                         placeholder="e.g. H21YA13JX"
                         value={li.batch.value || ''}
-                        onChange={(e) => handleBatchChange(index, e.target.value)}
-                        style={{ textTransform: 'uppercase' }}
+                        onValueChange={(value) => handleBatchChange(index, value)}
+                        aria-label={t('verifyInbound.colBatch', 'Batch')}
                       />
                     </div>
 

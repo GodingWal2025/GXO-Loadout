@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { Suggestable } from '../types/inspection';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { useT } from '../i18n/LanguageContext';
+import { AlphanumericInput } from './AlphanumericInput';
 
 interface Props<T extends string | number> {
   label: string;
@@ -99,15 +100,24 @@ export function SuggestableField<T extends string | number>({
         )}
       </div>
       <div style={{ display: 'flex', gap: '8px' }}>
-        <input
-          type={type}
-          value={field.value === null ? '' : String(field.value)}
-          onChange={(e) => handleChange(e.target.value)}
-          placeholder={placeholder}
-          className={mono ? 'mono' : ''}
-          autoCapitalize={uppercase ? 'characters' : undefined}
-          style={{ flex: 1, ...(uppercase ? { textTransform: 'uppercase' as const } : {}) }}
-        />
+        {uppercase && type === 'text' ? (
+          <AlphanumericInput
+            value={field.value === null ? '' : String(field.value)}
+            onValueChange={handleChange}
+            placeholder={placeholder}
+            className={mono ? 'mono' : ''}
+            aria-label={label}
+          />
+        ) : (
+          <input
+            type={type}
+            value={field.value === null ? '' : String(field.value)}
+            onChange={(e) => handleChange(e.target.value)}
+            placeholder={placeholder}
+            className={mono ? 'mono' : ''}
+            style={{ flex: 1 }}
+          />
+        )}
         {!hideCamera && (
           <button 
             className="btn btn--outline" 

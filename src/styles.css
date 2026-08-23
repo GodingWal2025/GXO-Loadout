@@ -2274,4 +2274,56 @@ kbd {
   border-radius: var(--radius);
 }
 
+/* Batch-code entry: keep digits available while the native letter keyboard is open. */
+.alphanumeric-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.tally__summary-labels {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tally__issue-flag {
+  flex: none;
+  font-size: 10px;
+}
+
+.alphanumeric-input > input {
+  width: 100%;
+}
+
+.alphanumeric-input__digits {
+  display: none;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.alphanumeric-input__digit {
+  min-width: 0;
+  min-height: 36px;
+  padding: 4px 0;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.alphanumeric-input__digit:active {
+  background: var(--accent);
+  color: white;
+}
+
+@media (max-width: 1024px), (pointer: coarse) {
+  .alphanumeric-input__digits {
+    display: grid;
+  }
+}
+
 
