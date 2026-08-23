@@ -134,6 +134,7 @@ export const pallet: Record<string, string> = {
   'tally.barNeeded': '{count} requeridas',
   'tally.barMore': '{count} más',
   'tally.batchesComplete': '{complete} de {total} lotes completos',
+  'tally.orderFlagged': 'Orden marcada — problema de cantidad',
   'tally.showBatches': 'Mostrar {count} lotes',
   'tally.hideBatches': 'Ocultar detalles de lotes',
 

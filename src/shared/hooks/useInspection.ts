@@ -21,6 +21,7 @@ import type {
 import { emptySuggestable, getPhotoRotation, isPackagingLine, picklistHasOcr } from '../types/inspection';
 import { expectedBags } from '../rules/uomRules';
 import { normalizeBatchCode } from '../rules/batchCodeMatching';
+import { countInspectionFlags } from '../rules/inspectionFlags';
 import { dbSaveInspection } from '../services/db';
 
 export function emptyInspection(siteId: string, type: InspectionType = 'outbound'): Inspection {
@@ -246,30 +247,8 @@ export function recomputeTallies(state: Inspection): Inspection {
   return { ...state, picklist: { ...state.picklist, lineItems }, pallets };
 }
 
-function recomputeFlags(state: Inspection): Inspection {
-  let count = state.qualityFlag ? 1 : 0;
-  for (const pallet of state.pallets) {
-    if (pallet.qualityFlag) count++;
-    for (const photo of pallet.photos) {
-      if (photo.qualityFlag) count++;
-    }
-  }
-  for (const photo of state.staging.overviewPhotos) {
-    if (photo.qualityFlag) count++;
-  }
-  for (const photo of state.staging.coverSheetPhotos) {
-    if (photo.qualityFlag) count++;
-  }
-  for (const photo of state.staging.finalLanePhotos || []) {
-    if (photo.qualityFlag) count++;
-  }
-  for (const photo of state.staging.palletsPackagingPhotos || []) {
-    if (photo.qualityFlag) count++;
-  }
-  for (const photo of state.staging.seedpaksPackagingPhotos || []) {
-    if (photo.qualityFlag) count++;
-  }
-  return { ...state, flaggedItemsCount: count };
+export function recomputeFlags(state: Inspection): Inspection {
+  return { ...state, flaggedItemsCount: countInspectionFlags(state) };
 }
 
 function reducer(state: Inspection, action: Action): Inspection {
@@ -277,7 +256,7 @@ function reducer(state: Inspection, action: Action): Inspection {
 
   switch (action.type) {
     case 'LOAD':
-      return action.inspection;
+      return recomputeFlags(recomputeTallies(action.inspection));
 
     case 'SET_STARTED_BY':
       next = {
@@ -745,7 +724,7 @@ function reducer(state: Inspection, action: Action): Inspection {
       break;
 
     case 'MARK_COMPLETE': {
-      const hasFlags = state.flaggedItemsCount > 0;
+      const hasFlags = countInspectionFlags(state) > 0;
       next = {
         ...state,
         status: hasFlags ? 'FLAGGED' : transitionInspection(state.status, 'COMPLETE'),
@@ -768,7 +747,11 @@ function reducer(state: Inspection, action: Action): Inspection {
 }
 
 export function useInspection(initial: Inspection) {
-  const [inspection, dispatch] = useReducer(reducer, initial);
+  const [inspection, dispatch] = useReducer(
+    reducer,
+    initial,
+    (loaded) => recomputeFlags(recomputeTallies(loaded))
+  );
   // Mounting a screen is a read, not an edit. Saving the initial snapshot here
   // used to give stale iPad data a fresh timestamp and overwrite newer work
   // from another device.

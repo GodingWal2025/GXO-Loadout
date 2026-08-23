@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Inspection, PicklistLineItemEntry } from '../shared';
-import { generateId, expectedBags } from '../shared';
+import { AlphanumericInput, generateId, expectedBags } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
@@ -206,11 +206,11 @@ export function AdjustOrderModal({ inspection, onClose, onAdjustLine, onAddLine 
                     <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
                       <div className="field">
                         <label className="field__label">{t('adjust.batchCode', 'Batch Code')}</label>
-                        <input
-                          type="text"
+                        <AlphanumericInput
                           className="mono"
                           value={st.batchCode}
-                          onChange={(e) => handleLineChange(i, 'batchCode', e.target.value)}
+                          onValueChange={(value) => handleLineChange(i, 'batchCode', value)}
+                          aria-label={t('adjust.batchCode', 'Batch Code')}
                         />
                       </div>
 
@@ -244,12 +244,12 @@ export function AdjustOrderModal({ inspection, onClose, onAdjustLine, onAddLine 
               <div className="field-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
                 <div className="field">
                   <label className="field__label">{t('adjust.batchCode', 'Batch Code')} *</label>
-                  <input
-                    type="text"
+                  <AlphanumericInput
                     className="mono"
                     placeholder="e.g. H22XYZ456"
                     value={newBatchCode}
-                    onChange={(e) => setNewBatchCode(e.target.value)}
+                    onValueChange={setNewBatchCode}
+                    aria-label={t('adjust.batchCode', 'Batch Code')}
                   />
                 </div>
                 <div className="field">

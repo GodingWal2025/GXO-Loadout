@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import type { Inspection } from '../shared';
+import { countInspectionFlags, type Inspection } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT, type TranslateFn } from '../shared/i18n/LanguageContext';
 import { buildInspectionListCardModel } from './inspectionListCardModel';
@@ -18,6 +18,7 @@ export function InspectionListCard({ inspection }: Props) {
     discard: t('listCard.typeDiscard', 'Discard'),
   };
   const card = buildInspectionListCardModel(inspection);
+  const flaggedItemsCount = countInspectionFlags(inspection);
   const isInbound = inspection.type === 'inbound';
   const startedBy = inspection.startedBy || t('listCard.unknownInspector', 'Unknown');
   const lastEdited = inspection.lastEditedAt ? timeAgo(inspection.lastEditedAt, t) : '';
@@ -68,9 +69,9 @@ export function InspectionListCard({ inspection }: Props) {
               ⤓ PDF
             </button>
           )}
-          {inspection.flaggedItemsCount > 0 ? (
+          {flaggedItemsCount > 0 ? (
             <span className="pill pill--danger">
-              ⚑ {t('listCard.flagged', '{count} flagged', { count: inspection.flaggedItemsCount })}
+              ⚑ {t('listCard.flagged', '{count} flagged', { count: flaggedItemsCount })}
             </span>
           ) : inspection.status === 'COMPLETED' ? (
             <span className="pill pill--success">✓ {t('listCard.completed', 'Completed')}</span>

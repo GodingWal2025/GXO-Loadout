@@ -108,6 +108,8 @@ export { SlotPhotoCapture, MultiPhotoCapture } from './camera/PhotoCapture';
 // UI Components
 export { InspectorPicker } from './components/InspectorPicker';
 export { SuggestableField } from './components/SuggestableField';
+export { AlphanumericInput } from './components/AlphanumericInput';
+export { countInspectionFlags, countQuantityOverages } from './rules/inspectionFlags';
 export { QualityFlagButton } from './components/QualityFlagButton';
 export { ImageQualityModal } from './components/ImageQualityModal';
 export { PhotoLightbox } from './components/PhotoLightbox';

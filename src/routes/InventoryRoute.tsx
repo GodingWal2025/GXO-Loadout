@@ -6,7 +6,7 @@ import {
   dbUpdateInventoryItem
 } from '../shared/services/db';
 import type { InventoryItem } from '../shared/types/inventory';
-import { parsePackInfo } from '../shared';
+import { AlphanumericInput, parsePackInfo } from '../shared';
 
 export function InventoryRoute() {
   const [items, setItems] = useState<InventoryItem[]>([]);
@@ -134,11 +134,12 @@ export function InventoryRoute() {
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>Batch</span>
-                <input
+                <AlphanumericInput
                   className="input"
                   placeholder="Batch (LOTATR3)"
                   value={editItem.batch}
-                  onChange={(e) => setEditItem({ ...editItem, batch: e.target.value })}
+                  onValueChange={(value) => setEditItem({ ...editItem, batch: value })}
+                  aria-label="Batch"
                 />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
