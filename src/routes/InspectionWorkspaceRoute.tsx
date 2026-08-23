@@ -33,12 +33,11 @@ export function InspectionWorkspaceRoute() {
     if (!id) return;
     dbGetInspection(id).then((i) => {
       if (!i) navigate('/');
+      else if (i.status === 'COMPLETED' || i.status === 'FLAGGED') {
+        navigate(`/inspection/${id}/review`, { replace: true });
+      }
       else if (i.type === 'inbound') {
-        if (i.status === 'COMPLETED' || i.status === 'FLAGGED') {
-          navigate(`/inspection/${id}/review`);
-        } else {
-          navigate(`/inspection/${id}/verify-inbound`);
-        }
+        navigate(`/inspection/${id}/verify-inbound`, { replace: true });
       } else setLoaded(i);
     });
   }, [id, navigate]);
