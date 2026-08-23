@@ -23,11 +23,12 @@ export function InspectionListCard({ inspection }: Props) {
   const startedBy = inspection.startedBy || t('listCard.unknownInspector', 'Unknown');
   const lastEdited = inspection.lastEditedAt ? timeAgo(inspection.lastEditedAt, t) : '';
 
-  const linkTarget = isInbound
-    ? inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED'
-      ? `/inspection/${inspection.id}/review`
-      : `/inspection/${inspection.id}/verify-inbound`
-    : `/inspection/${inspection.id}`;
+  const isFinished = inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED';
+  const linkTarget = isFinished
+    ? `/inspection/${inspection.id}/review`
+    : isInbound
+      ? `/inspection/${inspection.id}/verify-inbound`
+      : `/inspection/${inspection.id}`;
 
   return (
     <Link
