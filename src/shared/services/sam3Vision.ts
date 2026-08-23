@@ -21,6 +21,15 @@ export interface LocatePalletResponse {
   confidence?: number | null;
   multiplePalletsVisible?: boolean;
   targetAmbiguous?: boolean;
+  targetSelectionReason?: string | null;
+  primaryFace?: 'front' | 'left' | 'right' | null;
+  primaryFaceQuad?: [number, number][] | null;
+  secondaryFacesVisible?: string[];
+  yawDegrees?: number | null;
+  pitchDegrees?: number | null;
+  faceVisibility?: number | null;
+  geometryConfidence?: number | null;
+  safeToRectify?: boolean;
   reviewReason?: string | null;
   modelVersion?: string;
 }
