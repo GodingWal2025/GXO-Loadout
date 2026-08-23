@@ -141,12 +141,15 @@ client still does `layers × bags-per-layer` for the real number and the verifie
 confirms it. Train a single `bag_flap` class first; keep damage checks in the human
 inspection workflow rather than weakening the counting dataset with extra classes.
 
-Admins use `/admin/bag-count-console` to keep each pallet's photos in one group,
-verify the Cosmos pallet ROI, accept SAM 3 masks, and publish a versioned dataset.
-The **Train SAM 3 bag-flap model** action rejects split leakage and missing masks,
-fine-tunes on a GPU runner, and publishes the checkpoint and evaluation report.
-The existing `/bag-count-console.html` Collect/Review/Label workflow remains
-available for floor collection. Production counting stays fail-safe and manual
+`/bag-count-console.html` is the single canonical console for floor collection,
+review, labeling, and rectified-pipeline testing. The former
+`/admin/bag-count-console` URL redirects there so existing bookmarks do not open
+a second local dataset. Its Azure training records and offline IndexedDB queue
+are left in place; releases must never clear or rename `bcc-training`.
+
+The Test tab shows Cosmos geometry, OpenCV rectification/fallback decisions,
+SAM 3 results, shadow-mode raw-versus-rectified telemetry, and the reserved
+DINOv3 counter-head boundary. Production counting stays fail-safe and manual
 whenever `DETECTOR_SERVICE_URL` is unset or the GPU service reports degraded.
 
 ### Client-side image prep

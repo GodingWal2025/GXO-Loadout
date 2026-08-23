@@ -4,8 +4,9 @@ Floor collectors can continue using the Collect/Review/Label workflow at
 `/bag-count-console.html`. `sync_training_data.py` downloads those source photos
 and ground truth into `raw/`; see [`raw/README.md`](raw/README.md).
 
-The secured React console at `/admin/bag-count-console` exports canonical upright
-images, `manifest.json`, and `annotations/master.coco.json`. Run:
+The canonical `/bag-count-console.html` workflow owns the collected Azure records
+and device queue. The retired `/admin/bag-count-console` URL redirects there so
+operators do not create a second browser-local dataset. Run:
 
 ```bash
 python prepare_dataset.py --source ./dataset-export --output ./dataset
