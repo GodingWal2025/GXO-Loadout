@@ -9,6 +9,7 @@ import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
 import { AdjustOrderModal } from '../components/AdjustOrderModal';
 import { useT } from '../shared/i18n/LanguageContext';
+import { getInspectionWorkspaceRedirect } from './inspectionWorkspaceNavigation';
 
 // Pallet types are persisted data, so the stored value stays English. This hook
 // translates them only where they are displayed.
@@ -33,12 +34,11 @@ export function InspectionWorkspaceRoute() {
     if (!id) return;
     dbGetInspection(id).then((i) => {
       if (!i) navigate('/');
-      else if (i.status === 'COMPLETED' || i.status === 'FLAGGED') {
-        navigate(`/inspection/${id}/review`, { replace: true });
+      else {
+        const redirect = getInspectionWorkspaceRedirect(i);
+        if (redirect) navigate(redirect, { replace: true });
+        else setLoaded(i);
       }
-      else if (i.type === 'inbound') {
-        navigate(`/inspection/${id}/verify-inbound`, { replace: true });
-      } else setLoaded(i);
     });
   }, [id, navigate]);
 
