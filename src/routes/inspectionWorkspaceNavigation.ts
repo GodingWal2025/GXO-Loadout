@@ -12,3 +12,16 @@ export function getInspectionWorkspaceRedirect(
   }
   return null;
 }
+
+/** Previous workflow screen shown by the load workspace's Back control. */
+export function getPreviousInspectionStep(
+  inspection: Pick<Inspection, 'id' | 'type'>
+): string {
+  if (inspection.type === 'returns') {
+    return `/inspection/${inspection.id}/verify-returns`;
+  }
+  if (inspection.type === 'inbound') {
+    return `/inspection/${inspection.id}/verify-inbound`;
+  }
+  return `/inspection/${inspection.id}/verify`;
+}
