@@ -164,24 +164,32 @@ export type Action =
 
 // Exported for tests: the batch-code allocation below is subtle enough to pin down.
 export function recomputeTallies(state: Inspection): Inspection {
-  const tally: Record<string, number> = {};
-  for (const pallet of state.pallets) {
-    for (const section of pallet.batchSections) {
+  type ScannedSection = {
+    key: string;
+    count: number;
+  };
+
+  const sectionsByBatch: Record<string, ScannedSection[]> = {};
+  for (let palletIndex = 0; palletIndex < state.pallets.length; palletIndex += 1) {
+    const pallet = state.pallets[palletIndex];
+    for (let sectionIndex = 0; sectionIndex < pallet.batchSections.length; sectionIndex += 1) {
+      const section = pallet.batchSections[sectionIndex];
       const code = normalizeBatchCode(section.batchCode.value);
       const count = section.actualBagCount.value;
       if (code && typeof count === 'number') {
-        tally[code] = (tally[code] || 0) + count;
+        (sectionsByBatch[code] ||= []).push({
+          key: `${palletIndex}:${sectionIndex}`,
+          count,
+        });
       }
     }
   }
 
   // A batch code routinely spans MORE THAN ONE picklist line: the picklist can
   // split one SKU across order lines, and explodePicklistLines() turns every
-  // SP/MB line into one line per unit, all carrying the same code. Those lines
-  // draw from a SINGLE pool of scanned bags, so the pool is allocated across
-  // them in order. Crediting each line the full pool instead would mark unfilled
-  // lines "Complete" and count the same bags once per line in the header total.
-  const remaining: Record<string, number> = { ...tally };
+  // SP/MB line into one line per unit, all carrying the same code. Preserve the
+  // individual scanned section quantities so an exact 20-bag pallet can match
+  // the 20BG line even when a 60BG line for that batch appears first.
 
   // Scanning tallies loose bags, so the picklist quantity is converted to its
   // bag-equivalent before comparing (1 PL → 60 bags, one 40USP SeedPak → 40).
@@ -189,20 +197,69 @@ export function recomputeTallies(state: Inspection): Inspection {
     expectedBags(li.uom, li.expectedQuantity.value, li.description.value)
   );
 
-  // The last line for a code absorbs whatever the earlier lines didn't take, so
-  // an over-scan still surfaces as "Over by N" rather than silently vanishing.
-  const lastLineForCode: Record<string, number> = {};
-  state.picklist.lineItems.forEach((li, i) => {
-    if (li.cancelled) return;
-    const code = normalizeBatchCode(li.batchCode.value);
-    if (code) lastLineForCode[code] = i;
-  });
-
   // For outbound inspections with OCR data, packaging SKUs are excluded from
   // completion counts — they inflate the expected total and can never be
   // "fulfilled" by scanning product bags. Treated identically to cancelled lines.
   const excludePackaging =
     state.type === 'outbound' && picklistHasOcr(state.picklist);
+
+  const lineIndexesByBatch: Record<string, number[]> = {};
+  state.picklist.lineItems.forEach((li, index) => {
+    if (li.cancelled || (excludePackaging && isPackagingLine(li))) return;
+    const code = normalizeBatchCode(li.batchCode.value);
+    if (code) (lineIndexesByBatch[code] ||= []).push(index);
+  });
+
+  const actualByLine = expectedByLine.map(() => 0);
+  const expectedBySection = new Map<string, number>();
+
+  for (const [batch, sections] of Object.entries(sectionsByBatch)) {
+    const lineIndexes = lineIndexesByBatch[batch] || [];
+    if (lineIndexes.length === 0) continue;
+
+    const unclaimedLines = new Set(lineIndexes);
+    const unmatchedSections: ScannedSection[] = [];
+
+    // Exact quantities are stable regardless of scan or picklist order.
+    for (const section of sections) {
+      const exactLine = lineIndexes.find(
+        (index) => unclaimedLines.has(index) && expectedByLine[index] === section.count
+      );
+      if (exactLine === undefined || section.count <= 0) {
+        unmatchedSections.push(section);
+        continue;
+      }
+      actualByLine[exactLine] = section.count;
+      expectedBySection.set(section.key, expectedByLine[exactLine]);
+      unclaimedLines.delete(exactLine);
+    }
+
+    // Quantities without a one-to-one match still draw from one shared pool.
+    // The final remaining row absorbs overages so they stay visible.
+    let remaining = unmatchedSections.reduce((sum, section) => sum + section.count, 0);
+    const remainingLines = lineIndexes.filter((index) => unclaimedLines.has(index));
+    remainingLines.forEach((lineIndex, position) => {
+      const actual = position === remainingLines.length - 1
+        ? remaining
+        : Math.min(remaining, expectedByLine[lineIndex]);
+      actualByLine[lineIndex] = actual;
+      remaining -= actual;
+    });
+
+    // Choose the closest expected quantity for each unmatched pallet's own
+    // validation display. Exact matches were assigned above.
+    for (const section of unmatchedSections) {
+      const closestLine = lineIndexes.reduce((best, index) => {
+        if (best === undefined) return index;
+        const bestDistance = Math.abs(expectedByLine[best] - section.count);
+        const distance = Math.abs(expectedByLine[index] - section.count);
+        return distance < bestDistance ? index : best;
+      }, undefined as number | undefined);
+      if (closestLine !== undefined) {
+        expectedBySection.set(section.key, expectedByLine[closestLine]);
+      }
+    }
+  }
 
   const lineItems = state.picklist.lineItems.map((li, i) => {
     if (li.cancelled || (excludePackaging && isPackagingLine(li))) {
@@ -212,14 +269,8 @@ export function recomputeTallies(state: Inspection): Inspection {
         fulfilled: true,
       };
     }
-    const batch = normalizeBatchCode(li.batchCode.value);
     const expected = expectedByLine[i];
-    let actual = 0;
-    if (batch) {
-      const pool = remaining[batch] || 0;
-      actual = lastLineForCode[batch] === i ? pool : Math.min(pool, expected);
-      remaining[batch] = pool - actual;
-    }
+    const actual = actualByLine[i];
     return {
       ...li,
       actualQuantity: actual,
@@ -227,19 +278,17 @@ export function recomputeTallies(state: Inspection): Inspection {
     };
   });
 
-  const pallets = state.pallets.map((p) => ({
+  const pallets = state.pallets.map((p, palletIndex) => ({
     ...p,
-    batchSections: p.batchSections.map((bs) => {
+    batchSections: p.batchSections.map((bs, sectionIndex) => {
       const code = normalizeBatchCode(bs.batchCode.value);
       if (!code) return bs;
-      const lineItem = lineItems.find(
-        (li) => normalizeBatchCode(li.batchCode.value) === code
-      );
+      const fallbackLine = lineIndexesByBatch[code]?.[0];
       return {
         ...bs,
-        expectedBagCount: lineItem
-          ? expectedBags(lineItem.uom, lineItem.expectedQuantity.value, lineItem.description.value)
-          : 0,
+        expectedBagCount:
+          expectedBySection.get(`${palletIndex}:${sectionIndex}`) ??
+          (fallbackLine !== undefined ? expectedByLine[fallbackLine] : 0),
       };
     }),
   }));
