@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { countInspectionFlags, type Inspection } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT, type TranslateFn } from '../shared/i18n/LanguageContext';
-import { buildInspectionListCardModel } from './inspectionListCardModel';
+import { buildInspectionListCardModel, getInspectionCardStatus } from './inspectionListCardModel';
 
 interface Props {
   inspection: Inspection;
@@ -19,6 +19,7 @@ export function InspectionListCard({ inspection }: Props) {
   };
   const card = buildInspectionListCardModel(inspection);
   const flaggedItemsCount = countInspectionFlags(inspection);
+  const cardStatus = getInspectionCardStatus(inspection, card, flaggedItemsCount);
   const isInbound = inspection.type === 'inbound';
   const startedBy = inspection.startedBy || t('listCard.unknownInspector', 'Unknown');
   const lastEdited = inspection.lastEditedAt ? timeAgo(inspection.lastEditedAt, t) : '';
@@ -33,7 +34,7 @@ export function InspectionListCard({ inspection }: Props) {
   return (
     <Link
       to={linkTarget}
-      className="card"
+      className={`card inspection-card inspection-card--${cardStatus}`}
       style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
     >
       <div className="card__head">
@@ -70,14 +71,16 @@ export function InspectionListCard({ inspection }: Props) {
               ⤓ PDF
             </button>
           )}
-          {flaggedItemsCount > 0 ? (
-            <span className="pill pill--danger">
-              ⚑ {t('listCard.flagged', '{count} flagged', { count: flaggedItemsCount })}
+          {cardStatus === 'issue' ? (
+            <span className="pill pill--warn">
+              ⚑ {flaggedItemsCount > 0
+                ? t('listCard.flagged', '{count} flagged', { count: flaggedItemsCount })
+                : t('listCard.needsReview', 'Needs review')}
             </span>
-          ) : inspection.status === 'COMPLETED' ? (
+          ) : cardStatus === 'complete' ? (
             <span className="pill pill--success">✓ {t('listCard.completed', 'Completed')}</span>
           ) : (
-            <span className="pill pill--info">{t('listCard.inProgress', 'In progress')}</span>
+            <span className="pill pill--danger">✕ {t('listCard.notComplete', 'Not complete')}</span>
           )}
         </div>
       </div>
@@ -112,7 +115,7 @@ export function InspectionListCard({ inspection }: Props) {
                 expected: card.totalExpected,
               })}
             </span>
-            <span className="small fw-500" style={{ color: 'var(--accent)' }}>
+            <span className="small fw-500 inspection-card__percent">
               {card.percentComplete}%
             </span>
           </div>

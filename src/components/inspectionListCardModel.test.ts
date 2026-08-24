@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Inspection } from '../shared/types/inspection';
-import { buildInspectionListCardModel } from './inspectionListCardModel';
+import { buildInspectionListCardModel, getInspectionCardStatus } from './inspectionListCardModel';
 
 describe('buildInspectionListCardModel', () => {
   it('renders legacy inspection lines with missing Suggestable fields safely', () => {
@@ -76,5 +76,79 @@ describe('buildInspectionListCardModel', () => {
     } as unknown as Inspection;
 
     expect(buildInspectionListCardModel(inspection).hasUnlistedBatch).toBe(true);
+  });
+
+  it('classifies clean finished, unfinished, and issue loads distinctly', () => {
+    const base = {
+      id: 'status-inspection',
+      type: 'outbound',
+      status: 'COMPLETED',
+      picklist: {
+        lineItems: [{
+          id: 'line-1',
+          batchCode: { value: 'BATCH-1', source: 'manual' },
+          sku: { value: 'SKU-1', source: 'manual' },
+          description: { value: 'Product', source: 'manual' },
+          expectedQuantity: { value: 60, source: 'manual' },
+          uom: 'BG',
+          actualQuantity: 60,
+          fulfilled: true,
+        }],
+      },
+      bol: {},
+      pallets: [],
+    } as unknown as Inspection;
+
+    expect(getInspectionCardStatus(base, buildInspectionListCardModel(base), 0)).toBe('complete');
+
+    const unfinished = { ...base, status: 'IN_PROGRESS' } as Inspection;
+    expect(getInspectionCardStatus(unfinished, buildInspectionListCardModel(unfinished), 0))
+      .toBe('incomplete');
+
+    const quantityIssue = {
+      ...base,
+      picklist: {
+        ...base.picklist,
+        lineItems: [{ ...base.picklist.lineItems[0], actualQuantity: 55, fulfilled: false }],
+      },
+    } as unknown as Inspection;
+    expect(getInspectionCardStatus(quantityIssue, buildInspectionListCardModel(quantityIssue), 0))
+      .toBe('issue');
+  });
+
+  it('classifies explicit flags, inbound damage, and cross-reference mismatches as issues', () => {
+    const inbound = {
+      id: 'inbound-issue',
+      type: 'inbound',
+      status: 'COMPLETED',
+      picklist: { lineItems: [] },
+      bol: {},
+      pallets: [],
+      inbound: {
+        lineItems: [{
+          id: 'received-1',
+          batch: { value: 'BATCH-1' },
+          qtyReceived: { value: 60 },
+          qtyDamaged: { value: 2 },
+          uom: 'BG',
+        }],
+      },
+    } as unknown as Inspection;
+    expect(getInspectionCardStatus(inbound, buildInspectionListCardModel(inbound), 0)).toBe('issue');
+
+    const crossReferenceIssue = {
+      ...inbound,
+      type: 'outbound',
+      inbound: undefined,
+      crossReference: { matches: false },
+    } as unknown as Inspection;
+    expect(getInspectionCardStatus(
+      crossReferenceIssue,
+      buildInspectionListCardModel(crossReferenceIssue),
+      0
+    )).toBe('issue');
+
+    const flagged = { ...inbound, status: 'FLAGGED' } as Inspection;
+    expect(getInspectionCardStatus(flagged, buildInspectionListCardModel(flagged), 1)).toBe('issue');
   });
 });

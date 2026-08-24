@@ -708,6 +708,32 @@ main {
 .card__title { font-size: 15px; font-weight: 500; }
 .card__sub { font-size: 11px; color: var(--ink-soft); margin-top: 2px; }
 
+/* Inspection cards use both color and a text badge to communicate status. */
+.inspection-card {
+  --inspection-status-color: var(--ink-soft);
+  border-left: 6px solid var(--inspection-status-color);
+}
+.inspection-card--complete {
+  --inspection-status-color: var(--success);
+  background: #f3fbf6;
+  border-color: #b9ddc8;
+  border-left-color: var(--success);
+}
+.inspection-card--incomplete {
+  --inspection-status-color: var(--danger);
+  background: #fff5f4;
+  border-color: #ebbbb7;
+  border-left-color: var(--danger);
+}
+.inspection-card--issue {
+  --inspection-status-color: var(--warn);
+  background: #fff9ef;
+  border-color: #e7c58f;
+  border-left-color: var(--warn);
+}
+.inspection-card__percent { color: var(--inspection-status-color); }
+.inspection-card .progress__bar { background: var(--inspection-status-color); }
+
 .pill {
   display: inline-block;
   padding: 3px 10px;

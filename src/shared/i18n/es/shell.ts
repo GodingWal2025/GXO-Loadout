@@ -171,8 +171,9 @@ export const shell: Record<string, string> = {
   'listCard.daysAgo': 'hace {count} d',
   'listCard.downloadPdfTitle': 'Descargar resumen de lote en PDF',
   'listCard.flagged': '{count} marcadas',
+  'listCard.needsReview': 'Requiere revisión',
   'listCard.completed': 'Completada',
-  'listCard.inProgress': 'En curso',
+  'listCard.notComplete': 'No completada',
   'listCard.palletsBags': '{pallets} tarimas · {actual} de {expected} bolsas',
   'listCard.unlistedBatch': 'No estaba en la lista original',
 

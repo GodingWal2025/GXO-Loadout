@@ -31,6 +31,36 @@ export interface InspectionListCardModel {
   loadNumber: string;
 }
 
+export type InspectionCardStatus = 'complete' | 'incomplete' | 'issue';
+
+export function getInspectionCardStatus(
+  inspection: Inspection,
+  card: InspectionListCardModel,
+  flaggedItemsCount: number
+): InspectionCardStatus {
+  const isFinished = inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED';
+  const finishedQuantityMismatch = Boolean(
+    isFinished &&
+    inspection.type === 'outbound' &&
+    card.totalExpected > 0 &&
+    card.totalActual !== card.totalExpected
+  );
+  const crossReferenceMismatch = Boolean(
+    inspection.crossReference && inspection.crossReference.matches === false
+  );
+  const hasIssue = Boolean(
+    inspection.status === 'FLAGGED' ||
+    flaggedItemsCount > 0 ||
+    card.hasUnlistedBatch ||
+    card.inboundDamaged > 0 ||
+    crossReferenceMismatch ||
+    finishedQuantityMismatch
+  );
+
+  if (hasIssue) return 'issue';
+  return isFinished ? 'complete' : 'incomplete';
+}
+
 function valueOf<T>(field: unknown): T | undefined {
   if (field == null) return undefined;
   if (typeof field === 'object' && 'value' in field) {
