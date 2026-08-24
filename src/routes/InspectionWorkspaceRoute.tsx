@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
@@ -9,7 +9,10 @@ import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
 import { AdjustOrderModal } from '../components/AdjustOrderModal';
 import { useT } from '../shared/i18n/LanguageContext';
-import { getInspectionWorkspaceRedirect } from './inspectionWorkspaceNavigation';
+import {
+  getInspectionWorkspaceRedirect,
+  getPreviousInspectionStep,
+} from './inspectionWorkspaceNavigation';
 
 // Pallet types are persisted data, so the stored value stays English. This hook
 // translates them only where they are displayed.
@@ -52,6 +55,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
   const t = useT();
   const palletTypeLabel = usePalletTypeLabel();
   const navigate = useNavigate();
+  const location = useLocation();
   const [showAddModal, setShowAddModal] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
@@ -287,15 +291,13 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
           </div>
           <div className="page-head__actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
             {locked && <ViewEditToggle editing={editing} onChange={setEditing} />}
-            {inspection.type !== 'returns' && (
-              <Link
-                to={`/inspection/${inspection.id}/capture-bol`}
-                className="btn btn--ghost"
-                title={t('workspace.backToBolTitle', 'Go back to the BOL / picklist photo pages')}
-              >
-                {t('workspace.backToBol', '← BOL photos')}
-              </Link>
-            )}
+            <Link
+              to={getPreviousInspectionStep(inspection)}
+              state={{ from: location.pathname }}
+              className="btn btn--ghost"
+            >
+              {t('nav.back', '← Back')}
+            </Link>
             <button className="btn btn--ghost" onClick={() => setShowProgressModal(true)}>
               {t('workspace.reviewProgress', 'Review progress')}
             </button>
