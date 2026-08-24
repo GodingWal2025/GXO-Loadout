@@ -16,7 +16,7 @@ function line(batch: string, uom: Uom, qty: number, description: string | null =
   } as PicklistLineItemEntry;
 }
 
-function section(batch: string, bags: number) {
+function section(batch: string, bags: number | null) {
   return {
     id: `bs-${batch}-${bags}`,
     batchCode: mlSuggestable(batch),
@@ -38,6 +38,43 @@ const totalActual = (r: Inspection) =>
   r.picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
 
 describe('recomputeTallies — one batch code across several picklist lines', () => {
+  it('shows the first expected quantity before an actual count is entered', () => {
+    const result = recomputeTallies(
+      state(
+        [line('P21R1SHTB', 'BG', 60), line('P21R1SHTB', 'BG', 20)],
+        [section('P21R1SHTB', null)]
+      )
+    );
+
+    expect(result.pallets[0].batchSections[0].expectedBagCount).toBe(60);
+  });
+
+  it('matches a 20-bag pallet to the 20BG row even when 60BG appears first', () => {
+    const result = recomputeTallies(
+      state(
+        [line('P21R1SHTB', 'BG', 60), line('P21R1SHTB', 'BG', 20)],
+        [section('P21R1SHTB', 20)]
+      )
+    );
+
+    expect(result.picklist.lineItems.map((li) => li.actualQuantity)).toEqual([0, 20]);
+    expect(result.picklist.lineItems.map((li) => li.fulfilled)).toEqual([false, true]);
+    expect(result.pallets[0].batchSections[0].expectedBagCount).toBe(20);
+  });
+
+  it('keeps the same rows correct after the 60-bag pallet is scanned later', () => {
+    const result = recomputeTallies(
+      state(
+        [line('P21R1SHTB', 'BG', 60), line('P21R1SHTB', 'BG', 20)],
+        [section('P21R1SHTB', 20), section('P21R1SHTB', 60)]
+      )
+    );
+
+    expect(result.picklist.lineItems.map((li) => li.actualQuantity)).toEqual([60, 20]);
+    expect(result.picklist.lineItems.map((li) => li.fulfilled)).toEqual([true, true]);
+    expect(result.pallets[0].batchSections.map((s) => s.expectedBagCount)).toEqual([20, 60]);
+  });
+
   it('allocates a scanned pallet across the lines instead of crediting each in full', () => {
     // The reported bug: picklist needs 71 of P18GP43N8, split 60 + 11. Scanning
     // one 60-bag pallet used to read 60/60 "Complete" AND 60/11 "Over by 49",
