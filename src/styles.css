@@ -2300,7 +2300,7 @@ kbd {
   border-radius: var(--radius);
 }
 
-/* Batch-code entry: keep digits available while the native letter keyboard is open. */
+/* Code entry: keep digits available while the native letter keyboard is open. */
 .alphanumeric-input {
   flex: 1;
   min-width: 0;
@@ -2346,7 +2346,8 @@ kbd {
   color: white;
 }
 
-@media (max-width: 1024px), (pointer: coarse) {
+/* 1366px includes every current iPad in landscape, including "desktop site" mode. */
+@media (max-width: 1366px), (pointer: coarse) {
   .alphanumeric-input__digits {
     display: grid;
   }

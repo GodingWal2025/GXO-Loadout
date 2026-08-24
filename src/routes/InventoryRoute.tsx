@@ -125,11 +125,12 @@ export function InventoryRoute() {
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem', alignItems: 'flex-end' }}>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
                 <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#555' }}>SKU</span>
-                <input
+                <AlphanumericInput
                   className="input"
                   placeholder="SKU (Material)"
                   value={editItem.sku}
-                  onChange={(e) => setEditItem({ ...editItem, sku: e.target.value })}
+                  onValueChange={(value) => setEditItem({ ...editItem, sku: value })}
+                  aria-label="SKU"
                 />
               </label>
               <label style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>

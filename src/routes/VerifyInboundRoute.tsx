@@ -350,15 +350,15 @@ function VerifyInboundInner({
           <div className="field-row" style={{ marginTop: 12 }}>
             <div className="field">
               <div className="field__label">{t('verifyInbound.stagingLanes', 'Staging Lane(s)')}</div>
-              <input
-                type="text"
+              <AlphanumericInput
                 placeholder="e.g. STW15, STW16"
                 value={inbound.stagingLane.value || ''}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   updateHeader({
-                    stagingLane: { value: e.target.value || null, source: 'manual' },
+                    stagingLane: { value: value || null, source: 'manual' },
                   })
                 }
+                aria-label={t('verifyInbound.stagingLanes', 'Staging Lane(s)')}
               />
             </div>
             <div className="field">
@@ -579,16 +579,16 @@ function VerifyInboundInner({
 
                     <div className="field" style={{ flex: 1.1 }}>
                       <div className="field__label">{t('verifyInbound.colMaterial', 'Material / SKU')}</div>
-                      <input
-                        type="text"
+                      <AlphanumericInput
                         className="mono"
                         placeholder="e.g. 87674223"
                         value={li.materialNumber.value || ''}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           updateLine(index, {
-                            materialNumber: { value: e.target.value || null, source: 'manual' },
+                            materialNumber: { value: value || null, source: 'manual' },
                           })
                         }
+                        aria-label={t('verifyInbound.colMaterial', 'Material / SKU')}
                       />
                     </div>
 
@@ -632,15 +632,15 @@ function VerifyInboundInner({
                   <div className="field-row">
                     <div className="field">
                       <div className="field__label">{t('verifyInbound.colLoc', 'LOC (Location)')}</div>
-                      <input
-                        type="text"
+                      <AlphanumericInput
                         placeholder="e.g. STW15 / A01"
                         value={li.location?.value || ''}
-                        onChange={(e) =>
+                        onValueChange={(value) =>
                           updateLine(index, {
-                            location: { value: e.target.value || null, source: 'manual' },
+                            location: { value: value || null, source: 'manual' },
                           })
                         }
+                        aria-label={t('verifyInbound.colLoc', 'LOC (Location)')}
                       />
                     </div>
 

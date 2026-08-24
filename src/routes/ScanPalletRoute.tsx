@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { dbGetInspection, SlotPhotoCapture, usePhotoUrl } from '../shared';
 import { useInspection, useInspectionMode } from '../shared';
-import { SuggestableField } from '../shared';
+import { AlphanumericInput, SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, InspectionPhoto, BatchSection, PalletType } from '../shared';
@@ -779,18 +779,18 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           {inspection.type !== 'returns' && pallet.passInspection === 'Fail' && (
             <div className="field">
               <div className="field__label">{t('pallet.lpnLabel', '* What is the LPN number?')}</div>
-              <input
-                type="text"
+              <AlphanumericInput
                 value={pallet.lpnNumber || ''}
-                onChange={(e) =>
+                onValueChange={(value) =>
                   dispatch({
                     type: 'UPDATE_PALLET',
                     index: palletIndex,
-                    patch: { lpnNumber: e.target.value },
+                    patch: { lpnNumber: value },
                   })
                 }
                 placeholder={t('pallet.lpnPlaceholder', 'Enter LPN number...')}
                 className="mono"
+                aria-label={t('pallet.lpnLabel', 'What is the LPN number?')}
               />
             </div>
           )}

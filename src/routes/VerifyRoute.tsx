@@ -5,7 +5,7 @@ import { dbGetInspection } from '../shared';
 import { useInspection } from '../shared';
 import type { Inspection, Suggestable, PicklistLineItemEntry, Delivery, PalletInspection } from '../shared';
 import type { InventoryItem } from '../shared/types/inventory';
-import { SuggestableField } from '../shared';
+import { AlphanumericInput, SuggestableField } from '../shared';
 import { StepBackLink } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -228,17 +228,18 @@ function VerifyInner({
                 <div className="field-row">
                   <div className="field">
                     <div className="field__label">{t('verify.deliveryNumber', 'Delivery #')}</div>
-                    <input
+                    <AlphanumericInput
                       className="mono"
                       value={d.deliveryNumber}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         dispatch({
                           type: 'UPDATE_DELIVERY',
                           id: d.id,
-                          patch: { deliveryNumber: e.target.value },
+                          patch: { deliveryNumber: value },
                         })
                       }
                       placeholder="810..."
+                      aria-label={t('verify.deliveryNumber', 'Delivery #')}
                     />
                   </div>
                   {inspection.type !== 'returns' && (
