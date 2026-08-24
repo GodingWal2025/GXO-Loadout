@@ -1,6 +1,6 @@
 import type { Inspection, PicklistLineItemEntry } from '../shared/types/inspection';
 import { isPackagingLine } from '../shared/types/inspection';
-import { normalizeBatchCode } from '../shared/rules/batchCodeMatching';
+import { isBatchNotOnOriginalPicklist } from '../shared/rules/batchCodeMatching';
 import { expectedBags } from '../shared/rules/uomRules';
 
 interface CardProductLine {
@@ -79,14 +79,13 @@ export function buildInspectionListCardModel(inspection: Inspection): Inspection
   const totalExpected = productLines.reduce((sum, line) => sum + line.expectedQuantity, 0);
   const totalActual = productLines.reduce((sum, line) => sum + line.actualQuantity, 0);
   const percentComplete = totalExpected > 0 ? Math.round((totalActual / totalExpected) * 100) : 0;
-  const listedBatches = new Set(
-    rawProductLines.map((line) => normalizeBatchCode(valueOf<string>(line.batchCode))).filter(Boolean)
-  );
   const pallets = Array.isArray(inspection.pallets) ? inspection.pallets : [];
   const hasUnlistedBatch = pallets.some((pallet) =>
     (Array.isArray(pallet?.batchSections) ? pallet.batchSections : []).some((section) => {
-      const code = normalizeBatchCode(valueOf<string>(section?.batchCode));
-      return Boolean(code && !listedBatches.has(code));
+      return isBatchNotOnOriginalPicklist(
+        rawProductLines,
+        valueOf<string>(section?.batchCode)
+      );
     })
   );
 

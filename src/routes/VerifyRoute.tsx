@@ -157,21 +157,31 @@ function VerifyInner({
         pallets={inspection.pallets}
         deliveries={inspection.bol.deliveries}
         inventory={inventory}
-        onAdd={() =>
+        onAdd={(exceptionBatchCode) => {
+          const isException = Boolean(exceptionBatchCode) || inspection.pallets.length > 0;
           dispatch({
             type: 'ADD_PICKLIST_LINE',
             line: {
               id: generateId(),
-              batchCode: emptySuggestable<string>(),
+              batchCode: exceptionBatchCode
+                ? { value: exceptionBatchCode, source: 'manual' }
+                : emptySuggestable<string>(),
               sku: emptySuggestable<string>(),
               description: emptySuggestable<string>(),
               expectedQuantity: emptySuggestable<number>(),
               uom: 'BG',
               actualQuantity: 0,
               fulfilled: false,
+              picklistException: isException
+                ? {
+                    reason: 'not_on_original_picklist',
+                    addedAt: new Date().toISOString(),
+                    addedBy: inspection.lastEditedBy || inspection.startedBy || undefined,
+                  }
+                : undefined,
             },
-          })
-        }
+          });
+        }}
         onUpdate={(index, patch) =>
           dispatch({ type: 'UPDATE_PICKLIST_LINE', index, patch })
         }
@@ -342,7 +352,7 @@ function PicklistLineItems({
   pallets?: PalletInspection[];
   deliveries: Delivery[];
   inventory?: InventoryItem[];
-  onAdd: () => void;
+  onAdd: (exceptionBatchCode?: string) => void;
   onUpdate: (index: number, patch: Partial<PicklistLineItemEntry>) => void;
   onRemove: (index: number) => void;
 }) {
@@ -376,7 +386,7 @@ function PicklistLineItems({
           {t('verify.picklistLead', 'Picklist')}{' '}
           <em>{t('verify.picklistEm', 'line items ({count})', { count: lineItems.length })}</em>
         </h2>
-        <button className="btn btn--sm" onClick={onAdd}>
+        <button className="btn btn--sm" onClick={() => onAdd()}>
           {t('verify.addLine', '+ Add line')}
         </button>
       </div>
@@ -395,11 +405,27 @@ function PicklistLineItems({
         <div className="banner banner--warn">
           <span className="banner__icon">⚠</span>
           <div className="banner__body">
-            {t(
-              'verify.unlistedScannedWarn',
-              'Warning: Scanned batch(es) ({batches}) were not listed on the picklist after OCR.',
-              { batches: unlistedScannedBatches.join(', ') }
-            )}
+            <div>
+              {t(
+                'verify.unlistedScannedWarn',
+                'Warning: Scanned batch(es) ({batches}) were not listed on the original picklist.',
+                { batches: unlistedScannedBatches.join(', ') }
+              )}
+            </div>
+            <div className="flex gap-8" style={{ flexWrap: 'wrap', marginTop: 10 }}>
+              {unlistedScannedBatches.map((batchCode) => (
+                <button
+                  key={batchCode}
+                  type="button"
+                  className="btn btn--sm btn--outline"
+                  onClick={() => onAdd(batchCode)}
+                >
+                  {t('verify.addUnlistedAsException', 'Add {batch} as flagged exception', {
+                    batch: batchCode,
+                  })}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -422,6 +448,25 @@ function PicklistLineItems({
 
             return (
               <div key={li.id} className="card">
+                {li.picklistException?.reason === 'not_on_original_picklist' && (
+                  <div className="banner banner--danger" style={{ marginBottom: 12 }}>
+                    <span className="banner__icon">⚠</span>
+                    <div className="banner__body">
+                      <strong>{t('verify.originalPicklistException', 'Not on original picklist.')}</strong>{' '}
+                      {t(
+                        'verify.originalPicklistExceptionDetail',
+                        'The verifier added this batch so inspection can continue. Keep it flagged for final review.'
+                      )}
+                      {li.picklistException.addedBy && (
+                        <div className="small soft" style={{ marginTop: 4 }}>
+                          {t('verify.exceptionAddedBy', 'Added by {name}', {
+                            name: li.picklistException.addedBy,
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {notInInventory && (
                   <div className="mb-8">
                     <span className="pill pill--warn" style={{ fontSize: 11 }}>

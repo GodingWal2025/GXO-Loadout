@@ -4,7 +4,7 @@
 // summary, and the per-pallet detail table. Generated fully client-side with
 // jsPDF so it works offline and on iPad PWAs.
 
-import { normalizeBatchCode, type Inspection } from '../shared';
+import { isBatchNotOnOriginalPicklist, normalizeBatchCode, type Inspection } from '../shared';
 import { dbListInventoryItems } from '../shared/services/db';
 
 export async function downloadInspectionPdf(inspection: Inspection): Promise<void> {
@@ -287,18 +287,21 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     autoTable(doc, {
       startY: 100,
       margin: { left: margin, right: margin },
-      head: [['Batch Code', 'Product', 'Total Bags']],
+      head: [['Batch Code', 'Product', 'Exception', 'Total Bags']],
       body: Array.from(batchTotals.entries()).map(([code, bags]) => [
         code,
         productByBatch[norm(code)] || '—',
+        isBatchNotOnOriginalPicklist(inspection.picklist.lineItems, code)
+          ? 'NOT ON ORIGINAL PICKLIST'
+          : '—',
         String(bags),
       ]),
-      foot: [['Total', '', String(totalBags)]],
+      foot: [['Total', '', '', String(totalBags)]],
       theme: 'grid',
       headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 9 },
       footStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: 'bold', fontSize: 9 },
       styles: { fontSize: 9, cellPadding: 5 },
-      columnStyles: { 2: { halign: 'right' } },
+      columnStyles: { 3: { halign: 'right' } },
     });
     afterSummaryY = (doc as any).lastAutoTable.finalY + 24;
   }
@@ -311,11 +314,22 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
 
   const head = isReturns
     ? [['Pallet', 'Batch', 'SKU', 'Material Description', 'Quantity']]
-    : [['Pallet', 'Delivery', 'Stop', 'Type', 'Batch Code', 'Bags', 'Scanned By']];
+    : [['Pallet', 'Delivery', 'Stop', 'Type', 'Batch Code', 'Exception', 'Bags', 'Scanned By']];
   const body = rows.map((r) =>
     isReturns
       ? [`#${r.palletNumber}`, r.batchCode ? r.batchCode.toUpperCase() : '—', skuByBatch[norm(r.batchCode)] || '—', descByBatch[norm(r.batchCode)] || '—', String(r.bagCount)]
-      : [`#${r.palletNumber}`, r.deliveryNumber, r.stopNumber !== undefined ? String(r.stopNumber) : '—', r.palletType, r.batchCode || '—', String(r.bagCount), r.scannedBy || '—']
+      : [
+          `#${r.palletNumber}`,
+          r.deliveryNumber,
+          r.stopNumber !== undefined ? String(r.stopNumber) : '—',
+          r.palletType,
+          r.batchCode || '—',
+          isBatchNotOnOriginalPicklist(inspection.picklist.lineItems, r.batchCode)
+            ? 'NOT ON ORIGINAL PICKLIST'
+            : '—',
+          String(r.bagCount),
+          r.scannedBy || '—',
+        ]
   );
 
   autoTable(doc, {
@@ -326,7 +340,7 @@ export async function downloadInspectionPdf(inspection: Inspection): Promise<voi
     theme: 'grid',
     headStyles: { fillColor: [20, 20, 20], textColor: 255, fontSize: 9 },
     styles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: { [isReturns ? 4 : 5]: { halign: 'right' } },
+    columnStyles: { [isReturns ? 4 : 6]: { halign: 'right' } },
   });
 
   // Page footer

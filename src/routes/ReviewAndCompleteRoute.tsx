@@ -53,6 +53,9 @@ function ReviewInner({ initial }: { initial: Inspection }) {
     0
   );
   const allFulfilled = inspection.type === 'returns' || productLineItems.every((li) => li.fulfilled);
+  const originalPicklistExceptions = inspection.picklist.lineItems.filter(
+    (li) => li.picklistException?.reason === 'not_on_original_picklist'
+  );
 
   const isReturns = inspection.type === 'returns';
   const isInbound = inspection.type === 'inbound';
@@ -541,6 +544,29 @@ function ReviewInner({ initial }: { initial: Inspection }) {
             </h2>
             <span className="section__meta">{t('review.allDeliveries', 'All deliveries')}</span>
           </div>
+          {originalPicklistExceptions.length > 0 && (
+            <div className="banner banner--danger">
+              <span className="banner__icon">⚠</span>
+              <div className="banner__body">
+                <strong>
+                  {t(
+                    'review.originalPicklistExceptionTitle',
+                    '{count} batch(es) were not on the original picklist.',
+                    { count: originalPicklistExceptions.length }
+                  )}
+                </strong>{' '}
+                {t(
+                  'review.originalPicklistExceptionBody',
+                  'A verifier added them as exceptions: {batches}',
+                  {
+                    batches: originalPicklistExceptions
+                      .map((li) => li.batchCode.value || '—')
+                      .join(', '),
+                  }
+                )}
+              </div>
+            </div>
+          )}
           <div className="table-card">
             <table className="data">
               <thead>
@@ -562,7 +588,14 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                   const isExcludedPackaging = excludePackaging && isPackagingLine(li);
                   return (
                     <tr key={li.id} style={isExcludedPackaging ? { opacity: 0.45 } : undefined}>
-                      <td className="mono">{li.batchCode.value || '—'}</td>
+                      <td className="mono">
+                        {li.batchCode.value || '—'}
+                        {li.picklistException?.reason === 'not_on_original_picklist' && (
+                          <span className="pill pill--danger" style={{ fontSize: 10, marginLeft: 6 }}>
+                            {t('review.notOnOriginalPicklist', 'Not on original picklist')}
+                          </span>
+                        )}
+                      </td>
                       <td className="mono small">{li.sku.value || '—'}</td>
                       <td className="small soft">{li.description.value || '—'}</td>
                       <td className="mono small">{delivery?.deliveryNumber || '—'}</td>
