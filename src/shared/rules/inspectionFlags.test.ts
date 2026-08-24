@@ -53,4 +53,15 @@ describe('order discrepancy flags', () => {
 
     expect(countQuantityOverages(inspection)).toBe(0);
   });
+
+  it('counts a verifier-added batch as an inspection flag', () => {
+    const inspection = inspectionWith(60, 60);
+    inspection.picklist.lineItems[0].picklistException = {
+      reason: 'not_on_original_picklist',
+      addedAt: '2026-08-24T12:00:00.000Z',
+      addedBy: 'Verifier A',
+    };
+
+    expect(countInspectionFlags(inspection)).toBe(1);
+  });
 });

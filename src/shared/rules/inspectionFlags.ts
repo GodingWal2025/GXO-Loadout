@@ -30,6 +30,13 @@ export function countQuantityOverages(inspection: Inspection): number {
 export function countInspectionFlags(inspection: Inspection): number {
   let count = inspection.qualityFlag ? 1 : 0;
 
+  // A verifier-added batch is an order exception even after it is accepted
+  // into the working picklist. Counting it here keeps the inspection visibly
+  // FLAGGED at completion instead of treating it as an ordinary matching row.
+  count += (inspection.picklist?.lineItems || []).filter(
+    (line) => line.picklistException?.reason === 'not_on_original_picklist'
+  ).length;
+
   for (const pallet of inspection.pallets || []) {
     if (pallet.qualityFlag) count++;
     for (const photo of pallet.photos || []) {

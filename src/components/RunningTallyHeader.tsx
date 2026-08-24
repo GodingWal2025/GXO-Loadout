@@ -303,6 +303,20 @@ export function RunningTallyHeader({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <span>{li.batchCode.value || '—'}</span>
+                    {li.picklistException?.reason === 'not_on_original_picklist' && (
+                      <span
+                        title={t('tally.originalPicklistExceptionTitle', 'Added by verifier; not on original picklist')}
+                        style={{
+                          fontSize: 10,
+                          padding: '1px 3px',
+                          borderRadius: 3,
+                          background: 'var(--danger)',
+                          color: '#fff',
+                        }}
+                      >
+                        {t('tally.unlistedBadge', 'UNLISTED')}
+                      </span>
+                    )}
                     {isAdjusted && (
                       <span
                         title={

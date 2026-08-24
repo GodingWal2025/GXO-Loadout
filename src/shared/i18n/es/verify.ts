@@ -41,10 +41,15 @@ export const verify: Record<string, string> = {
   'verify.acrossLine': 'en {count} línea',
   'verify.acrossLines': 'en {count} líneas',
   'verify.unlistedScannedWarn':
-    'Advertencia: Los lotes escaneados ({batches}) no estaban listados en la lista de surtido tras el OCR.',
+    'Advertencia: Los lotes escaneados ({batches}) no estaban en la lista de surtido original.',
+  'verify.addUnlistedAsException': 'Agregar {batch} como excepción marcada',
+  'verify.originalPicklistException': 'No estaba en la lista de surtido original.',
+  'verify.originalPicklistExceptionDetail':
+    'El verificador agregó este lote para continuar la inspección. Manténgalo marcado para la revisión final.',
+  'verify.exceptionAddedBy': 'Agregado por {name}',
   'verify.notInInventory': 'No se encontró en el inventario principal',
   'progress.unlistedCount': '{count} lote(s) no listado(s)',
-  'progress.notOnPicklist': 'No está en lista de surtido',
+  'progress.notOnPicklist': 'No estaba en la lista original',
 
 
   // ---- VerifyRoute: deliveries ----
@@ -180,6 +185,11 @@ export const verify: Record<string, string> = {
   'review.statusMatch': '✓ coincide',
   'review.statusShort': 'faltante',
   'review.statusPackaging': 'Empaque — excluido',
+  'review.originalPicklistExceptionTitle':
+    '{count} lote(s) no estaba(n) en la lista de surtido original.',
+  'review.originalPicklistExceptionBody':
+    'Un verificador los agregó como excepciones: {batches}',
+  'review.notOnOriginalPicklist': 'No estaba en la lista original',
 
   // ---- ReviewAndCompleteRoute: cross-reference (picklist vs BOL) ----
   'review.xrefLead': 'Picklist vs',

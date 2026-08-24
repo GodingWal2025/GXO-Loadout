@@ -16,3 +16,30 @@ export const isBatchCodeValid = (expectedCode: string, scannedCode: string): boo
   const scanned = normalizeBatchCode(scannedCode);
   return Boolean(expected && scanned && expected === scanned);
 };
+
+type PicklistBatchLine = {
+  batchCode?: { value?: string | null } | string;
+  picklistException?: { reason?: string };
+};
+
+export function isPicklistExceptionLine(line: PicklistBatchLine | undefined): boolean {
+  return line?.picklistException?.reason === 'not_on_original_picklist';
+}
+
+/**
+ * True when a scanned batch was absent from the original picklist. A verifier
+ * adding it as an exception must not make the warning disappear.
+ */
+export function isBatchNotOnOriginalPicklist(
+  lineItems: PicklistBatchLine[] | undefined,
+  batchCode: string | null | undefined
+): boolean {
+  const normalized = normalizeBatchCode(batchCode);
+  if (!normalized || !lineItems?.length) return false;
+  const matchingLine = lineItems.find(
+    (line) => normalizeBatchCode(
+      typeof line.batchCode === 'string' ? line.batchCode : line.batchCode?.value
+    ) === normalized
+  );
+  return !matchingLine || isPicklistExceptionLine(matchingLine);
+}

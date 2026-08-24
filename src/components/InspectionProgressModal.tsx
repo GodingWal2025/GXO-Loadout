@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { normalizeBatchCode, type Inspection } from '../shared';
+import { isBatchNotOnOriginalPicklist, normalizeBatchCode, type Inspection } from '../shared';
 import type { InventoryItem } from '../shared/types/inventory';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { dbListInventoryItems } from '../shared/services/db';
@@ -167,23 +167,15 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
   const totalBags = allBatches.reduce((s, r) => s + r.bagCount, 0);
   const uniqueBatches = new Set(allBatches.map((r) => r.batchCode).filter(Boolean));
 
-  const picklistBatchCodes = useMemo(() => {
-    return new Set(
-      (inspection.picklist?.lineItems ?? [])
-        .map((li) => normalizeBatchCode(li.batchCode.value))
-        .filter(Boolean)
-    );
-  }, [inspection.picklist?.lineItems]);
-
   const unlistedBatchesCount = useMemo(() => {
     let count = 0;
     for (const code of uniqueBatches) {
-      if (!picklistBatchCodes.has(normalizeBatchCode(code))) {
+      if (isBatchNotOnOriginalPicklist(inspection.picklist?.lineItems, code)) {
         count++;
       }
     }
     return count;
-  }, [uniqueBatches, picklistBatchCodes]);
+  }, [uniqueBatches, inspection.picklist?.lineItems]);
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -321,7 +313,10 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                 </thead>
                 <tbody>
                   {filtered.map((r, i) => {
-                    const isUnlisted = Boolean(r.batchCode) && !picklistBatchCodes.has(normalizeBatchCode(r.batchCode));
+                    const isUnlisted = isBatchNotOnOriginalPicklist(
+                      inspection.picklist?.lineItems,
+                      r.batchCode
+                    );
                     return (
                       <tr key={i}>
                         <td className="mono fw-500">#{r.palletNumber}</td>
@@ -332,7 +327,7 @@ export function InspectionProgressModal({ inspection, onClose }: Props) {
                           {r.batchCode || '—'}
                           {isUnlisted && (
                             <span className="pill pill--danger" style={{ fontSize: 10, marginLeft: 6 }}>
-                              ⚠ {t('progress.notOnPicklist', 'Not on picklist')}
+                              ⚠ {t('progress.notOnPicklist', 'Not on original picklist')}
                             </span>
                           )}
                         </td>

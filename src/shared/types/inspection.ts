@@ -314,6 +314,16 @@ export interface PicklistLineItemEntry {
   adjustedBy?: string;
   adjustmentReason?: string;
   cancelled?: boolean;
+  /**
+   * Audit marker for a batch that was physically scanned but did not appear
+   * on the original picklist. Verifiers may add the line so work can
+   * continue, but this marker must remain visible after it becomes a line.
+   */
+  picklistException?: {
+    reason: 'not_on_original_picklist';
+    addedAt: string;
+    addedBy?: string;
+  };
 }
 
 // ============================================================

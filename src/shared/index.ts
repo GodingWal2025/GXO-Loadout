@@ -77,7 +77,12 @@ export { transitionPallet } from './state/palletMachine';
 export type { PalletEvent } from './state/palletMachine';
 
 // Rules
-export { isBatchCodeValid, normalizeBatchCode } from './rules/batchCodeMatching';
+export {
+  isBatchCodeValid,
+  isBatchNotOnOriginalPicklist,
+  isPicklistExceptionLine,
+  normalizeBatchCode,
+} from './rules/batchCodeMatching';
 export { validatePhotoQuality } from './rules/photoQuality';
 export { isValidStopSticker } from './rules/stopStickerValidation';
 export { isInspectionComplete } from './rules/inspectionCompletion';

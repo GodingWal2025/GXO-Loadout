@@ -6,7 +6,7 @@ import { SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, InspectionPhoto, BatchSection, PalletType } from '../shared';
-import { PALLET_TYPES, ConfirmModal, normalizeBatchCode } from '../shared';
+import { PALLET_TYPES, ConfirmModal, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import {
   assessPalletFaces,
@@ -707,6 +707,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
             sectionNumber={sectionIdx + 1}
             isMultiple={pallet.batchSections.length > 1}
             isReturns={isReturns}
+            isOutbound={inspection.type === 'outbound'}
             palletType={pallet.palletType}
             picklistLineItems={inspection.picklist.lineItems}
             remainingAvailable={remainingForBatch(section.batchCode.value)}
@@ -1006,6 +1007,7 @@ function BatchSectionRow({
   sectionNumber,
   isMultiple,
   isReturns,
+  isOutbound,
   palletType,
   picklistLineItems,
   remainingAvailable,
@@ -1015,6 +1017,7 @@ function BatchSectionRow({
   sectionNumber: number;
   isMultiple: boolean;
   isReturns: boolean;
+  isOutbound: boolean;
   palletType: PalletType;
   picklistLineItems: Inspection['picklist']['lineItems'];
   remainingAvailable: number | null;
@@ -1026,13 +1029,9 @@ function BatchSectionRow({
   const mismatch = expected > 0 && actual !== null && actual !== expected;
 
   const isUnlistedOnPicklist = useMemo(() => {
-    const code = normalizeBatchCode(section.batchCode.value);
-    if (!code || isReturns) return false;
-    if (!picklistLineItems || picklistLineItems.length === 0) return false;
-    return !picklistLineItems.some(
-      (li) => normalizeBatchCode(li.batchCode.value) === code
-    );
-  }, [picklistLineItems, section.batchCode.value, isReturns]);
+    if (!isOutbound || isReturns) return false;
+    return isBatchNotOnOriginalPicklist(picklistLineItems, section.batchCode.value);
+  }, [picklistLineItems, section.batchCode.value, isOutbound, isReturns]);
 
   const sectionUom = useMemo(() => {
     if (!section.batchCode.value) return undefined;
@@ -1114,7 +1113,7 @@ function BatchSectionRow({
           <div className="banner__body">
             {t(
               'pallet.unlistedBatchWarn',
-              'Warning: Batch "{code}" was not listed on the picklist after OCR verification. Please notify supervisor/verifier.',
+              'Warning: Batch "{code}" was not on the original picklist. A verifier may add it, but it will remain flagged for final review.',
               { code: section.batchCode.value || '' }
             )}
           </div>

@@ -43,7 +43,7 @@ export function InspectionListCard({ inspection }: Props) {
             <div className="card__title mono">#{card.loadNumber}</div>
             {card.hasUnlistedBatch && (
               <span className="pill pill--warn" style={{ fontSize: 11 }}>
-                ⚠ {t('listCard.unlistedBatch', 'Unlisted batch')}
+                ⚠ {t('listCard.unlistedBatch', 'Not on original picklist')}
               </span>
             )}
             {isInbound && card.inboundDamaged > 0 && (

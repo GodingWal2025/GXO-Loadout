@@ -55,7 +55,10 @@ export const pallet: Record<string, string> = {
   'pallet.mismatchDiff': 'diferencia {diff}',
   'pallet.notOnPicklist': 'No está en la lista de surtido',
   'pallet.unlistedBatchWarn':
-    'Advertencia: El lote "{code}" no estaba listado en la lista de surtido tras el OCR. Notifique al supervisor/verificador.',
+    'Advertencia: El lote "{code}" no estaba en la lista de surtido original. Un verificador puede agregarlo, pero permanecerá marcado para la revisión final.',
+  'tally.originalPicklistExceptionTitle':
+    'Agregado por el verificador; no estaba en la lista de surtido original',
+  'tally.unlistedBadge': 'NO LISTADO',
 
 
   // ---- Layer counter ----

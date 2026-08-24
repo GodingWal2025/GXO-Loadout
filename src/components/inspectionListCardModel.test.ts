@@ -47,4 +47,34 @@ describe('buildInspectionListCardModel', () => {
       inboundLines: [],
     });
   });
+
+  it('keeps a verifier-added batch flagged after it is added to the picklist', () => {
+    const inspection = {
+      id: 'inspection-exception',
+      type: 'outbound',
+      picklist: {
+        lineItems: [{
+          id: 'exception-line',
+          batchCode: { value: 'EXTRA-7', source: 'manual' },
+          sku: { value: null, source: 'manual' },
+          description: { value: null, source: 'manual' },
+          expectedQuantity: { value: 10, source: 'manual' },
+          uom: 'BG',
+          actualQuantity: 10,
+          fulfilled: true,
+          picklistException: {
+            reason: 'not_on_original_picklist',
+            addedAt: '2026-08-24T12:00:00.000Z',
+            addedBy: 'Verifier A',
+          },
+        }],
+      },
+      bol: {},
+      pallets: [{
+        batchSections: [{ batchCode: { value: 'extra-7', source: 'manual' } }],
+      }],
+    } as unknown as Inspection;
+
+    expect(buildInspectionListCardModel(inspection).hasUnlistedBatch).toBe(true);
+  });
 });
