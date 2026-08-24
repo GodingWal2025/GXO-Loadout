@@ -806,26 +806,6 @@ function BatchSectionRow({
           placeholder="P18GY43M8"
           onChange={(field) => onUpdate({ batchCode: field })}
         />
-        {!isReturns && (
-          <div className="field">
-            <div className="field__label">{t('pallet.expectedCount', 'Expected count')}</div>
-            <input
-              type="number"
-              value={expected || ''}
-              readOnly
-              disabled
-              placeholder="—"
-              style={{ background: 'var(--surface-tint)', cursor: 'not-allowed' }}
-            />
-            <div className="field__hint">
-              {section.batchCode.value
-                ? t('pallet.fromPicklistLine', 'From picklist line for {batch}', {
-                    batch: section.batchCode.value,
-                  })
-                : t('pallet.enterBatchFirst', 'Enter batch code first')}
-            </div>
-          </div>
-        )}
         <SuggestableField
           label={t('pallet.actualCount', 'Actual count')}
           field={section.actualBagCount}
