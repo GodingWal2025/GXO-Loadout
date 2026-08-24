@@ -100,12 +100,13 @@ export function SuggestableField<T extends string | number>({
         )}
       </div>
       <div style={{ display: 'flex', gap: '8px' }}>
-        {uppercase && type === 'text' ? (
+        {type === 'text' && (uppercase || mono) ? (
           <AlphanumericInput
             value={field.value === null ? '' : String(field.value)}
             onValueChange={handleChange}
             placeholder={placeholder}
             className={mono ? 'mono' : ''}
+            uppercase={uppercase || Boolean(mono)}
             aria-label={label}
           />
         ) : (

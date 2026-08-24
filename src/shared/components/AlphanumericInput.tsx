@@ -7,12 +7,14 @@ interface Props {
   placeholder?: string;
   disabled?: boolean;
   required?: boolean;
+  /** Keep identifier-style values consistently capitalized. */
+  uppercase?: boolean;
   'aria-label'?: string;
 }
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
-/** Batch-code input with a mobile number row above the letter keyboard. */
+/** Code/identifier input with an iPad-friendly number row beside the letter keyboard. */
 export function AlphanumericInput({
   value,
   onValueChange,
@@ -20,15 +22,18 @@ export function AlphanumericInput({
   placeholder,
   disabled,
   required,
+  uppercase = true,
   'aria-label': ariaLabel,
 }: Props) {
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const normalize = (nextValue: string) => uppercase ? nextValue.toUpperCase() : nextValue;
 
   const insertDigit = (digit: string) => {
     const input = inputRef.current;
     const start = input?.selectionStart ?? value.length;
     const end = input?.selectionEnd ?? start;
-    onValueChange(`${value.slice(0, start)}${digit}${value.slice(end)}`.toUpperCase());
+    onValueChange(normalize(`${value.slice(0, start)}${digit}${value.slice(end)}`));
     requestAnimationFrame(() => {
       input?.focus();
       input?.setSelectionRange(start + 1, start + 1);
@@ -42,16 +47,16 @@ export function AlphanumericInput({
         type="text"
         inputMode="text"
         value={value}
-        onChange={(event) => onValueChange(event.target.value.toUpperCase())}
+        onChange={(event) => onValueChange(normalize(event.target.value))}
         className={className}
         placeholder={placeholder}
         disabled={disabled}
         required={required}
         aria-label={ariaLabel}
-        autoCapitalize="characters"
+        autoCapitalize={uppercase ? 'characters' : 'none'}
         autoCorrect="off"
         spellCheck={false}
-        style={{ textTransform: 'uppercase' }}
+        style={uppercase ? { textTransform: 'uppercase' } : undefined}
       />
       <div className="alphanumeric-input__digits" aria-label="Number shortcuts">
         {DIGITS.map((digit) => (
