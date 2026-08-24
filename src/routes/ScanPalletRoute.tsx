@@ -1,43 +1,14 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { dbGetInspection, SlotPhotoCapture, usePhotoUrl } from '../shared';
+import { dbGetInspection, SlotPhotoCapture } from '../shared';
 import { useInspection, useInspectionMode } from '../shared';
 import { AlphanumericInput, SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
-import type { Inspection, InspectionPhoto, BatchSection, PalletType } from '../shared';
+import type { Inspection, BatchSection, PalletType } from '../shared';
 import { PALLET_TYPES, ConfirmModal, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
-import {
-  assessPalletFaces,
-  bestBagTotal,
-  consensusLayers,
-  PALLET_FACE_SLOTS,
-  physicalIssues,
-  type AssessedFace,
-  type PalletAssessment,
-} from '../shared/services/palletVision';
-import { dbGetPhotoBlob } from '../shared/services/db';
 import { useT } from '../shared/i18n/LanguageContext';
-
-function VisionFaceOverlay({ photo, face }: { photo: InspectionPhoto; face: AssessedFace }) {
-  const url = usePhotoUrl(photo);
-  if (!url) return null;
-  const pallet = face.palletBox;
-  return (
-    <figure className="vision-face-overlay">
-      <img src={url} alt={`${face.slotKey ?? 'Pallet face'} vision result`} />
-      <svg viewBox="0 0 1 1" preserveAspectRatio="none" aria-hidden="true">
-        {pallet && <rect x={pallet[0]} y={pallet[1]} width={pallet[2] - pallet[0]} height={pallet[3] - pallet[1]} className="vision-face-overlay__pallet" />}
-        {face.displayPolygons?.flatMap((instance, instanceIndex) => instance.map((polygon, polygonIndex) => {
-          const points = Array.from({ length: Math.floor(polygon.length / 2) }, (_, index) => `${polygon[index * 2]},${polygon[index * 2 + 1]}`).join(' ');
-          return <polygon key={`${instanceIndex}-${polygonIndex}`} points={points} className="vision-face-overlay__flap" />;
-        }))}
-      </svg>
-      <figcaption>{face.slotKey} · {face.boxCount ?? 0} flaps{face.needsReview ? ' · review' : ''}</figcaption>
-    </figure>
-  );
-}
 
 const FINDINGS_OPTIONS = [
   'Picked Short',
@@ -169,133 +140,6 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const [validationError, setValidationError] = useState('');
   const [showConfirmRemove, setShowConfirmRemove] = useState(false);
 
-  // --- layer prediction from the four required face photos -------------------
-  // Estimating from all four faces is the strongest measured configuration (6 of
-  // 7 pallets, versus ~55% from any single face), and because these four slots
-  // are whole-pallet views by definition it also closes the one failure mode
-  // voting cannot: a bag-label close-up reads 1-5 layers at high confidence.
-  const [facesBusy, setFacesBusy] = useState(false);
-  const [facesMsg, setFacesMsg] = useState<string | null>(null);
-  const [faceReadings, setFaceReadings] = useState<{ slotKey: string; layers: number | null }[]>([]);
-  const [assessment, setAssessment] = useState<PalletAssessment | null>(null);
-  // Which set of photos we have already predicted from. Retaking a face changes
-  // its photo id, so the estimate re-runs; nothing else re-triggers it.
-  const [predictedFor, setPredictedFor] = useState<string | null>(null);
-
-  const facePhotos = useMemo(
-    () =>
-      PALLET_FACE_SLOTS.map((slot) => pallet?.photos?.find((p: any) => p.slotKey === slot)).filter(
-        (p): p is NonNullable<typeof p> => Boolean(p?.id)
-      ),
-    [pallet?.photos]
-  );
-  const allFacesCaptured = facePhotos.length === PALLET_FACE_SLOTS.length;
-  const faceSignature = allFacesCaptured ? facePhotos.map((p: any) => p.id).join('|') : null;
-  // Only auto-apply when the pallet has a single batch; on a mixed pallet one
-  // stack height does not map onto several batch sections.
-  const singleBatch = pallet?.batchSections?.length === 1;
-
-  const predictFromFaces = async () => {
-    if (!faceSignature || facesBusy) return;
-    setFacesBusy(true);
-    setFacesMsg(null);
-    setPredictedFor(faceSignature);
-    try {
-      const withBlobs: { slotKey: string; blob: Blob }[] = [];
-      for (const p of facePhotos as any[]) {
-        const blob = await dbGetPhotoBlob(p.id);
-        if (blob) withBlobs.push({ slotKey: p.slotKey, blob });
-      }
-      if (withBlobs.length === 0) {
-        setFacesMsg(t('pallet.facesNoBlobs', 'Photos not available offline — enter layers manually.'));
-        return;
-      }
-
-      // One request carries every face. Any service or localization failure stays
-      // manual; silently falling back would bypass the Cosmos ROI safety gate.
-      let a: Awaited<ReturnType<typeof assessPalletFaces>>;
-      try {
-        a = await assessPalletFaces(withBlobs);
-        if (a.needsReview || a.faces.some((face) => face.needsReview)) {
-          setAssessment(a);
-          setFaceReadings(a.faces.map((face) => ({ slotKey: face.slotKey ?? '', layers: face.layers })));
-          setFacesMsg(
-            a.reviewReason ||
-              t(
-                'pallet.roiNeedsReview',
-                'The intended pallet was ambiguous or background pallets were detected. Confirm the layer count manually.'
-              )
-          );
-          return;
-        }
-      } catch {
-        setAssessment(null);
-        setFacesMsg(t('pallet.facesUnreadable', "Couldn't read the stack — enter layers manually."));
-        return;
-      }
-      if (!a.success) {
-        setFacesMsg(t('pallet.facesUnreadable', "Couldn't read the stack — enter layers manually."));
-        return;
-      }
-      setAssessment(a);
-      const layerVotes = a.faces.map((f) => f.layers).filter((n): n is number => typeof n === 'number');
-      const est = {
-        consensus: consensusLayers(layerVotes),
-        readings: a.faces.map((f) => ({ slotKey: f.slotKey ?? '', layers: f.layers })),
-        topLayerFull: a.topLayerFull,
-        gaps: a.gaps,
-        damage: a.damage,
-        modelVersion: a.modelVersion,
-      };
-      setFaceReadings(est.readings.map((r) => ({ slotKey: r.slotKey, layers: r.layers })));
-
-      if (est.consensus.value === null) {
-        setFacesMsg(t('pallet.facesUnreadable', "Couldn't read the stack — enter layers manually."));
-        return;
-      }
-      if (!singleBatch) {
-        // Surfaced but not applied: the inspector decides which section it fits.
-        setFacesMsg(
-          t('pallet.facesMixed', 'AI read {n} layers from the 4 photos — apply it to the right batch yourself.', {
-            n: est.consensus.value,
-          })
-        );
-        return;
-      }
-
-      const samples = est.readings
-        .map((r) => r.layers)
-        .filter((n): n is number => typeof n === 'number');
-      dispatch({
-        type: 'UPDATE_BATCH_SECTION',
-        palletIndex,
-        sectionId: pallet.batchSections[0].id,
-        patch: {
-          layerCount: est.consensus.value,
-          aiLayerSamples: samples,
-          aiSuggestedLayers: est.consensus.value,
-          aiModelVersion: est.modelVersion,
-          aiSuggestedAt: new Date().toISOString(),
-          aiTopLayerFull: est.topLayerFull,
-          aiGaps: est.gaps,
-          aiDamage: est.damage,
-        },
-      });
-    } catch {
-      setFacesMsg(t('pallet.facesUnavailable', 'AI estimate unavailable — enter layers manually.'));
-    } finally {
-      setFacesBusy(false);
-    }
-  };
-
-  useEffect(() => {
-    // Fires once per distinct set of four photos, and never in read-only view.
-    if (readOnly || !faceSignature || faceSignature === predictedFor) return;
-    void predictFromFaces();
-    // predictFromFaces is recreated each render; faceSignature is the real trigger.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [faceSignature, predictedFor, readOnly]);
-
   const handleAdd = () => {
     if (!pallet.lpnNumber && inspection.type !== 'returns' && pallet.passInspection === 'Fail') {
       setValidationError(t('pallet.errLpnRequired', 'LPN number is required.'));
@@ -357,8 +201,6 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
     if (pallet.palletType === 'Minibulk') return 'MB';
     return 'BG';
   }, [pallet.batchSections, pallet.palletType, inspection.picklist.lineItems]);
-
-  const isBagPallet = pallet.palletType !== 'Seedpak' && pallet.palletType !== 'Minibulk';
 
   const totalActualOnPallet = pallet.batchSections.reduce(
     (sum, bs) => sum + (bs.actualBagCount.value || 0),
@@ -567,117 +409,6 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
           }
           readOnly={readOnly}
         />
-        {/* Layer prediction from the four faces, once they are all captured. */}
-        {!readOnly && isBagPallet && allFacesCaptured && (
-          <div className="mt-8" style={{ borderTop: '1px dashed var(--rule-soft)', paddingTop: 8 }}>
-            {facesBusy ? (
-              <div className="xs soft">
-                {t('pallet.facesEstimating', '✨ Reading the stack from all 4 photos…')}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                {faceReadings.length > 0 && (
-                  <span className="xs soft">
-                    {t('pallet.facesRead', 'AI read {list} from the 4 photos', {
-                      list: faceReadings.map((r) => r.layers ?? '—').join(' · '),
-                    })}
-                  </span>
-                )}
-                <button
-                  type="button"
-                  className="btn btn--sm btn--ghost"
-                  onClick={() => {
-                    setPredictedFor(null); // allow a re-run on the same photos
-                    void predictFromFaces();
-                  }}
-                >
-                  {faceReadings.length > 0
-                    ? t('pallet.facesAgain', '✨ Read again')
-                    : t('pallet.facesEstimate', '✨ Estimate layers from the 4 photos')}
-                </button>
-              </div>
-            )}
-            {facesMsg && (
-              <div className="xs soft" style={{ marginTop: 4 }}>
-                {facesMsg}
-              </div>
-            )}
-
-            {/* Bag total from flaps. Every bag's flap faces exactly one side, so the
-                faces sum to the pallet total — no bags-per-layer assumption needed,
-                which makes this directly checkable against the picklist. */}
-            {assessment?.needsReview && (
-              <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
-                <span className="banner__icon">⚠</span>
-                <div className="banner__body">
-                  {assessment.reviewReason ||
-                    t(
-                      'pallet.roiNeedsReview',
-                      'The intended pallet was ambiguous or background pallets were detected. Confirm the layer count manually.'
-                    )}
-                </div>
-              </div>
-            )}
-
-            {assessment && (
-              <div className="vision-face-grid" aria-label="Pallet vision overlays">
-                {assessment.faces.map((face) => {
-                  const source = (facePhotos as InspectionPhoto[]).find((item) => item.slotKey === face.slotKey);
-                  return source ? <VisionFaceOverlay key={`${source.id}-${face.index}`} photo={source} face={face} /> : null;
-                })}
-              </div>
-            )}
-
-            {!assessment?.needsReview && assessment &&
-              (() => {
-                const { total, source } = bestBagTotal(assessment);
-                if (total === null) return null;
-                const perFace = assessment.faces
-                  .map((f) => f.boxCount ?? f.bagFlaps ?? '—')
-                  .join(' + ');
-                const disagrees = assessment.faces.some((f) => f.countMatchesBoxes === false);
-                return (
-                  <div className="xs soft" style={{ marginTop: 4 }}>
-                    {t('pallet.flapTotal', 'Bag flaps: {perFace} = {total} visible', {
-                      perFace,
-                      total,
-                    })}
-                    {source === 'tally'
-                      ? ` · ${t('pallet.flapTally', 'counted by the model, not located')}`
-                      : ''}
-                    {typeof assessment.interiorBags === 'number' && assessment.interiorBags > 0
-                      ? ` · ${t('pallet.flapInterior', '+{n} hidden inside → {est} total', {
-                          n: assessment.interiorBags,
-                          est: assessment.estimatedPalletTotal ?? total + assessment.interiorBags,
-                        })}`
-                      : ''}
-                    {disagrees
-                      ? ` · ${t('pallet.flapMismatch', "its own tally disagrees with what it located")}`
-                      : ''}
-                  </div>
-                );
-              })()}
-
-            {/* Physical condition — what a world model is actually good at, and it
-                maps onto findings this inspection already records. */}
-            {assessment &&
-              (() => {
-                const issues = physicalIssues(assessment);
-                if (issues.length === 0) return null;
-                return (
-                  <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
-                    <span className="banner__icon">⚠</span>
-                    <div className="banner__body">
-                      {t('pallet.physicalIssues', 'AI flagged the load — check it: {issues}.', {
-                        issues: issues.join(', '),
-                      })}
-                      {assessment.conditionNotes ? ` “${assessment.conditionNotes}”` : ''}
-                    </div>
-                  </div>
-                );
-              })()}
-          </div>
-        )}
       </section>
 
       {/* Batch sections - one per batch on this pallet */}

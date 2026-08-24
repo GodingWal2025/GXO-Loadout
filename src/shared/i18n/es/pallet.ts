@@ -1,18 +1,4 @@
 export const pallet: Record<string, string> = {
-  'pallet.facesAgain': '✨ Leer de nuevo',
-  'pallet.facesEstimate': '✨ Estimar capas de las 4 fotos',
-  'pallet.facesEstimating': '✨ Leyendo la estiba de las 4 fotos…',
-  'pallet.facesMixed': 'La IA leyó {n} capas de las 4 fotos; aplíquelas manualmente al lote correcto.',
-  'pallet.facesNoBlobs': 'Las fotos no están disponibles sin conexión; ingrese las capas manualmente.',
-  'pallet.facesRead': 'La IA leyó {list} de las 4 fotos',
-  'pallet.facesUnavailable': 'La estimación de IA no está disponible; ingrese las capas manualmente.',
-  'pallet.facesUnreadable': 'No se pudo leer la estiba; ingrese las capas manualmente.',
-  'pallet.flapInterior': '+{n} ocultas en el interior → {est} en total',
-  'pallet.flapMismatch': 'su propio conteo no coincide con lo que localizó',
-  'pallet.flapTally': 'contadas por el modelo, no localizadas',
-  'pallet.flapTotal': 'Solapas de bolsas: {perFace} = {total} visibles',
-  'pallet.physicalIssues': 'La IA marcó la carga; revísela: {issues}.',
-  'pallet.roiNeedsReview': 'No se pudo aislar con seguridad la tarima prevista. Revise las fotos antes de continuar.',
   // ---- Pallet scan screen: header ----
   'pallet.headPallet': 'Tarima',
   'pallet.headDelivery': 'Entrega',
