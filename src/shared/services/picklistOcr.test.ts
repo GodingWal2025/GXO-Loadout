@@ -18,6 +18,8 @@ import {
   extractLineItemsFromTables,
   findDeliveryAnchors,
   findLabeledValue,
+  normalizeOcrBatchCode,
+  normalizeOcrNumericText,
   parseDateToIso,
 } from '../../../api/src/index';
 
@@ -32,6 +34,30 @@ function table(header: string[], rows: string[][]) {
 }
 
 describe('picklist OCR extraction', () => {
+  it('corrects B/8 only where the field format makes the character unambiguous', () => {
+    expect(normalizeOcrNumericText('91007B44')).toBe('91007844');
+    expect(normalizeOcrBatchCode('PB8GE1JMB')).toBe('P88GE1JMB');
+    expect(normalizeOcrBatchCode('821R1SHTB')).toBe('B21R1SHTB');
+    // The suffix is genuinely alphanumeric, so its B and 8 must remain as read.
+    expect(normalizeOcrBatchCode('P21B1S8TB')).toBe('P21B1S8TB');
+  });
+
+  it('normalizes B to 8 in numeric SKU, quantity, and delivery fields', () => {
+    const items = extractLineItemsFromTables([
+      table(
+        ['Delivery', 'Batch', 'Material', 'Qty'],
+        [['80123B5', 'PB8GE1JM8', '91007B44', '2B']]
+      ),
+    ]);
+
+    expect(items[0]).toMatchObject({
+      deliveryNumber: '8012385',
+      batchCode: 'P88GE1JM8',
+      sku: '91007844',
+      expectedQuantity: 28,
+    });
+  });
+
   it('keeps the material number and its description in separate fields', () => {
     const items = extractLineItemsFromTables([
       table(
@@ -206,6 +232,13 @@ describe('delivery grouping', () => {
       '8012345',
       '8012346',
     ]);
+  });
+
+  it('corrects B/8 confusion in a numeric delivery heading', () => {
+    const inline = docLines({ pages: [page(['Delivery 80123B5'])] });
+    const stacked = docLines({ pages: [page(['Delivery', '80123B6'])] });
+    expect(findDeliveryAnchors(inline)[0].deliveryNumber).toBe('8012385');
+    expect(findDeliveryAnchors(stacked)[0].deliveryNumber).toBe('8012386');
   });
 
   it('assigns a row to the heading printed above it', () => {

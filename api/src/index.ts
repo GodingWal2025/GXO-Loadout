@@ -63,14 +63,44 @@ const COLUMN_KEYWORDS: Array<{ key: keyof OcrLineItem; words: string[] }> = [
  * ("91007244") and from a dotted description ("C.CL.201-40VT4...").
  */
 function looksLikeBatchCode(value: string): boolean {
-    const v = value.trim().toUpperCase();
+    const v = normalizeOcrBatchCode(value);
     if (!/^[A-Z0-9]{5,20}$/.test(v)) return false;
     return /[A-Z]/.test(v) && /[0-9]/.test(v);
 }
 
 /** A material/SKU number is essentially all digits. */
 function looksLikeSku(value: string): boolean {
-    return /^\d[\d\s-]{3,}$/.test(value.trim());
+    return /^\d[\d\s-]{3,}$/.test(normalizeOcrNumericText(value));
+}
+
+/**
+ * Azure occasionally reads the digit 8 as B. Only correct that ambiguity in
+ * fields that are known to be numeric; changing arbitrary alphanumeric text
+ * would corrupt legitimate batch letters.
+ */
+export function normalizeOcrNumericText(raw: string): string {
+    return String(raw || "").trim().replace(/[Bb]/g, "8");
+}
+
+/**
+ * Albert Lea batch codes start with a letter followed by a two-digit year.
+ * Those three positions let us safely resolve Azure's B/8 confusion while
+ * leaving the genuinely alphanumeric remainder untouched.
+ */
+export function normalizeOcrBatchCode(raw: string): string {
+    const chars = String(raw || "").trim().toUpperCase().replace(/\s+/g, "").split("");
+    if (chars[0] === "8") chars[0] = "B";
+    if (chars[1] === "B") chars[1] = "8";
+    if (chars[2] === "B") chars[2] = "8";
+    return chars.join("");
+}
+
+function normalizeOcrSku(raw: string | null): string | null {
+    if (!raw) return null;
+    const cleaned = String(raw).trim();
+    // SKU/material numbers are numeric, but do not rewrite a description that
+    // was accidentally mapped into the SKU column.
+    return /^[\dBb\s-]{4,}$/.test(cleaned) ? normalizeOcrNumericText(cleaned) : cleaned;
 }
 
 function normalizeUom(raw: string | null): Uom {
@@ -88,7 +118,7 @@ function normalizeUom(raw: string | null): Uom {
 
 function parseQuantity(raw: string | null): number | null {
     if (!raw) return null;
-    const m = raw.replace(/,/g, "").match(/\d+(\.\d+)?/);
+    const m = normalizeOcrNumericText(raw).replace(/,/g, "").match(/\d+(\.\d+)?/);
     return m ? Number(m[0]) : null;
 }
 
@@ -262,12 +292,13 @@ export function findDeliveryAnchors(lines: DocLine[]): DeliveryAnchor[] {
     for (let i = 0; i < lines.length; i++) {
         const label = DELIVERY_LABEL.exec(lines[i].text);
         if (!label) continue;
-        const rest = lines[i].text.slice(label.index + label[0].length);
+        const rest = normalizeOcrNumericText(lines[i].text.slice(label.index + label[0].length));
         let value = (DELIVERY_VALUE.exec(rest) || [])[0] || null;
         if (!value) {
             for (let j = i + 1; j <= i + 2 && j < lines.length; j++) {
-                if (!isWholeLineValue(DELIVERY_VALUE, lines[j].text)) continue;
-                value = (DELIVERY_VALUE.exec(lines[j].text) || [])[0] || null;
+                const candidate = normalizeOcrNumericText(lines[j].text);
+                if (!isWholeLineValue(DELIVERY_VALUE, candidate)) continue;
+                value = (DELIVERY_VALUE.exec(candidate) || [])[0] || null;
                 if (value) break;
             }
         }
@@ -379,13 +410,15 @@ export function extractLineItemsFromTables(
             }
 
             const item: OcrLineItem = {
-                batchCode: raw.batchCode ? raw.batchCode.toUpperCase() : null,
-                sku,
+                batchCode: raw.batchCode ? normalizeOcrBatchCode(raw.batchCode) : null,
+                sku: normalizeOcrSku(sku),
                 description,
                 expectedQuantity: parseQuantity(raw.expectedQuantity ?? null),
                 uom: normalizeUom(raw.uom ?? null),
                 deliveryNumber:
-                    raw.deliveryNumber ?? (resolveDelivery ? resolveDelivery(rowCells[0]) : null),
+                    raw.deliveryNumber
+                        ? normalizeOcrNumericText(raw.deliveryNumber)
+                        : (resolveDelivery ? resolveDelivery(rowCells[0]) : null),
             };
             // Skip empty/subtotal rows.
             if (item.batchCode || item.sku || item.description || item.expectedQuantity !== null) {
@@ -567,15 +600,15 @@ export async function analyzePicklist(request: HttpRequest, context: InvocationC
             const rowDelivery = row.get("DeliveryNumber", "Delivery", "DeliveryNo", "Delivery#", "DeliveryId");
 
             const item: OcrLineItem = {
-                batchCode: batchCodeRaw ? String(batchCodeRaw).trim().toUpperCase() : null,
-                sku: sku ? String(sku).trim() : null,
+                batchCode: batchCodeRaw ? normalizeOcrBatchCode(String(batchCodeRaw)) : null,
+                sku: sku ? normalizeOcrSku(String(sku)) : null,
                 description: description ? String(description).trim() : null,
                 expectedQuantity,
                 uom: normalizeUom(uomRaw != null ? String(uomRaw) : null),
                 // A delivery column wins; otherwise the row belongs to whichever
                 // delivery heading it is printed under.
                 deliveryNumber: rowDelivery
-                    ? String(rowDelivery).trim()
+                    ? normalizeOcrNumericText(String(rowDelivery))
                     : deliveryForPosition(anchors, row.position),
             };
 

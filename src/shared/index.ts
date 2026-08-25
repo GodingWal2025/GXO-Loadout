@@ -37,6 +37,7 @@ export type {
   BolOcrResult,
 } from './services/ocr';
 export { computeCrossReference } from './services/crossReference';
+export { reconcilePicklistPageBoundary } from './services/picklistPageMerge';
 
 export {
   parseSpSize,

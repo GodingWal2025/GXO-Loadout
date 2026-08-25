@@ -4,6 +4,7 @@ import {
   analyzePicklistPhoto,
   compressPhoto,
   explodePicklistLines,
+  reconcilePicklistPageBoundary,
   recomputeTallies,
 } from '../shared';
 import { useEffect, useState } from 'react';
@@ -105,7 +106,9 @@ export function CapturePicklistRoute() {
             const number = (rawNumber ?? header.deliveryNumber ?? '').trim();
             let index = number
               ? deliveries.findIndex((d) => d.deliveryNumber.trim() === number)
-              : deliveries.findIndex((d) => !d.deliveryNumber.trim());
+              // A page continuation often omits the delivery heading. In that
+              // case its rows continue under the most recently seen delivery.
+              : deliveries.length - 1;
             // A blank delivery (added by hand, or created before any number was
             // read) adopts the number rather than sitting empty beside it.
             if (index === -1 && number) {
@@ -137,8 +140,9 @@ export function CapturePicklistRoute() {
           }));
           // SP lines split into one line per SeedPak (see uomRules). Each copy
           // keeps its parent's deliveryId, so the split stays on one delivery.
-          const exploded = explodePicklistLines(mapped);
-          updatedPicklist.lineItems = [...updatedPicklist.lineItems, ...exploded];
+          const boundary = reconcilePicklistPageBoundary(updatedPicklist.lineItems, mapped);
+          const exploded = explodePicklistLines(boundary.incoming);
+          updatedPicklist.lineItems = [...boundary.existing, ...exploded];
 
           // Append the new ids to their delivery — existing assignments from an
           // earlier page stay put.
@@ -148,7 +152,9 @@ export function CapturePicklistRoute() {
               ...d,
               lineItemIds: [
                 ...d.lineItemIds,
-                ...exploded.filter((li) => li.deliveryId === d.id).map((li) => li.id),
+                ...exploded
+                  .filter((li) => li.deliveryId === d.id && !d.lineItemIds.includes(li.id))
+                  .map((li) => li.id),
               ],
             })),
           };
