@@ -21,8 +21,9 @@ const TABLE = (process.env.TRAINING_TABLE_NAME || 'TrainingSamples').trim();
 const CONTAINER = (process.env.TRAINING_PHOTO_CONTAINER || 'training-photos').trim();
 const PARTITION = 'sample';
 
-/** Four sides first, then up to three flap close-ups, optional top view. Order matters: the
- *  console requires all four sides before it will let a sample be submitted. */
+/** Four sides first, then up to three flap close-ups. Legacy top-view uploads remain
+ * accepted so existing samples can still be reviewed or edited. Order matters: the
+ * console requires all four sides before it will let a sample be submitted. */
 export const SIDE_ROLES = ['FRONT', 'RIGHT', 'BACK', 'LEFT'] as const;
 export const FLAP_ROLES = ['FLAP_1', 'FLAP_2', 'FLAP_3'] as const;
 export const TOP_ROLES = ['TOP'] as const;
