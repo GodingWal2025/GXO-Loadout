@@ -520,7 +520,7 @@
             </ol>
             <div class="cmd"><pre id="syncCmd">cd detector-service
 python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestaticapps.net
-# -> dataset/raw/&lt;pallet&gt;/{FRONT,RIGHT,BACK,LEFT,TOP,FLAP_1}.jpg
+# -> dataset/raw/&lt;pallet&gt;/{FRONT,RIGHT,BACK,LEFT,FLAP_1}.jpg
 # -> dataset/raw/samples.csv   (the ground-truth counts)</pre><button data-copy="syncCmd">Copy</button></div>
           </div></div>
         </div>
@@ -633,7 +633,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
                 <button class="btn" id="labPullBtn">Pull collected photos</button>
                 <label class="btn ghost" style="display:inline-block;margin-left:8px">Add images<input type="file" id="labFileIn" accept="image/*" multiple hidden></label>
               </p>
-              <p class="hint" id="labPullHint" style="margin:10px 0 0">Pulls the four side photos + top photos of uploaded pallets. Flap close-ups are left out (they carry batch text).</p>
+              <p class="hint" id="labPullHint" style="margin:10px 0 0">Pulls the four side photos of uploaded pallets. Flap close-ups are left out (they carry batch text).</p>
             </div>
             <canvas id="labCanvas" hidden></canvas>
           </div>
@@ -1107,13 +1107,10 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     const missing = SIDE_ROLES.filter(d => !draft.photos[d.role]);
     if (missing.length) out.push(`all four sides (missing ${missing.map(d=>d.label.toLowerCase()).join(", ")})`);
     if (!FLAP_ROLES.some(d => draft.photos[d.role])) out.push("at least one bag-flap photo");
-    const { per, layers, partial, total } = recalcQuiet();
+    const { per, layers, total } = recalcQuiet();
     if (per == null || per < 1) out.push("bags per layer");
     if (layers == null || layers < 1) out.push("full layers");
     if (total == null || total < 1) out.push("a total");
-    if (partial > 0 && !draft.photos["TOP"]) {
-      out.push("elevated top view photo (required because partial top count > 0)");
-    }
     return out;
   }
   function recalcQuiet() {
@@ -1296,10 +1293,8 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     const roles = new Set((s.photos || []).map(p => p.role));
     const missingSides = SIDE_ROLES.filter(d => !roles.has(d.role)).map(d => d.label);
     const flaps = FLAP_ROLES.filter(d => roles.has(d.role)).length;
-    const hasTop = roles.has("TOP");
     const computed = (s.bagsPerLayer || 0) * (s.fullLayers || 0) + (s.partialBags || 0);
-    const partialMissingTop = (s.partialBags > 0) && !hasTop;
-    return { missingSides, flaps, hasTop, partialMissingTop, computed, countsAgree: computed === s.totalBags };
+    return { missingSides, flaps, computed, countsAgree: computed === s.totalBags };
   }
 
   let reviewSamples = [];
@@ -1325,7 +1320,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
 
     const audits = reviewSamples.map(auditSample);
     const bags = reviewSamples.reduce((n, s) => n + (s.totalBags || 0), 0);
-    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree || a.partialMissingTop).length;
+    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree).length;
     const labelable = reviewSamples.reduce((n, s, i) => n + (4 - audits[i].missingSides.length), 0);
 
     tiles.innerHTML = `
@@ -1353,7 +1348,6 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       s.sku ? chip("SKU " + s.sku, "acc") : "",
       a.missingSides.length ? chip("missing " + a.missingSides.join(", ").toLowerCase(), "crit") : "",
       !a.flaps ? chip("no flap photo", "crit") : "",
-      a.partialMissingTop ? chip("partial missing top photo", "warn") : "",
       !a.countsAgree ? chip(`total ${s.totalBags} ≠ layers ${a.computed}`, "warn") : "",
     ].filter(Boolean).join("");
 
