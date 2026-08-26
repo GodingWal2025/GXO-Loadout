@@ -44,6 +44,7 @@ export {
   parsePackInfo,
   bagsPerUnit,
   expectedBags,
+  actualCountUom,
   shouldExplode,
   explodePicklistLine,
   explodePicklistLines,

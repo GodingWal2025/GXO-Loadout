@@ -6,7 +6,7 @@ import { AlphanumericInput, SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, BatchSection, PalletType } from '../shared';
-import { PALLET_TYPES, ConfirmModal, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
+import { PALLET_TYPES, ConfirmModal, actualCountUom, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -84,7 +84,7 @@ function formatUomCount(
     return `${count} MB`;
   }
   if (code === 'PL') {
-    return `${count} PL`;
+    return `${count} ${actualCountUom(code)}`;
   }
   if (code === 'C62') {
     return `${count} C62`;
