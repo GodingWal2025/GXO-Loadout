@@ -114,7 +114,7 @@ export const pallet: Record<string, string> = {
 
   // ---- Running tally header ----
   'tally.complete': 'Completo',
-  'tally.totalBags': 'Total de bolsas',
+  'tally.totalByUnit': 'Totales por unidad',
   'tally.barComplete': '✓ Completo',
   'tally.barOver': 'Excedente de {count}',
   'tally.barNeeded': '{count} requeridas',

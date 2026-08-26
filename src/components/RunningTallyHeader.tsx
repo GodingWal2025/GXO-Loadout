@@ -1,7 +1,13 @@
 import { useState } from 'react';
 import type { Picklist, PalletInspection, HandoffEntry, InspectionType } from '../shared';
-import { expectedBags, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
+import { isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
+import {
+  formatTallyQuantity,
+  tallyDisplayCount,
+  tallyTotalsByUnit,
+  type TallyDisplayUnit,
+} from './runningTallyModel';
 
 export interface InspectorColorTheme {
   primary: string;
@@ -119,10 +125,10 @@ export function RunningTallyHeader({
     return INSPECTOR_PALETTES[index % INSPECTOR_PALETTES.length];
   };
 
-  // The header counts bags, so each line's quantity is converted from its UOM
-  // (1 PL → 60 bags, one 40USP SeedPak → 40) to match the scanned bag tally.
+  // Completion still compares bag-equivalents internally. The visible tally is
+  // grouped into BG/SP/MB below so unlike units are never added together.
   const bagsExpected = (li: Picklist['lineItems'][number]) =>
-    expectedBags(li.uom, li.expectedQuantity.value, li.description.value);
+    tallyDisplayCount(li).expectedBags;
 
   const excludePackaging =
     inspectionType === 'outbound' && picklistHasOcr(picklist);
@@ -133,6 +139,8 @@ export function RunningTallyHeader({
 
   const totalExpected = activeLineItems.reduce((sum, li) => sum + bagsExpected(li), 0);
   const totalActual = activeLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
+  const totalsByUnit = tallyTotalsByUnit(activeLineItems);
+  const displayUnits: TallyDisplayUnit[] = ['BG', 'SP', 'MB'];
   const allFulfilled =
     activeLineItems.length > 0 && activeLineItems.every((li) => li.fulfilled);
   const completedBatches = activeLineItems.filter((li) => li.fulfilled).length;
@@ -150,11 +158,18 @@ export function RunningTallyHeader({
       <div className="tally__inner">
         <div className="tally__total">
           <div className="tally__total-lbl">
-            {allFulfilled ? t('tally.complete', 'Complete') : t('tally.totalBags', 'Total bags')}
+            {allFulfilled ? t('tally.complete', 'Complete') : t('tally.totalByUnit', 'Totals by unit')}
           </div>
-          <div className="tally__total-num tnum">
-            {totalActual}
-            <span className="of"> / {totalExpected}</span>
+          <div className="tally__unit-totals">
+            {displayUnits.map((unit) => (
+              <div className="tally__unit-total" key={unit}>
+                <span className="tally__unit-code">{unit}</span>
+                <span className="tally__total-num tnum">
+                  {formatTallyQuantity(totalsByUnit[unit].actual)}
+                  <span className="of"> / {formatTallyQuantity(totalsByUnit[unit].expected)}</span>
+                </span>
+              </div>
+            ))}
           </div>
 
           {/* Mini-legend if there are handoffs / multiple inspectors */}
@@ -235,8 +250,9 @@ export function RunningTallyHeader({
         <div id="running-tally-batches" className="tally__details">
           <div className="tally__bars">
           {activeLineItems.map((li) => {
-            const expected = bagsExpected(li);
-            const actual = li.actualQuantity;
+            const display = tallyDisplayCount(li);
+            const expected = display.expectedBags;
+            const actual = display.actualBags;
             const pct = expected ? Math.min(100, (actual / expected) * 100) : 0;
             const isAdjusted = Boolean(li.originalBatchCode || li.originalExpectedQuantity !== undefined);
             const status =
@@ -271,15 +287,18 @@ export function RunningTallyHeader({
             const isMultiScanned = contributingInspectors.length > 1;
 
             const cls = status === 'full' ? 'full' : status === 'over' ? 'over' : status === 'short' ? 'short' : '';
+            const displayDifference = `${formatTallyQuantity(Math.abs(display.actual - display.expected))} ${display.unit}`;
 
             const statusText =
               status === 'full'
                 ? t('tally.barComplete', '✓ Complete')
                 : status === 'over'
-                ? t('tally.barOver', 'Over by {count}', { count: actual - expected })
+                ? t('tally.barOver', 'Over by {count}', { count: displayDifference })
                 : status === 'empty'
-                ? t('tally.barNeeded', '{count} needed', { count: expected })
-                : t('tally.barMore', '{count} more', { count: expected - actual });
+                ? t('tally.barNeeded', '{count} needed', {
+                    count: `${formatTallyQuantity(display.expected)} ${display.unit}`,
+                  })
+                : t('tally.barMore', '{count} more', { count: displayDifference });
 
             // Dynamic styles when completed with different inspectors
             const barStyle: React.CSSProperties = {};
@@ -362,8 +381,8 @@ export function RunningTallyHeader({
                 </div>
 
                 <div className="tally__bar-vals tnum">
-                  {actual}
-                  <span className="of"> / {expected}</span>
+                  {formatTallyQuantity(display.actual)}
+                  <span className="of"> / {formatTallyQuantity(display.expected)} {display.unit}</span>
                 </div>
 
                 <div className="tally__bar-track">

@@ -1332,6 +1332,26 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
   color: var(--ink-faint);
   font-weight: 400;
 }
+.tally__unit-totals {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  white-space: nowrap;
+}
+.tally__unit-total {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tally__unit-code {
+  color: var(--ink-soft);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+}
+.tally__unit-total .tally__total-num {
+  font-size: 17px;
+}
 .tally__summary {
   flex: 1 1 220px;
   min-width: 0;
@@ -1465,6 +1485,8 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
     padding-left: max(16px, var(--safe-left));
     padding-right: max(16px, var(--safe-right));
   }
+  .tally__unit-totals { gap: 8px; }
+  .tally__unit-total .tally__total-num { font-size: 15px; }
   .tally__details {
     padding-left: max(16px, var(--safe-left));
     padding-right: max(16px, var(--safe-right));
@@ -1483,6 +1505,8 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
     padding-right: max(16px, var(--safe-right));
   }
   .tally__summary { order: 3; flex-basis: 100%; }
+  .tally__total { flex: 1 1 auto; min-width: 0; }
+  .tally__unit-totals { justify-content: space-between; gap: 6px; }
   .tally__toggle span:first-child { display: none; }
   .tally__toggle { width: 44px; padding-inline: 0; }
   .tally__details {
