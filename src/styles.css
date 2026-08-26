@@ -1332,6 +1332,38 @@ table.data tr.clickable:hover td { background: var(--accent-bg); }
   color: var(--ink-faint);
   font-weight: 400;
 }
+
+.inspection-card__flag-button {
+  appearance: none;
+  font: inherit;
+  cursor: pointer;
+}
+.inspection-card__flag-button:hover,
+.inspection-card__flag-button:focus-visible {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 28%, transparent);
+}
+.inspection-flags-modal { max-width: 560px; }
+.inspection-flags-modal__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.inspection-flags-modal__item {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface-tint);
+  border: 1px solid var(--rule-soft);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--radius-sm);
+}
+.inspection-flags-modal__icon {
+  color: var(--warn);
+  font-size: 18px;
+  line-height: 1.2;
+}
 .tally__unit-totals {
   display: flex;
   align-items: flex-end;
