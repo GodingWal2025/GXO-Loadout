@@ -851,16 +851,6 @@ function BatchSectionRow({
         </div>
       )}
 
-      {remainingAvailable !== null && remainingAvailable > 0 && (
-        <div className="small soft mt-8">
-          {t(
-            'pallet.remainingOnPicklist',
-            '{count} bags remaining on picklist for this batch (already scanned on other pallets)',
-            { count: remainingAvailable }
-          )}
-        </div>
-      )}
-
       {mismatch && (
         <div className="banner banner--warn" style={{ marginTop: 8, marginBottom: 0 }}>
           <span className="banner__icon">⚠</span>
