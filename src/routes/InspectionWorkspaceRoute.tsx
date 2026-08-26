@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
-import { PALLET_TYPES, expectedBags, actualCountUom, ConfirmModal, UndoToast, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
+import { PALLET_TYPES, expectedBags, actualCountInUom, actualCountUom, ConfirmModal, UndoToast, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
@@ -835,10 +835,6 @@ function DeliveryGroup({
                 </div>
               </div>
               {(() => {
-                const total = p.batchSections.reduce(
-                  (sum: number, bs) => sum + (bs.actualBagCount.value || 0),
-                  0
-                );
                 let uomCode = 'BG';
                 if (p.palletType === 'Seedpak') uomCode = 'SP';
                 else if (p.palletType === 'Minibulk') uomCode = 'MB';
@@ -856,6 +852,20 @@ function DeliveryGroup({
                     }
                   }
                 }
+                const total = p.batchSections.reduce((sum: number, bs) => {
+                  const batchCode = normalizeBatchCode(bs.batchCode.value);
+                  const li = lineItems?.find(
+                    (item: any) => normalizeBatchCode(item.batchCode.value) === batchCode
+                  );
+                  return (
+                    sum +
+                    actualCountInUom(
+                      li?.uom || uomCode,
+                      bs.actualBagCount.value,
+                      li?.description.value
+                    )
+                  );
+                }, 0);
                 const formattedUnit =
                   uomCode === 'SP' || uomCode === 'SEEDPAK'
                     ? 'SP'

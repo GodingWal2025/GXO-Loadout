@@ -1,5 +1,5 @@
 import type { PicklistLineItemEntry } from '../shared';
-import { bagsPerUnit, expectedBags } from '../shared';
+import { actualCountInUom, expectedBags } from '../shared';
 
 export type TallyDisplayUnit = 'BG' | 'SP' | 'MB';
 
@@ -21,10 +21,9 @@ export function tallyDisplayCount(line: PicklistLineItemEntry): TallyDisplayCoun
   const expectedBagCount = expectedBags(line.uom, line.expectedQuantity.value, line.description.value);
 
   if (unit === 'SP' || unit === 'MB') {
-    const bagsInUnit = bagsPerUnit(unit, line.description.value);
     return {
       unit,
-      actual: cleanNumber(bagsInUnit ? actualBags / bagsInUnit : actualBags),
+      actual: cleanNumber(actualCountInUom(unit, actualBags, line.description.value)),
       expected: cleanNumber(line.expectedQuantity.value || 0),
       actualBags,
       expectedBags: expectedBagCount,

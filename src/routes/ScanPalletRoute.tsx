@@ -6,7 +6,7 @@ import { AlphanumericInput, SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, BatchSection, PalletType } from '../shared';
-import { PALLET_TYPES, ConfirmModal, actualCountUom, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
+import { PALLET_TYPES, ConfirmModal, actualCountInUom, actualCountUom, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -205,6 +205,26 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const totalActualOnPallet = pallet.batchSections.reduce(
     (sum, bs) => sum + (bs.actualBagCount.value || 0),
     0
+  );
+
+  const totalDisplayOnPallet = useMemo(
+    () =>
+      pallet.batchSections.reduce((sum, section) => {
+        const code = normalizeBatchCode(section.batchCode.value);
+        const line = inspection.picklist.lineItems.find(
+          (item) => normalizeBatchCode(item.batchCode.value) === code
+        );
+        const sectionUom = line?.uom || palletUom;
+        return (
+          sum +
+          actualCountInUom(
+            sectionUom,
+            section.actualBagCount.value,
+            line?.description.value
+          )
+        );
+      }, 0),
+    [pallet.batchSections, inspection.picklist.lineItems, palletUom]
   );
 
   // For each section, compute how much more is "available" (i.e., remaining on picklist)
@@ -661,7 +681,7 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
               {t('pallet.totalOnPallet', 'Total on this pallet')}
             </div>
             <div className="fw-500" style={{ fontSize: 24 }}>
-              {formatUomCount(totalActualOnPallet, palletUom, pallet.palletType, t)}
+              {formatUomCount(totalDisplayOnPallet, palletUom, pallet.palletType, t)}
             </div>
           </div>
         </div>
