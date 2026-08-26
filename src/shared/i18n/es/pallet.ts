@@ -31,8 +31,6 @@ export const pallet: Record<string, string> = {
   'pallet.batchNumber': 'Lote {number}',
   'pallet.batchCodeLabel': 'Código de lote',
   'pallet.actualCount': 'Cantidad real',
-  'pallet.remainingOnPicklist':
-    'Quedan {count} bolsas en la lista de surtido para este lote (ya escaneadas en otras tarimas)',
   'pallet.mismatchPre': 'Discrepancia de conteo: esperado',
   'pallet.mismatchMid': ', se ingresó',
   'pallet.mismatchDiff': 'diferencia {diff}',
