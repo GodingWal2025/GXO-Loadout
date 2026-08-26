@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { countInspectionFlags, type Inspection } from '../shared';
+import { listInspectionFlags, type Inspection } from '../shared';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT, type TranslateFn } from '../shared/i18n/LanguageContext';
 import { buildInspectionListCardModel, getInspectionCardStatus } from './inspectionListCardModel';
+import { InspectionFlagsModal } from './InspectionFlagsModal';
 
 interface Props {
   inspection: Inspection;
@@ -10,6 +12,7 @@ interface Props {
 
 export function InspectionListCard({ inspection }: Props) {
   const t = useT();
+  const [showFlags, setShowFlags] = useState(false);
   const typeLabels: Record<Inspection['type'], string> = {
     outbound: t('listCard.typeOutbound', 'Outbound'),
     inbound: t('listCard.typeInbound', 'Inbound'),
@@ -18,7 +21,8 @@ export function InspectionListCard({ inspection }: Props) {
     discard: t('listCard.typeDiscard', 'Discard'),
   };
   const card = buildInspectionListCardModel(inspection);
-  const flaggedItemsCount = countInspectionFlags(inspection);
+  const flags = listInspectionFlags(inspection);
+  const flaggedItemsCount = flags.length;
   const cardStatus = getInspectionCardStatus(inspection, card, flaggedItemsCount);
   const isInbound = inspection.type === 'inbound';
   const startedBy = inspection.startedBy || t('listCard.unknownInspector', 'Unknown');
@@ -32,7 +36,8 @@ export function InspectionListCard({ inspection }: Props) {
       : `/inspection/${inspection.id}`;
 
   return (
-    <Link
+    <>
+      <Link
       to={linkTarget}
       className={`card inspection-card inspection-card--${cardStatus}`}
       style={{ display: 'block', textDecoration: 'none', color: 'inherit' }}
@@ -72,11 +77,24 @@ export function InspectionListCard({ inspection }: Props) {
             </button>
           )}
           {cardStatus === 'issue' ? (
-            <span className="pill pill--warn">
-              ⚑ {flaggedItemsCount > 0
-                ? t('listCard.flagged', '{count} flagged', { count: flaggedItemsCount })
-                : t('listCard.needsReview', 'Needs review')}
-            </span>
+            flaggedItemsCount > 0 ? (
+              <button
+                type="button"
+                className="pill pill--warn inspection-card__flag-button"
+                aria-haspopup="dialog"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setShowFlags(true);
+                }}
+              >
+                ⚑ {t('listCard.flagged', '{count} flagged', { count: flaggedItemsCount })}
+              </button>
+            ) : (
+              <span className="pill pill--warn">
+                {t('listCard.needsReview', 'Needs review')}
+              </span>
+            )
           ) : cardStatus === 'complete' ? (
             <span className="pill pill--success">✓ {t('listCard.completed', 'Completed')}</span>
           ) : (
@@ -137,7 +155,15 @@ export function InspectionListCard({ inspection }: Props) {
           ))}
         </div>
       )}
-    </Link>
+      </Link>
+      {showFlags && (
+        <InspectionFlagsModal
+          loadNumber={card.loadNumber}
+          flags={flags}
+          onClose={() => setShowFlags(false)}
+        />
+      )}
+    </>
   );
 }
 

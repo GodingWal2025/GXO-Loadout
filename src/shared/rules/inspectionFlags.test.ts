@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Inspection, PicklistLineItemEntry } from '../types/inspection';
 import { emptySuggestable } from '../types/inspection';
-import { countInspectionFlags, countQuantityOverages } from './inspectionFlags';
+import { countInspectionFlags, countQuantityOverages, listInspectionFlags } from './inspectionFlags';
 
 function inspectionWith(actual: number, expected = 60): Inspection {
   const line: PicklistLineItemEntry = {
@@ -63,5 +63,29 @@ describe('order discrepancy flags', () => {
     };
 
     expect(countInspectionFlags(inspection)).toBe(1);
+  });
+
+  it('lists the same two issues shown by the flagged badge', () => {
+    const inspection = inspectionWith(61, 60);
+    inspection.picklist.lineItems[0].picklistException = {
+      reason: 'not_on_original_picklist',
+      addedAt: '2026-08-24T12:00:00.000Z',
+      addedBy: 'Verifier A',
+    };
+
+    expect(listInspectionFlags(inspection)).toEqual([
+      expect.objectContaining({
+        source: 'unlisted_batch',
+        batchCode: 'P60SM1PB8',
+        flaggedBy: 'Verifier A',
+      }),
+      expect.objectContaining({
+        source: 'quantity_overage',
+        batchCode: 'P60SM1PB8',
+        actual: 61,
+        expected: 60,
+      }),
+    ]);
+    expect(countInspectionFlags(inspection)).toBe(2);
   });
 });
