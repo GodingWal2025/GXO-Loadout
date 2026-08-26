@@ -4,6 +4,7 @@ import {
   parsePackInfo,
   bagsPerUnit,
   expectedBags,
+  actualCountUom,
   shouldExplode,
   explodePicklistLine,
   explodePicklistLines,
@@ -87,6 +88,18 @@ describe('expectedBags', () => {
     expect(expectedBags('C62', 3, 'anything')).toBe(3);
     expect(expectedBags('SP', 2, 'no-size-here')).toBe(2); // undecipherable tote
     expect(expectedBags('PL', null, null)).toBe(0);
+  });
+});
+
+describe('actualCountUom', () => {
+  it('labels a PL picklist line actual as bags', () => {
+    expect(actualCountUom('PL')).toBe('BG');
+  });
+
+  it('preserves non-pallet units', () => {
+    expect(actualCountUom('BG')).toBe('BG');
+    expect(actualCountUom('SP')).toBe('SP');
+    expect(actualCountUom('MB')).toBe('MB');
   });
 });
 

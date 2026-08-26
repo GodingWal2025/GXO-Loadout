@@ -94,6 +94,16 @@ export function expectedBags(uom: string, quantity: number | null | undefined, d
   return per == null ? qty : qty * per;
 }
 
+/**
+ * Actual pallet tallies are stored as physical bag counts. A picklist may use
+ * PL for its expected quantity, but showing an actual count such as "61 PL"
+ * would multiply the meaning by 60. Keep the expected side as PL and label the
+ * scanned/confirmed side as BG.
+ */
+export function actualCountUom(uom: string | null | undefined): string {
+  return String(uom || 'BG').toUpperCase() === 'PL' ? 'BG' : String(uom || 'BG').toUpperCase();
+}
+
 /** True when a picklist line should be split into one line per unit: SP or MB. */
 export function shouldExplode(uom: string): boolean {
   return uom === 'SP' || uom === 'MB';

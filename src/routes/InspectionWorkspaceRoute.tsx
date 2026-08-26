@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import type { Inspection, PalletType, Delivery, PalletInspection } from '../shared';
-import { PALLET_TYPES, expectedBags, ConfirmModal, UndoToast, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
+import { PALLET_TYPES, expectedBags, actualCountUom, ConfirmModal, UndoToast, isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
 import { RunningTallyHeader } from '../components/RunningTallyHeader';
 import { InspectorPicker } from '../shared';
 import { InspectionProgressModal } from '../components/InspectionProgressModal';
@@ -862,7 +862,7 @@ function DeliveryGroup({
                     : uomCode === 'MB' || uomCode === 'MINIBULK'
                     ? 'MB'
                     : uomCode === 'PL'
-                    ? 'PL'
+                    ? actualCountUom(uomCode)
                     : uomCode === 'C62'
                     ? 'C62'
                     : t('workspace.bagsUnit', 'bags');

@@ -4,7 +4,7 @@ import { dbGetInspection, dbGetPhotoBlob, computeCrossReference, PhotoLightbox }
 import { useInspection, useInspectionMode, ViewEditToggle } from '../shared';
 import { InspectorPicker } from '../shared';
 import { MultiPhotoCapture } from '../shared';
-import { isPackagingLine, picklistHasOcr } from '../shared';
+import { actualCountUom, isPackagingLine, picklistHasOcr } from '../shared';
 import type { Inspection } from '../shared';
 import { CapturedPageThumb } from '../components/CapturedPageThumb';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
@@ -603,7 +603,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
                         {li.expectedQuantity.value || 0} {li.uom}
                       </td>
                       <td className="right num fw-500">
-                        {li.actualQuantity} {li.uom}
+                        {li.actualQuantity} {actualCountUom(li.uom)}
                       </td>
                       <td className="right">
                         {isExcludedPackaging ? (
