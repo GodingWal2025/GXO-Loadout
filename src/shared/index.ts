@@ -45,6 +45,7 @@ export {
   bagsPerUnit,
   expectedBags,
   actualCountUom,
+  actualCountInUom,
   shouldExplode,
   explodePicklistLine,
   explodePicklistLines,

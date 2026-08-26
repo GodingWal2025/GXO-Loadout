@@ -104,6 +104,24 @@ export function actualCountUom(uom: string | null | undefined): string {
   return String(uom || 'BG').toUpperCase() === 'PL' ? 'BG' : String(uom || 'BG').toUpperCase();
 }
 
+/**
+ * Convert a stored actual (always a physical bag/SSU count for product lines)
+ * into the unit operators expect to see. For example, 40 actual SSUs on a
+ * 40SCUSP line is one SeedPak, not 40 SeedPaks.
+ */
+export function actualCountInUom(
+  uom: string | null | undefined,
+  actualCount: number | null | undefined,
+  description: string | null | undefined
+): number {
+  const count = actualCount || 0;
+  const normalizedUom = String(uom || 'BG').toUpperCase();
+  if (normalizedUom !== 'SP' && normalizedUom !== 'MB') return count;
+
+  const perUnit = bagsPerUnit(normalizedUom, description);
+  return perUnit ? count / perUnit : count;
+}
+
 /** True when a picklist line should be split into one line per unit: SP or MB. */
 export function shouldExplode(uom: string): boolean {
   return uom === 'SP' || uom === 'MB';

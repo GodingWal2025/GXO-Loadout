@@ -5,6 +5,7 @@ import {
   bagsPerUnit,
   expectedBags,
   actualCountUom,
+  actualCountInUom,
   shouldExplode,
   explodePicklistLine,
   explodePicklistLines,
@@ -100,6 +101,23 @@ describe('actualCountUom', () => {
     expect(actualCountUom('BG')).toBe('BG');
     expect(actualCountUom('SP')).toBe('SP');
     expect(actualCountUom('MB')).toBe('MB');
+  });
+});
+
+describe('actualCountInUom', () => {
+  it('converts SSU bag-equivalents into SeedPaks', () => {
+    expect(actualCountInUom('SP', 40, 'B.CC.CT1523E.SF9.40SCUSP.X.US')).toBe(1);
+    expect(actualCountInUom('SP', 100, 'C.CL.201.50USP.US')).toBe(2);
+  });
+
+  it('converts Minibulk contents into Minibulk units', () => {
+    expect(actualCountInUom('MB', 45, 'C.CL.201.45SCUMB.US')).toBe(1);
+  });
+
+  it('leaves bags and unknown tote sizes unchanged', () => {
+    expect(actualCountInUom('BG', 40, null)).toBe(40);
+    expect(actualCountInUom('PL', 60, null)).toBe(60);
+    expect(actualCountInUom('SP', 3, 'unknown')).toBe(3);
   });
 });
 
