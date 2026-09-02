@@ -481,6 +481,7 @@ function PicklistLineItems({
                     field={li.batchCode}
                     mono
                     uppercase
+                    scanMode="gs1Batch"
                     placeholder="H18MYD9JX"
                     onChange={(field) => onUpdate(index, { batchCode: field })}
                   />

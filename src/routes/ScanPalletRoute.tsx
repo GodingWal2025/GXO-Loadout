@@ -822,7 +822,7 @@ function BatchSectionRow({
           field={section.batchCode}
           mono
           uppercase
-          hideCamera={true}
+          scanMode="gs1Batch"
           placeholder="P18GY43M8"
           onChange={(field) => onUpdate({ batchCode: field })}
         />
