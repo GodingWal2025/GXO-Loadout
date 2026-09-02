@@ -1,5 +1,3 @@
-import { useRef } from 'react';
-
 interface Props {
   value: string;
   onValueChange: (value: string) => void;
@@ -12,9 +10,7 @@ interface Props {
   'aria-label'?: string;
 }
 
-const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
-
-/** Code/identifier input with an iPad-friendly number row beside the letter keyboard. */
+/** Code/identifier input with consistent capitalization and keyboard behavior. */
 export function AlphanumericInput({
   value,
   onValueChange,
@@ -25,25 +21,11 @@ export function AlphanumericInput({
   uppercase = true,
   'aria-label': ariaLabel,
 }: Props) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
   const normalize = (nextValue: string) => uppercase ? nextValue.toUpperCase() : nextValue;
-
-  const insertDigit = (digit: string) => {
-    const input = inputRef.current;
-    const start = input?.selectionStart ?? value.length;
-    const end = input?.selectionEnd ?? start;
-    onValueChange(normalize(`${value.slice(0, start)}${digit}${value.slice(end)}`));
-    requestAnimationFrame(() => {
-      input?.focus();
-      input?.setSelectionRange(start + 1, start + 1);
-    });
-  };
 
   return (
     <div className="alphanumeric-input">
       <input
-        ref={inputRef}
         type="text"
         inputMode="text"
         value={value}
@@ -58,21 +40,6 @@ export function AlphanumericInput({
         spellCheck={false}
         style={uppercase ? { textTransform: 'uppercase' } : undefined}
       />
-      <div className="alphanumeric-input__digits" aria-label="Number shortcuts">
-        {DIGITS.map((digit) => (
-          <button
-            key={digit}
-            type="button"
-            className="alphanumeric-input__digit mono"
-            aria-label={`Insert ${digit}`}
-            disabled={disabled}
-            onPointerDown={(event) => event.preventDefault()}
-            onClick={() => insertDigit(digit)}
-          >
-            {digit}
-          </button>
-        ))}
-      </div>
     </div>
   );
 }

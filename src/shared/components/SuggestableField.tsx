@@ -11,6 +11,8 @@ interface Props<T extends string | number> {
   placeholder?: string;
   mono?: boolean;
   hideCamera?: boolean;
+  /** Interpret a scanned GS1 barcode as a batch/lot code (application identifier 10). */
+  scanMode?: 'raw' | 'gs1Batch';
   /** Force typed letters to uppercase (batch codes are always uppercase). */
   uppercase?: boolean;
   onChange: (next: Suggestable<T>) => void;
@@ -23,6 +25,7 @@ export function SuggestableField<T extends string | number>({
   placeholder,
   mono,
   hideCamera = false,
+  scanMode = 'raw',
   uppercase = false,
   onChange,
 }: Props<T>) {
@@ -43,24 +46,9 @@ export function SuggestableField<T extends string | number>({
 
   const handleScan = (decodedText: string) => {
     setScanning(false);
-    let finalValue = decodedText.trim();
-
-    // Strip GS1 symbology identifier if present
-    finalValue = finalValue.replace(/^\]C1/, '');
-
-    if (label.toLowerCase().includes('batch')) {
-      // Try to match human-readable format with parens: (10)H18MYD9JX
-      const parensMatch = finalValue.match(/\(10\)\s*([A-Z0-9]+)/i);
-      if (parensMatch) {
-        finalValue = parensMatch[1];
-      } else {
-        // Try to match raw GS1: 01 (14 chars) + 10 (batch)
-        const gs1Match = finalValue.match(/^01\d{14}10([A-Z0-9]+)/i);
-        if (gs1Match) {
-          finalValue = gs1Match[1];
-        }
-      }
-    }
+    const finalValue = scanMode === 'gs1Batch'
+      ? extractGs1BatchCode(decodedText)
+      : decodedText.trim().replace(/^\]C1/, '');
 
     handleChange(finalValue);
   };
@@ -120,11 +108,13 @@ export function SuggestableField<T extends string | number>({
           />
         )}
         {!hideCamera && (
-          <button 
+          <button
+            type="button"
             className="btn btn--outline" 
             onClick={() => setScanning(true)}
             style={{ padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
             title={t('suggest.scanBarcode', 'Scan Barcode')}
+            aria-label={t('suggest.scanBarcode', 'Scan Barcode')}
           >
             📷
           </button>
@@ -139,4 +129,25 @@ export function SuggestableField<T extends string | number>({
       )}
     </div>
   );
+}
+
+/** Extract GS1 application identifier 10 (lot/batch) from scanner output. */
+export function extractGs1BatchCode(decodedText: string): string {
+  const value = decodedText.trim().replace(/^\]C1/, '');
+
+  // Human-readable GS1, such as (01)00197515378837(10)P60G6UPB8.
+  const parenthesized = value.match(/\(10\)\s*([A-Z0-9][A-Z0-9._/-]{0,19})/i);
+  if (parenthesized) return parenthesized[1].toUpperCase();
+
+  // Scanner output for AI 01 followed by variable-length AI 10. A group
+  // separator (FNC1) terminates the lot when another application identifier follows.
+  const gtinAndBatch = value.match(/^01\d{14}10([^\x1D]{1,20})/i);
+  if (gtinAndBatch) return gtinAndBatch[1].toUpperCase();
+
+  // Also support barcodes that contain only application identifier 10.
+  const batchOnly = value.match(/^10([^\x1D]{1,20})/i);
+  if (batchOnly) return batchOnly[1].toUpperCase();
+
+  // Preserve support for ordinary, non-GS1 batch-code barcodes.
+  return value.toUpperCase();
 }
