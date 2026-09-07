@@ -20,6 +20,7 @@ import type {
 } from '../types/inspection';
 import { emptySuggestable, getPhotoRotation, isPackagingLine, picklistHasOcr } from '../types/inspection';
 import { expectedBags } from '../rules/uomRules';
+import { BAGS_PER_PALLET } from '../types/inspection';
 import { normalizeBatchCode } from '../rules/batchCodeMatching';
 import { countInspectionFlags } from '../rules/inspectionFlags';
 import { dbSaveInspection } from '../services/db';
@@ -212,10 +213,31 @@ export function recomputeTallies(state: Inspection): Inspection {
 
   const actualByLine = expectedByLine.map(() => 0);
   const expectedBySection = new Map<string, number>();
+  const fallbackExpectedByBatch: Record<string, number> = {};
+
+  const expectedSectionCountsFor = (lineIndexes: number[]): number[] => {
+    const bagLineIndexes = lineIndexes.filter((index) => {
+      const unit = String(state.picklist.lineItems[index].uom || 'BG').toUpperCase();
+      return unit === 'BG' || unit === 'BAG' || unit === 'PL';
+    });
+    const otherLineIndexes = lineIndexes.filter((index) => !bagLineIndexes.includes(index));
+    const bagExpected = bagLineIndexes.reduce((sum, index) => sum + expectedByLine[index], 0);
+    const counts: number[] = [];
+    for (let remaining = bagExpected; remaining > 0; remaining -= BAGS_PER_PALLET) {
+      counts.push(Math.min(BAGS_PER_PALLET, remaining));
+    }
+    otherLineIndexes.forEach((index) => counts.push(expectedByLine[index]));
+    return counts;
+  };
+
+  for (const [batch, lineIndexes] of Object.entries(lineIndexesByBatch)) {
+    fallbackExpectedByBatch[batch] = expectedSectionCountsFor(lineIndexes)[0] || 0;
+  }
 
   for (const [batch, sections] of Object.entries(sectionsByBatch)) {
     const lineIndexes = lineIndexesByBatch[batch] || [];
     if (lineIndexes.length === 0) continue;
+    const expectedSectionCounts = expectedSectionCountsFor(lineIndexes);
 
     const unclaimedLines = new Set(lineIndexes);
     const unmatchedSections: ScannedSection[] = [];
@@ -246,18 +268,21 @@ export function recomputeTallies(state: Inspection): Inspection {
       remaining -= actual;
     });
 
-    // Choose the closest expected quantity for each unmatched pallet's own
-    // validation display. Exact matches were assigned above.
-    for (const section of unmatchedSections) {
-      const closestLine = lineIndexes.reduce((best, index) => {
-        if (best === undefined) return index;
-        const bestDistance = Math.abs(expectedByLine[best] - section.count);
-        const distance = Math.abs(expectedByLine[index] - section.count);
-        return distance < bestDistance ? index : best;
-      }, undefined as number | undefined);
-      if (closestLine !== undefined) {
-        expectedBySection.set(section.key, expectedByLine[closestLine]);
-      }
+    // Match each physical scan to the combined pallet-sized target. This turns
+    // duplicate partial rows such as 8BG + 12BG into one expected 20BG section.
+    const unclaimedExpectedCounts = expectedSectionCounts.map((count, index) => ({ count, index }));
+    for (const section of sections) {
+      if (section.count <= 0 || unclaimedExpectedCounts.length === 0) continue;
+      const exactIndex = unclaimedExpectedCounts.findIndex(({ count }) => count === section.count);
+      const matchIndex = exactIndex >= 0
+        ? exactIndex
+        : unclaimedExpectedCounts.reduce((best, candidate, index, candidates) =>
+            Math.abs(candidate.count - section.count) < Math.abs(candidates[best].count - section.count)
+              ? index
+              : best,
+          0);
+      const [matched] = unclaimedExpectedCounts.splice(matchIndex, 1);
+      expectedBySection.set(section.key, matched.count);
     }
   }
 
@@ -283,12 +308,11 @@ export function recomputeTallies(state: Inspection): Inspection {
     batchSections: p.batchSections.map((bs, sectionIndex) => {
       const code = normalizeBatchCode(bs.batchCode.value);
       if (!code) return bs;
-      const fallbackLine = lineIndexesByBatch[code]?.[0];
       return {
         ...bs,
         expectedBagCount:
           expectedBySection.get(`${palletIndex}:${sectionIndex}`) ??
-          (fallbackLine !== undefined ? expectedByLine[fallbackLine] : 0),
+          fallbackExpectedByBatch[code] ?? 0,
       };
     }),
   }));

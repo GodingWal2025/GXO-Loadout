@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Html5QrcodeScanner } from 'html5-qrcode';
+import { useLayoutEffect, useRef, useState } from 'react';
+import { Html5Qrcode } from 'html5-qrcode';
 import { useT } from '../shared/i18n/LanguageContext';
 
 interface Props {
@@ -9,41 +9,55 @@ interface Props {
 
 export function BarcodeScanner({ onResult, onClose }: Props) {
   const t = useT();
-  const scannerRef = useRef<Html5QrcodeScanner | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const [isReading, setIsReading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!scannerRef.current) {
-      scannerRef.current = new Html5QrcodeScanner(
-        'reader',
-        { 
-          fps: 10, 
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          formatsToSupport: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15] // All formats
-        },
-        false
-      );
+  useLayoutEffect(() => {
+    scannerRef.current = new Html5Qrcode('barcode-photo-reader', {
+      formatsToSupport: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      verbose: false,
+    });
 
-      scannerRef.current.render(
-        (decodedText) => {
-          if (scannerRef.current) {
-            scannerRef.current.clear();
-          }
-          onResult(decodedText);
-        },
-        (_error) => {
-          // ignore error (it triggers continuously when no QR code is found)
-        }
-      );
-    }
+    // Immediately hand off to the device's native rear-camera capture UI.
+    // The visible button below remains available after cancel or a bad photo.
+    inputRef.current?.click();
 
     return () => {
-      if (scannerRef.current) {
-        scannerRef.current.clear().catch(e => console.warn("Failed to clear scanner", e));
-        scannerRef.current = null;
-      }
+      scannerRef.current?.clear();
+      scannerRef.current = null;
     };
-  }, [onResult]);
+  }, []);
+
+  const capturePhoto = () => {
+    setError(null);
+    inputRef.current?.click();
+  };
+
+  const handlePhoto = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    // Let the user select the same photo again after an unsuccessful read.
+    event.target.value = '';
+    if (!file || !scannerRef.current) return;
+
+    setIsReading(true);
+    setError(null);
+    try {
+      const decodedText = await scannerRef.current.scanFile(file, true);
+      scannerRef.current.clear();
+      onResult(decodedText);
+    } catch {
+      setError(
+        t(
+          'scanner.notFound',
+          'No barcode was found in that picture. Move closer, keep the barcode in focus, and try again.'
+        )
+      );
+    } finally {
+      setIsReading(false);
+    }
+  };
 
   return (
     <div style={{ 
@@ -70,8 +84,46 @@ export function BarcodeScanner({ onResult, onClose }: Props) {
         </h2>
         <button onClick={onClose} className="btn">{t('scanner.close', 'Close')}</button>
       </div>
-      <div style={{ flex: 1, padding: '16px', overflow: 'auto' }}>
-        <div id="reader" style={{ width: '100%', maxWidth: '600px', margin: '0 auto', background: '#000' }}></div>
+      <div style={{ flex: 1, padding: '24px 16px', overflow: 'auto', textAlign: 'center' }}>
+        <input
+          ref={inputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handlePhoto}
+          style={{ display: 'none' }}
+          aria-hidden="true"
+          tabIndex={-1}
+        />
+
+        <p style={{ margin: '0 auto 16px', maxWidth: '520px' }}>
+          {t(
+            'scanner.photoHint',
+            'Take a clear picture with the full barcode inside the frame.'
+          )}
+        </p>
+
+        <div
+          id="barcode-photo-reader"
+          style={{ width: '100%', maxWidth: '600px', margin: '0 auto 16px', background: '#000' }}
+        />
+
+        {error && (
+          <div className="alert alert--danger" role="alert" style={{ maxWidth: '600px', margin: '0 auto 16px' }}>
+            {error}
+          </div>
+        )}
+
+        <button
+          type="button"
+          className="btn btn--accent"
+          onClick={capturePhoto}
+          disabled={isReading}
+        >
+          {isReading
+            ? t('scanner.reading', 'Reading barcode…')
+            : t('scanner.takePicture', '📷 Take barcode picture')}
+        </button>
       </div>
     </div>
   );

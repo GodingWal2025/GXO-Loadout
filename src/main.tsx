@@ -18,8 +18,8 @@ import { runResetIfNeeded } from './services/appReset';
 import { startSharedStorageSync } from './shared/services/sync';
 import { requestPersistentAppStorage } from './shared/services/storagePersistence';
 
-// Wipe stale data from prior versions before app loads. Once this resolves,
-// IndexedDB and localStorage are guaranteed to be at the current schema.
+// Record the data version before rendering. Existing inspections are preserved;
+// IndexedDB handles its own schema migrations when the database opens.
 runResetIfNeeded().then(() => {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

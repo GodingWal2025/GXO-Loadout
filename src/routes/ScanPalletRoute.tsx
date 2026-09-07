@@ -6,7 +6,7 @@ import { AlphanumericInput, SuggestableField } from '../shared';
 import { QualityFlagButton } from '../shared';
 import { ViewEditToggle } from '../shared';
 import type { Inspection, BatchSection, PalletType } from '../shared';
-import { PALLET_TYPES, ConfirmModal, actualCountInUom, actualCountUom, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
+import { PALLET_TYPES, BAGS_PER_PALLET, ConfirmModal, actualCountInUom, actualCountUom, expectedBags, isBatchNotOnOriginalPicklist, normalizeBatchCode } from '../shared';
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -231,11 +231,22 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
   const remainingForBatch = (batchCode: string | null) => {
     const normalizedBatch = normalizeBatchCode(batchCode);
     if (!normalizedBatch) return null;
-    const lineItem = inspection.picklist.lineItems.find(
+    const lineItems = inspection.picklist.lineItems.filter(
       (li) => normalizeBatchCode(li.batchCode.value) === normalizedBatch
     );
-    if (!lineItem) return null;
-    const expected = lineItem.expectedQuantity.value || 0;
+    if (lineItems.length === 0) return null;
+    const firstUnit = String(lineItems[0].uom || 'BG').toUpperCase();
+    const combinesAsBags = firstUnit === 'BG' || firstUnit === 'BAG' || firstUnit === 'PL';
+    const expected = combinesAsBags
+      ? lineItems.reduce(
+          (sum, line) => sum + expectedBags(line.uom, line.expectedQuantity.value, line.description.value),
+          0
+        )
+      : expectedBags(
+          lineItems[0].uom,
+          lineItems[0].expectedQuantity.value,
+          lineItems[0].description.value
+        );
     // Total already counted across all pallets except this one
     let countedElsewhere = 0;
     inspection.pallets.forEach((p, idx) => {
@@ -246,7 +257,8 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
         }
       });
     });
-    return Math.max(0, expected - countedElsewhere);
+    const remaining = Math.max(0, expected - countedElsewhere);
+    return combinesAsBags ? Math.min(BAGS_PER_PALLET, remaining) : remaining;
   };
 
   const isReturns = inspection.type === 'returns';

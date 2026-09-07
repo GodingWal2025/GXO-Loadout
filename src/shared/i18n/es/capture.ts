@@ -55,6 +55,13 @@ export const capture: Record<string, string> = {
   'picklist.continue': 'Continuar → Verificar',
   'picklist.skipManual': 'Omitir — capturar la lista de surtido a mano',
   'picklist.skipRest': 'Omitir lo demás',
+  'picklist.ocrFailureTitle': 'No se pudo leer la lista de surtido',
+  'picklist.ocrEmptyMessage':
+    'No se encontraron líneas. Asegúrese de que toda la página de la lista de surtido esté visible, enfocada y bien iluminada, luego vuelva a tomar la foto.',
+  'picklist.ocrFailedMessage':
+    'El escaneo de la lista de surtido no funcionó. Asegúrese de que toda la página esté visible, enfocada y bien iluminada, luego vuelva a tomar la foto.',
+  'picklist.ocrFailurePreviewAlt': 'Foto ilegible de la lista de surtido',
+  'picklist.ocrRetake': '📷 Volver a tomar la foto',
 
   // ---- Capture Returns BOL ----
   'returnsBol.titleLead': 'Capturar',
@@ -103,6 +110,11 @@ export const capture: Record<string, string> = {
   // ---- Barcode scanner ----
   'scanner.title': 'Escanear código de barras / QR',
   'scanner.close': 'Cerrar',
+  'scanner.photoHint': 'Tome una foto clara con el código de barras completo dentro del encuadre.',
+  'scanner.notFound':
+    'No se encontró ningún código de barras en esa foto. Acérquese, mantenga el código enfocado e inténtelo de nuevo.',
+  'scanner.reading': 'Leyendo código de barras…',
+  'scanner.takePicture': '📷 Tomar foto del código de barras',
 
   // CapturedPageThumb
   'pageThumb.rotate': 'Girar esta página 90°',

@@ -4,6 +4,7 @@ import { isPackagingLine, normalizeBatchCode, picklistHasOcr } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 import {
   formatTallyQuantity,
+  groupTallyLines,
   tallyDisplayCount,
   tallyTotalsByUnit,
   type TallyDisplayUnit,
@@ -140,18 +141,23 @@ export function RunningTallyHeader({
   const totalExpected = activeLineItems.reduce((sum, li) => sum + bagsExpected(li), 0);
   const totalActual = activeLineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
   const totalsByUnit = tallyTotalsByUnit(activeLineItems);
+  const tallyGroups = groupTallyLines(activeLineItems);
   const displayUnits: TallyDisplayUnit[] = ['BG', 'SP', 'MB'];
   const allFulfilled =
-    activeLineItems.length > 0 && activeLineItems.every((li) => li.fulfilled);
-  const completedBatches = activeLineItems.filter((li) => li.fulfilled).length;
-  const overageCount = activeLineItems.filter(
-    (li) => bagsExpected(li) > 0 && li.actualQuantity > bagsExpected(li)
+    tallyGroups.length > 0 && tallyGroups.every(
+      (group) => group.display.expected > 0 && group.display.actual >= group.display.expected
+    );
+  const completedBatches = tallyGroups.filter(
+    (group) => group.display.expected > 0 && group.display.actual >= group.display.expected
   ).length;
-  const expanded = expandedOverride ?? activeLineItems.length <= 6;
+  const overageCount = tallyGroups.filter(
+    (group) => group.display.expected > 0 && group.display.actual > group.display.expected
+  ).length;
+  const expanded = expandedOverride ?? tallyGroups.length <= 6;
   const totalPct = totalExpected ? Math.min(100, (totalActual / totalExpected) * 100) : 0;
   const toggleLabel = expanded
     ? t('tally.hideBatches', 'Hide batch details')
-    : t('tally.showBatches', 'Show {count} batches', { count: activeLineItems.length });
+    : t('tally.showBatches', 'Show {count} batches', { count: tallyGroups.length });
 
   return (
     <div className={`tally ${expanded ? 'is-expanded' : 'is-collapsed'} ${allFulfilled ? 'is-complete' : ''}`}>
@@ -219,7 +225,7 @@ export function RunningTallyHeader({
             <div className="tally__summary-label">
               {t('tally.batchesComplete', '{complete} of {total} batches complete', {
                 complete: completedBatches,
-                total: activeLineItems.length,
+                total: tallyGroups.length,
               })}
             </div>
             {overageCount > 0 && (
@@ -249,12 +255,15 @@ export function RunningTallyHeader({
       {expanded && (
         <div id="running-tally-batches" className="tally__details">
           <div className="tally__bars">
-          {activeLineItems.map((li) => {
-            const display = tallyDisplayCount(li);
+          {tallyGroups.map((group) => {
+            const li = group.lines[0];
+            const display = group.display;
             const expected = display.expectedBags;
             const actual = display.actualBags;
             const pct = expected ? Math.min(100, (actual / expected) * 100) : 0;
-            const isAdjusted = Boolean(li.originalBatchCode || li.originalExpectedQuantity !== undefined);
+            const isAdjusted = group.lines.some(
+              (line) => Boolean(line.originalBatchCode || line.originalExpectedQuantity !== undefined)
+            );
             const status =
               actual === 0
                 ? 'empty'
@@ -269,7 +278,7 @@ export function RunningTallyHeader({
             const batchPallets = pallets.filter((p) =>
               p.batchSections.some(
                 (bs) =>
-                  normalizeBatchCode(bs.batchCode.value) === normalizeBatchCode(li.batchCode.value) &&
+                  normalizeBatchCode(bs.batchCode.value) === normalizeBatchCode(group.batchCode) &&
                   (bs.actualBagCount.value || 0) > 0
               )
             );
@@ -315,14 +324,16 @@ export function RunningTallyHeader({
             }
 
             return (
-              <div key={li.id} className={`tally__bar ${cls}`} style={barStyle}>
+              <div key={group.id} className={`tally__bar ${cls}`} style={barStyle}>
                 <div
                   className="tally__bar-batch mono"
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span>{li.batchCode.value || '—'}</span>
-                    {li.picklistException?.reason === 'not_on_original_picklist' && (
+                    <span>{group.batchCode || '—'}</span>
+                    {group.lines.some(
+                      (line) => line.picklistException?.reason === 'not_on_original_picklist'
+                    ) && (
                       <span
                         title={t('tally.originalPicklistExceptionTitle', 'Added by verifier; not on original picklist')}
                         style={{

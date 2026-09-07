@@ -46,6 +46,19 @@ A React-based single-page application built with Vite and TypeScript for capturi
 2. Run `npm run dev` to start the local development server.
 3. Open `http://localhost:5173` in your browser.
 
+### Finding your way around the code
+
+- `src/main.tsx` starts the app and background synchronization; `src/App.tsx` maps URLs to screens.
+- `src/routes/` contains workflow screens. Each screen coordinates user actions and saves inspection updates.
+- `src/shared/types/inspection.ts` defines inspection records; `src/shared/rules/` contains validation and completion rules.
+- `src/shared/services/db.ts` saves records and photos locally and queues changes. `sync.ts` exchanges those changes with the API when connectivity is available.
+- `src/shared/camera/` handles capture and image checks. `useQualityCheckedCapture.ts` shares the quality-review flow; each calling screen decides how to save an accepted photo.
+- `api/src/` contains the Azure Functions backend. `detector-service/` contains the separate vision service and training tools.
+
+Document captures save photo IDs in the inspection and image blobs separately in IndexedDB. Temporary `blob:` preview URLs belong to the current browser session and must be released when no longer needed.
+
+Run `npm test` for the TypeScript test suite and `npm run build` for type checking and the production PWA build.
+
 To exercise cross-device sync locally, run Azurite and copy
 `api/local.settings.json.example` to `api/local.settings.json`. In Azure, set
 `LOADOUT_STORAGE_CONNECTION_STRING` as a Static Web Apps application setting.

@@ -1,14 +1,18 @@
-import { generateId, compressPhoto } from '../shared';
-import { useState } from 'react';
+import {
+  generateId,
+  compressPhoto,
+  dbGetInspection,
+  dbSavePhotoBlob,
+  dbSaveInspection,
+  ImageQualityModal,
+  StepBackLink,
+  type Inspection,
+  type BOLData,
+} from '../shared';
+import { useQualityCheckedCapture } from '../shared/camera/useQualityCheckedCapture';
+import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
-import { useCameraCapture } from '../shared';
-import { useEffect } from 'react';
 
-import { checkImageQuality, type QualityIssue } from '../shared';
-import { ImageQualityModal } from '../shared';
-import { StepBackLink } from '../shared';
-import type { Inspection, InspectionPhoto, BOLData } from '../shared';
 import { CapturedPageThumb } from '../components/CapturedPageThumb';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -18,11 +22,6 @@ export function CaptureBOLRoute() {
   const navigate = useNavigate();
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [saving, setSaving] = useState(false);
-  const [pending, setPending] = useState<{
-    blob: Blob;
-    previewUrl: string;
-    issues: QualityIssue[];
-  } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -32,46 +31,25 @@ export function CaptureBOLRoute() {
     });
   }, [id, navigate]);
 
-  const capture = useCameraCapture(async (blob) => {
-    // A BOL is a document — landscape is a legitimate way to shoot it, so the
-    // portrait check is skipped here.
-    const quality = await checkImageQuality(blob, { allowLandscape: true });
-    if (!quality.passed) {
-      const previewUrl = URL.createObjectURL(blob);
-      setPending({ blob, previewUrl, issues: quality.issues });
-      return;
-    }
-    await addPage(blob);
-  });
+  const { capture, pending, handleRetake, handleKeep } = useQualityCheckedCapture(
+    addPage,
+    { allowLandscape: true },
+  );
 
   async function addPage(blob: Blob) {
     if (!inspection) return;
     setSaving(true);
     try {
       const compressed = await compressPhoto(blob);
-      const bitmap = await createImageBitmap(compressed);
-      const photo: InspectionPhoto = {
-        id: generateId(),
-        capturedAt: new Date().toISOString(),
-        capturedBy: inspection.startedBy || 'unknown',
-        category: 'BOL',
-        localBlobUrl: URL.createObjectURL(compressed),
-        metadata: {
-          deviceModel: navigator.userAgent.includes('iPad') ? 'iPad' : 'web',
-          orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
-          originalWidth: bitmap.width,
-          originalHeight: bitmap.height,
-          fileSizeBytes: compressed.size,
-        },
-      };
-
-      await dbSavePhotoBlob(photo.id, inspection.id, compressed);
+      // Document records store photo IDs; the image itself lives in IndexedDB.
+      const photoId = generateId();
+      await dbSavePhotoBlob(photoId, inspection.id, compressed);
 
       // The BOL is photographed for the record only — its line items and header
       // are entered later, by hand, at review time. No OCR runs here.
       const updatedBol: BOLData = {
         ...inspection.bol,
-        photoIds: [...inspection.bol.photoIds, photo.id],
+        photoIds: [...inspection.bol.photoIds, photoId],
       };
 
       const updated: Inspection = {
@@ -85,20 +63,6 @@ export function CaptureBOLRoute() {
       setSaving(false);
     }
   }
-
-  const handleRetake = () => {
-    if (pending) URL.revokeObjectURL(pending.previewUrl);
-    setPending(null);
-    setTimeout(() => capture(), 50);
-  };
-
-  const handleKeep = async () => {
-    if (!pending) return;
-    const { blob, previewUrl } = pending;
-    URL.revokeObjectURL(previewUrl);
-    setPending(null);
-    await addPage(blob);
-  };
 
   if (!inspection) return null;
 

@@ -1,13 +1,16 @@
-import { generateId } from '../shared';
+import {
+  generateId,
+  dbGetInspection,
+  dbSavePhotoBlob,
+  dbSaveInspection,
+  ImageQualityModal,
+  StepBackLink,
+  type Inspection,
+} from '../shared';
+import { useQualityCheckedCapture } from '../shared/camera/useQualityCheckedCapture';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
-import { useCameraCapture } from '../shared';
 
-import { checkImageQuality, type QualityIssue } from '../shared';
-import { ImageQualityModal } from '../shared';
-import { StepBackLink } from '../shared';
-import type { Inspection, InspectionPhoto } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
 export function CaptureReturnsBOLRoute() {
@@ -16,11 +19,6 @@ export function CaptureReturnsBOLRoute() {
   const navigate = useNavigate();
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
-  const [pending, setPending] = useState<{
-    blob: Blob;
-    previewUrl: string;
-    issues: QualityIssue[];
-  } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -30,37 +28,17 @@ export function CaptureReturnsBOLRoute() {
     });
   }, [id, navigate]);
 
-  const capture = useCameraCapture(async (blob) => {
-    // Document capture — landscape is legitimate, so skip the portrait check.
-    const quality = await checkImageQuality(blob, { allowLandscape: true });
-    if (!quality.passed) {
-      const previewUrl = URL.createObjectURL(blob);
-      setPending({ blob, previewUrl, issues: quality.issues });
-      return;
-    }
-    await processReturnsBOL(blob);
-  });
+  const { capture, pending, handleRetake, handleKeep } = useQualityCheckedCapture(
+    processReturnsBOL,
+    { allowLandscape: true },
+  );
 
   async function processReturnsBOL(blob: Blob) {
     if (!inspection) return;
 
-    const bitmap = await createImageBitmap(blob);
-    const photo: InspectionPhoto = {
-      id: generateId(),
-      capturedAt: new Date().toISOString(),
-      capturedBy: inspection.startedBy || 'unknown',
-      category: 'Returns_BOL',
-      localBlobUrl: URL.createObjectURL(blob),
-      metadata: {
-        deviceModel: navigator.userAgent.includes('iPad') ? 'iPad' : 'web',
-        orientation: bitmap.width > bitmap.height ? 'landscape' : 'portrait',
-        originalWidth: bitmap.width,
-        originalHeight: bitmap.height,
-        fileSizeBytes: blob.size,
-      },
-    };
-
-    await dbSavePhotoBlob(photo.id, inspection.id, blob);
+    // Document records store photo IDs; the image itself lives in IndexedDB.
+    const photoId = generateId();
+    await dbSavePhotoBlob(photoId, inspection.id, blob);
 
     setAnalyzing(true);
     try {
@@ -74,9 +52,11 @@ export function CaptureReturnsBOLRoute() {
         expectedProductSeedPaks: { value: null, source: 'empty' },
         expectedBaggedProduct: { value: null, source: 'empty' },
       };
-      
-      const updatedReturnsBol = { ...currentReturnsBol };
-      updatedReturnsBol.photoIds = [...(updatedReturnsBol.photoIds || []), photo.id];
+
+      const updatedReturnsBol = {
+        ...currentReturnsBol,
+        photoIds: [...(currentReturnsBol.photoIds || []), photoId],
+      };
 
       const updated: Inspection = {
         ...inspection,
@@ -90,21 +70,7 @@ export function CaptureReturnsBOLRoute() {
     }
   }
 
-  const handleRetake = () => {
-    if (pending) URL.revokeObjectURL(pending.previewUrl);
-    setPending(null);
-    setTimeout(() => capture(), 50);
-  };
-
-  const handleKeep = async () => {
-    if (!pending) return;
-    const { blob, previewUrl } = pending;
-    URL.revokeObjectURL(previewUrl);
-    setPending(null);
-    await processReturnsBOL(blob);
-  };
-
-  const skipToVerify = async () => {
+  const skipToVerify = () => {
     if (!inspection) return;
     navigate(`/inspection/${inspection.id}/capture-returns-staging`);
   };

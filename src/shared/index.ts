@@ -1,11 +1,8 @@
-// Barrel re-export for shared module.
-// This mirrors the old @gxo/semantic package's public API so that
-// changing `from '@gxo/semantic'` to `from '../shared'` is the only
-// edit needed in consuming files.
+// Public entry point for inspection types, rules, storage, and UI helpers.
+// Routes can import these shared pieces without knowing their file locations.
 
 // Types
 export * from './types/inspection';
-export { PACKAGING_SKUS, isPackagingLine, picklistHasOcr } from './types/inspection';
 export * from './types/ontology';
 
 // Utils

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PicklistLineItemEntry, Uom } from '../shared';
 import { mlSuggestable } from '../shared';
-import { formatTallyQuantity, tallyDisplayCount, tallyTotalsByUnit } from './runningTallyModel';
+import { formatTallyQuantity, groupTallyLines, tallyDisplayCount, tallyTotalsByUnit } from './runningTallyModel';
 
 function line(uom: Uom, expected: number, actualBags: number, description = ''): PicklistLineItemEntry {
   return {
@@ -54,5 +54,31 @@ describe('running tally unit model', () => {
   it('formats partial units without long floating-point tails', () => {
     expect(formatTallyQuantity(0.5)).toBe('0.5');
     expect(formatTallyQuantity(2)).toBe('2');
+  });
+
+  it('combines duplicate partial BG rows for one batch', () => {
+    const groups = groupTallyLines([line('BG', 8, 8), line('BG', 12, 12)]);
+
+    expect(groups).toHaveLength(1);
+    expect(groups[0].display).toMatchObject({ unit: 'BG', actual: 20, expected: 20 });
+    expect(groups[0].lines).toHaveLength(2);
+  });
+
+  it('caps combined BG tally items at 60 bags', () => {
+    const groups = groupTallyLines([line('BG', 40, 40), line('BG', 40, 30)]);
+
+    expect(groups.map((group) => [group.display.actual, group.display.expected])).toEqual([
+      [60, 60],
+      [10, 20],
+    ]);
+  });
+
+  it('does not combine different batches or full 60BG rows', () => {
+    const first = line('BG', 8, 8);
+    const second = line('BG', 12, 12);
+    second.batchCode = mlSuggestable('OTHER');
+    const full = line('BG', 60, 60);
+
+    expect(groupTallyLines([first, second, full])).toHaveLength(3);
   });
 });

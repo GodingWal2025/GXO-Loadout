@@ -30,6 +30,10 @@ export function CapturePicklistRoute() {
     previewUrl: string;
     issues: QualityIssue[];
   } | null>(null);
+  const [ocrFailure, setOcrFailure] = useState<{
+    previewUrl: string;
+    reason: 'failed' | 'empty';
+  } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -57,6 +61,30 @@ export function CapturePicklistRoute() {
     setAnalyzing(true);
     try {
       const compressed = await compressPhoto(blob);
+      let ocrResult;
+
+      try {
+        ocrResult = await analyzePicklistPhoto(compressed);
+      } catch (err) {
+        console.warn('[picklist-ocr] extraction failed:', err);
+        setOcrFailure({
+          previewUrl: URL.createObjectURL(compressed),
+          reason: 'failed',
+        });
+        return;
+      }
+
+      // A picklist photo is only accepted when OCR finds at least one line.
+      // Otherwise the unreadable image would be saved and the inspector could
+      // continue without noticing that the picklist was never captured.
+      if (ocrResult.lineItems.length === 0) {
+        setOcrFailure({
+          previewUrl: URL.createObjectURL(compressed),
+          reason: 'empty',
+        });
+        return;
+      }
+
       const bitmap = await createImageBitmap(compressed);
       const photo: InspectionPhoto = {
         id: generateId(),
@@ -79,103 +107,81 @@ export function CapturePicklistRoute() {
       updatedPicklist.photoIds = [...updatedPicklist.photoIds, photo.id];
       let updatedBol = inspection.bol;
 
-      // Best-effort OCR per page, so a multi-page picklist accumulates its
-      // line items. Any failure (offline, OCR not configured, parse miss)
-      // falls through to manual entry — never blocks the capture flow.
-      try {
-        const { lineItems: ocrItems, header } = await analyzePicklistPhoto(compressed);
+      // OCR runs per page, so a multi-page picklist accumulates its line items.
+      const { lineItems: ocrItems, header } = ocrResult;
 
-        // Auto-fill the load header from the picklist. Load # / ship date are
-        // mirrored onto the BOL (they're the same value) unless the inspector
-        // already typed one in — never clobber a manual entry.
-        if (header.loadNumber && updatedPicklist.loadNumber.source !== 'manual') {
-          updatedPicklist.loadNumber = mlSuggestable(header.loadNumber);
-          updatedBol = { ...updatedBol, loadNumber: mlSuggestable(header.loadNumber) };
-        }
-        if (header.shipDate && updatedPicklist.shipDate.source !== 'manual') {
-          updatedPicklist.shipDate = mlSuggestable(header.shipDate);
-          updatedBol = { ...updatedBol, shipDate: mlSuggestable(header.shipDate) };
-        }
-
-        if (ocrItems.length > 0) {
-          // Each line goes under the delivery it was picked for. Deliveries are
-          // matched by number across pages, so page 2's lines land under the
-          // delivery page 1 already created instead of spawning a duplicate.
-          const deliveries = [...updatedBol.deliveries];
-          const deliveryIdFor = (rawNumber: string | null): string => {
-            const number = (rawNumber ?? header.deliveryNumber ?? '').trim();
-            let index = number
-              ? deliveries.findIndex((d) => d.deliveryNumber.trim() === number)
-              // A page continuation often omits the delivery heading. In that
-              // case its rows continue under the most recently seen delivery.
-              : deliveries.length - 1;
-            // A blank delivery (added by hand, or created before any number was
-            // read) adopts the number rather than sitting empty beside it.
-            if (index === -1 && number) {
-              index = deliveries.findIndex((d) => !d.deliveryNumber.trim());
-              if (index !== -1) deliveries[index] = { ...deliveries[index], deliveryNumber: number };
-            }
-            if (index === -1) {
-              deliveries.push({
-                id: generateId(),
-                deliveryNumber: number,
-                stopNumber: deliveries.length + 1,
-                lineItemIds: [],
-              });
-              index = deliveries.length - 1;
-            }
-            return deliveries[index].id;
-          };
-
-          const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
-            id: generateId(),
-            batchCode: mlSuggestable(li.batchCode),
-            sku: mlSuggestable(li.sku),
-            description: mlSuggestable(li.description),
-            expectedQuantity: mlSuggestable(li.expectedQuantity),
-            uom: li.uom,
-            deliveryId: deliveryIdFor(li.deliveryNumber),
-            actualQuantity: 0,
-            fulfilled: false,
-          }));
-          // SP lines split into one line per SeedPak (see uomRules). Each copy
-          // keeps its parent's deliveryId, so the split stays on one delivery.
-          const boundary = reconcilePicklistPageBoundary(updatedPicklist.lineItems, mapped);
-          const exploded = explodePicklistLines(boundary.incoming);
-          updatedPicklist.lineItems = [...boundary.existing, ...exploded];
-
-          // Append the new ids to their delivery — existing assignments from an
-          // earlier page stay put.
-          updatedBol = {
-            ...updatedBol,
-            deliveries: deliveries.map((d) => ({
-              ...d,
-              lineItemIds: [
-                ...d.lineItemIds,
-                ...exploded
-                  .filter((li) => li.deliveryId === d.id && !d.lineItemIds.includes(li.id))
-                  .map((li) => li.id),
-              ],
-            })),
-          };
-        } else if (header.deliveryNumber && updatedBol.deliveries.length === 0) {
-          // Nothing read off this page, but we know the delivery — seed it so
-          // the inspector only has to confirm the number.
-          updatedBol = {
-            ...updatedBol,
-            deliveries: [
-              {
-                id: generateId(),
-                deliveryNumber: header.deliveryNumber,
-                stopNumber: 1,
-                lineItemIds: [],
-              },
-            ],
-          };
-        }
-      } catch (err) {
-        console.warn('[picklist-ocr] extraction skipped:', err);
+      // Auto-fill the load header from the picklist. Load # / ship date are
+      // mirrored onto the BOL (they're the same value) unless the inspector
+      // already typed one in — never clobber a manual entry.
+      if (header.loadNumber && updatedPicklist.loadNumber.source !== 'manual') {
+        updatedPicklist.loadNumber = mlSuggestable(header.loadNumber);
+        updatedBol = { ...updatedBol, loadNumber: mlSuggestable(header.loadNumber) };
       }
+      if (header.shipDate && updatedPicklist.shipDate.source !== 'manual') {
+        updatedPicklist.shipDate = mlSuggestable(header.shipDate);
+        updatedBol = { ...updatedBol, shipDate: mlSuggestable(header.shipDate) };
+      }
+
+      // Each line goes under the delivery it was picked for. Deliveries are
+      // matched by number across pages, so page 2's lines land under the
+      // delivery page 1 already created instead of spawning a duplicate.
+      const deliveries = [...updatedBol.deliveries];
+      const deliveryIdFor = (rawNumber: string | null): string => {
+        const number = (rawNumber ?? header.deliveryNumber ?? '').trim();
+        let index = number
+          ? deliveries.findIndex((d) => d.deliveryNumber.trim() === number)
+          // A page continuation often omits the delivery heading. In that
+          // case its rows continue under the most recently seen delivery.
+          : deliveries.length - 1;
+        // A blank delivery (added by hand, or created before any number was
+        // read) adopts the number rather than sitting empty beside it.
+        if (index === -1 && number) {
+          index = deliveries.findIndex((d) => !d.deliveryNumber.trim());
+          if (index !== -1) deliveries[index] = { ...deliveries[index], deliveryNumber: number };
+        }
+        if (index === -1) {
+          deliveries.push({
+            id: generateId(),
+            deliveryNumber: number,
+            stopNumber: deliveries.length + 1,
+            lineItemIds: [],
+          });
+          index = deliveries.length - 1;
+        }
+        return deliveries[index].id;
+      };
+
+      const mapped: PicklistLineItemEntry[] = ocrItems.map((li) => ({
+        id: generateId(),
+        batchCode: mlSuggestable(li.batchCode),
+        sku: mlSuggestable(li.sku),
+        description: mlSuggestable(li.description),
+        expectedQuantity: mlSuggestable(li.expectedQuantity),
+        uom: li.uom,
+        deliveryId: deliveryIdFor(li.deliveryNumber),
+        actualQuantity: 0,
+        fulfilled: false,
+      }));
+      // SP lines split into one line per SeedPak (see uomRules). Each copy
+      // keeps its parent's deliveryId, so the split stays on one delivery.
+      const boundary = reconcilePicklistPageBoundary(updatedPicklist.lineItems, mapped);
+      const exploded = explodePicklistLines(boundary.incoming);
+      updatedPicklist.lineItems = [...boundary.existing, ...exploded];
+
+      // Append the new ids to their delivery — existing assignments from an
+      // earlier page stay put.
+      updatedBol = {
+        ...updatedBol,
+        deliveries: deliveries.map((d) => ({
+          ...d,
+          lineItemIds: [
+            ...d.lineItemIds,
+            ...exploded
+              .filter((li) => li.deliveryId === d.id && !d.lineItemIds.includes(li.id))
+              .map((li) => li.id),
+          ],
+        })),
+      };
 
       const updated = recomputeTallies({
         ...inspection,
@@ -202,6 +208,12 @@ export function CapturePicklistRoute() {
     URL.revokeObjectURL(previewUrl);
     setPending(null);
     await addPage(blob);
+  };
+
+  const handleOcrRetake = () => {
+    if (ocrFailure) URL.revokeObjectURL(ocrFailure.previewUrl);
+    setOcrFailure(null);
+    setTimeout(() => capture(), 50);
   };
 
   if (!inspection) return null;
@@ -332,6 +344,43 @@ export function CapturePicklistRoute() {
           onRetake={handleRetake}
           onKeep={handleKeep}
         />
+      )}
+
+      {ocrFailure && (
+        <div className="modal-backdrop" role="presentation">
+          <div
+            className="modal modal--photo-check"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="picklist-ocr-failure-title"
+          >
+            <h2 id="picklist-ocr-failure-title" className="modal__title">
+              {t('picklist.ocrFailureTitle', 'Picklist could not be read')}
+            </h2>
+            <p className="modal__sub">
+              {ocrFailure.reason === 'empty'
+                ? t(
+                    'picklist.ocrEmptyMessage',
+                    'No line items were found. Make sure the full picklist page is visible, in focus, and well lit, then retake the picture.'
+                  )
+                : t(
+                    'picklist.ocrFailedMessage',
+                    'The picklist scan did not work. Make sure the full page is visible, in focus, and well lit, then retake the picture.'
+                  )}
+            </p>
+            <div className="photo-check__preview">
+              <img
+                src={ocrFailure.previewUrl}
+                alt={t('picklist.ocrFailurePreviewAlt', 'Unreadable picklist photo')}
+              />
+            </div>
+            <div className="modal__actions">
+              <button className="btn btn--accent" onClick={handleOcrRetake} autoFocus>
+                {t('picklist.ocrRetake', '📷 Retake photo')}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );

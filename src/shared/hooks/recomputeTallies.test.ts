@@ -38,6 +38,41 @@ const totalActual = (r: Inspection) =>
   r.picklist.lineItems.reduce((sum, li) => sum + li.actualQuantity, 0);
 
 describe('recomputeTallies — one batch code across several picklist lines', () => {
+  it('combines duplicate partial BG expectations into one capped pallet target', () => {
+    const result = recomputeTallies(
+      state(
+        [line('P77F1JFZ8', 'BG', 8), line('P77F1JFZ8', 'BG', 12)],
+        [section('P77F1JFZ8', 20)]
+      )
+    );
+
+    expect(result.picklist.lineItems.map((li) => li.actualQuantity)).toEqual([8, 12]);
+    expect(result.picklist.lineItems.map((li) => li.fulfilled)).toEqual([true, true]);
+    expect(result.pallets[0].batchSections[0].expectedBagCount).toBe(20);
+  });
+
+  it('shows the combined partial target before the bag count is entered', () => {
+    const result = recomputeTallies(
+      state(
+        [line('P77F1JFZ8', 'BG', 8), line('P77F1JFZ8', 'BG', 12)],
+        [section('P77F1JFZ8', null)]
+      )
+    );
+
+    expect(result.pallets[0].batchSections[0].expectedBagCount).toBe(20);
+  });
+
+  it('caps combined partial BG expectations at 60 per pallet', () => {
+    const result = recomputeTallies(
+      state(
+        [line('P77F1JFZ8', 'BG', 40), line('P77F1JFZ8', 'BG', 40)],
+        [section('P77F1JFZ8', 60), section('P77F1JFZ8', 20)]
+      )
+    );
+
+    expect(result.pallets[0].batchSections.map((item) => item.expectedBagCount)).toEqual([60, 20]);
+  });
+
   it('shows the first expected quantity before an actual count is entered', () => {
     const result = recomputeTallies(
       state(

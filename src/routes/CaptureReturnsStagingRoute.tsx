@@ -1,12 +1,17 @@
-import { generateId } from '../shared';
+import {
+  generateId,
+  dbGetInspection,
+  dbSavePhotoBlob,
+  dbSaveInspection,
+  ImageQualityModal,
+  StepBackLink,
+  type Inspection,
+  type InspectionPhoto,
+  type PhotoCategory,
+} from '../shared';
+import { useQualityCheckedCapture } from '../shared/camera/useQualityCheckedCapture';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { dbGetInspection, dbSavePhotoBlob, dbSaveInspection } from '../shared';
-import { useCameraCapture } from '../shared';
-import { checkImageQuality, type QualityIssue } from '../shared';
-import { ImageQualityModal } from '../shared';
-import { StepBackLink } from '../shared';
-import type { Inspection, InspectionPhoto, PhotoCategory } from '../shared';
 import { normalizeCloudPhotoUrl } from '../shared/services/resolvePhotoUrls';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -26,11 +31,6 @@ export function CaptureReturnsStagingRoute() {
   const [inspection, setInspection] = useState<Inspection | null>(null);
   const [activeCategory, setActiveCategory] = useState<ReturnsCaptureCategory>('staging-lane');
   const [analyzing, setAnalyzing] = useState(false);
-  const [pending, setPending] = useState<{
-    blob: Blob;
-    previewUrl: string;
-    issues: QualityIssue[];
-  } | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -40,15 +40,9 @@ export function CaptureReturnsStagingRoute() {
     });
   }, [id, navigate]);
 
-  const capture = useCameraCapture(async (blob) => {
-    const quality = await checkImageQuality(blob);
-    if (!quality.passed) {
-      const previewUrl = URL.createObjectURL(blob);
-      setPending({ blob, previewUrl, issues: quality.issues });
-      return;
-    }
-    await processPhoto(blob);
-  });
+  const { capture, pending, handleRetake, handleKeep } = useQualityCheckedCapture(
+    processPhoto,
+  );
 
   async function processPhoto(blob: Blob) {
     if (!inspection) return;
@@ -113,21 +107,7 @@ export function CaptureReturnsStagingRoute() {
     }
   }
 
-  const handleRetake = () => {
-    if (pending) URL.revokeObjectURL(pending.previewUrl);
-    setPending(null);
-    setTimeout(() => capture(), 50);
-  };
-
-  const handleKeep = async () => {
-    if (!pending) return;
-    const { blob, previewUrl } = pending;
-    URL.revokeObjectURL(previewUrl);
-    setPending(null);
-    await processPhoto(blob);
-  };
-
-  const continueToVerify = async () => {
+  const continueToVerify = () => {
     if (!inspection) return;
     navigate(`/inspection/${inspection.id}/verify-returns`);
   };

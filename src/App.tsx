@@ -4,7 +4,13 @@ import type { ReactNode } from 'react';
 import { getDeviceConfig } from './lib/deviceConfig';
 import { isAdminAuthenticated } from './services/adminAuth';
 
+import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
+import { LanguageToggle } from './shared/components/LanguageToggle';
+import { SyncRefreshButton } from './components/SyncRefreshButton';
+import { SyncDetailsModal } from './components/SyncDetailsModal';
+import { getSyncState, type SyncState } from './shared/services/sync';
 
+// Load each screen on demand so warehouse devices download only the code they need.
 const HomeRoute = lazy(() => import('./routes/HomeRoute').then((m) => ({ default: m.HomeRoute })));
 const NewInspectionRoute = lazy(() => import('./routes/NewInspectionRoute').then((m) => ({ default: m.NewInspectionRoute })));
 const CapturePicklistRoute = lazy(() => import('./routes/CapturePicklistRoute').then((m) => ({ default: m.CapturePicklistRoute })));
@@ -25,55 +31,49 @@ const CaptureReturnsStagingRoute = lazy(() => import('./routes/CaptureReturnsSta
 const InventoryRoute = lazy(() => import('./routes/InventoryRoute').then((m) => ({ default: m.InventoryRoute })));
 const InvestigationRoute = lazy(() => import('./routes/InvestigationRoute').then((m) => ({ default: m.InvestigationRoute })));
 
-import { LanguageProvider, useT } from './shared/i18n/LanguageContext';
-import { LanguageToggle } from './shared/components/LanguageToggle';
-import { SyncRefreshButton } from './components/SyncRefreshButton';
-import { SyncDetailsModal } from './components/SyncDetailsModal';
-import { getSyncState, type SyncState } from './shared/services/sync';
-
 export default function App() {
   return (
     <LanguageProvider>
       <BrowserRouter>
         <Shell>
           <Suspense fallback={<main className="page"><div className="soft">Loading…</div></main>}>
-          <Routes>
-            <Route path="/" element={<HomeRoute />} />
-            <Route path="/setup" element={<SetupRoute />} />
-            <Route path="/inventory" element={<InventoryRoute />} />
+            <Routes>
+              <Route path="/" element={<HomeRoute />} />
+              <Route path="/setup" element={<SetupRoute />} />
+              <Route path="/inventory" element={<InventoryRoute />} />
 
-  
-            {/* New inspection by type - outbound/returns/retag */}
-            <Route path="/inspection/new/:type" element={<NewInspectionRoute />} />
-  
-            {/* Step 1 of an existing inspection — same screen, edit mode */}
-            <Route path="/inspection/:id/details" element={<NewInspectionRoute />} />
 
-            {/* Outbound workflow */}
-            <Route path="/inspection/:id/capture-picklist" element={<CapturePicklistRoute />} />
-            <Route path="/inspection/:id/capture-bol" element={<CaptureBOLRoute />} />
-            <Route path="/inspection/:id/verify" element={<VerifyRoute />} />
-            
-            {/* Returns workflow */}
-            <Route path="/inspection/:id/capture-returns-bol" element={<CaptureReturnsBOLRoute />} />
-            <Route path="/inspection/:id/capture-returns-staging" element={<CaptureReturnsStagingRoute />} />
-            <Route path="/inspection/:id/verify-returns" element={<VerifyReturnsRoute />} />
+              {/* New inspection by type - outbound/returns/retag */}
+              <Route path="/inspection/new/:type" element={<NewInspectionRoute />} />
 
-            {/* Inbound workflow */}
-            <Route path="/inspection/:id/capture-inbound-bol" element={<CaptureInboundBOLRoute />} />
-            <Route path="/inspection/:id/verify-inbound" element={<VerifyInboundRoute />} />
-  
-            {/* Shared Pallet & Workspace */}
-            <Route path="/inspection/:id" element={<InspectionWorkspaceRoute />} />
-            <Route path="/inspection/:id/pallet/:palletIndex" element={<ScanPalletRoute />} />
-            <Route path="/inspection/:id/review" element={<ReviewAndCompleteRoute />} />
-            <Route path="/inspection/:id/complete" element={<ReviewAndCompleteRoute />} />
-            <Route path="/investigation" element={<InvestigationRoute />} />
-  
-            {/* Admin area - password gated, dashboard lives inside */}
-            <Route path="/admin" element={<AdminGate><AdminRoute /></AdminGate>} />
-            <Route path="/admin/dashboard" element={<AdminGate><DashboardRoute /></AdminGate>} />
-          </Routes>
+              {/* Step 1 of an existing inspection — same screen, edit mode */}
+              <Route path="/inspection/:id/details" element={<NewInspectionRoute />} />
+
+              {/* Outbound workflow */}
+              <Route path="/inspection/:id/capture-picklist" element={<CapturePicklistRoute />} />
+              <Route path="/inspection/:id/capture-bol" element={<CaptureBOLRoute />} />
+              <Route path="/inspection/:id/verify" element={<VerifyRoute />} />
+
+              {/* Returns workflow */}
+              <Route path="/inspection/:id/capture-returns-bol" element={<CaptureReturnsBOLRoute />} />
+              <Route path="/inspection/:id/capture-returns-staging" element={<CaptureReturnsStagingRoute />} />
+              <Route path="/inspection/:id/verify-returns" element={<VerifyReturnsRoute />} />
+
+              {/* Inbound workflow */}
+              <Route path="/inspection/:id/capture-inbound-bol" element={<CaptureInboundBOLRoute />} />
+              <Route path="/inspection/:id/verify-inbound" element={<VerifyInboundRoute />} />
+
+              {/* Shared Pallet & Workspace */}
+              <Route path="/inspection/:id" element={<InspectionWorkspaceRoute />} />
+              <Route path="/inspection/:id/pallet/:palletIndex" element={<ScanPalletRoute />} />
+              <Route path="/inspection/:id/review" element={<ReviewAndCompleteRoute />} />
+              <Route path="/inspection/:id/complete" element={<ReviewAndCompleteRoute />} />
+              <Route path="/investigation" element={<InvestigationRoute />} />
+
+              {/* Admin area - password gated, dashboard lives inside */}
+              <Route path="/admin" element={<AdminGate><AdminRoute /></AdminGate>} />
+              <Route path="/admin/dashboard" element={<AdminGate><DashboardRoute /></AdminGate>} />
+            </Routes>
           </Suspense>
         </Shell>
       </BrowserRouter>

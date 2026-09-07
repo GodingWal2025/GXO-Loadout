@@ -1,5 +1,5 @@
 import type { PicklistLineItemEntry } from '../shared';
-import { actualCountInUom, expectedBags } from '../shared';
+import { actualCountInUom, BAGS_PER_PALLET, expectedBags, normalizeBatchCode } from '../shared';
 
 export type TallyDisplayUnit = 'BG' | 'SP' | 'MB';
 
@@ -9,6 +9,13 @@ export interface TallyDisplayCount {
   expected: number;
   actualBags: number;
   expectedBags: number;
+}
+
+export interface TallyLineGroup {
+  id: string;
+  batchCode: string | null;
+  lines: PicklistLineItemEntry[];
+  display: TallyDisplayCount;
 }
 
 const cleanNumber = (value: number): number => Math.round(value * 1000) / 1000;
@@ -57,6 +64,98 @@ export function tallyTotalsByUnit(lines: PicklistLineItemEntry[]): Record<TallyD
     total.expectedBags += count.expectedBags;
   }
   return totals;
+}
+
+/**
+ * Combine duplicate partial BG/BAG picklist rows for one batch into physical
+ * pallet-sized tally items. A displayed item can never exceed 60 bags.
+ */
+export function groupTallyLines(lines: PicklistLineItemEntry[]): TallyLineGroup[] {
+  type PartialAccumulator = {
+    kind: 'partial';
+    batchCode: string;
+    normalizedBatch: string;
+    lines: PicklistLineItemEntry[];
+  };
+  type SingleAccumulator = { kind: 'single'; group: TallyLineGroup };
+
+  const ordered: Array<PartialAccumulator | SingleAccumulator> = [];
+  const partialByBatch = new Map<string, PartialAccumulator>();
+
+  for (const line of lines) {
+    const display = tallyDisplayCount(line);
+    const rawUnit = String(line.uom || 'BG').toUpperCase();
+    const normalizedBatch = normalizeBatchCode(line.batchCode.value);
+    const isPartialBag =
+      (rawUnit === 'BG' || rawUnit === 'BAG') &&
+      display.expectedBags > 0 &&
+      display.expectedBags < BAGS_PER_PALLET &&
+      Boolean(normalizedBatch);
+
+    if (!isPartialBag) {
+      ordered.push({
+        kind: 'single',
+        group: {
+          id: line.id,
+          batchCode: line.batchCode.value,
+          lines: [line],
+          display,
+        },
+      });
+      continue;
+    }
+
+    let accumulator = partialByBatch.get(normalizedBatch);
+    if (!accumulator) {
+      accumulator = {
+        kind: 'partial',
+        batchCode: line.batchCode.value || normalizedBatch,
+        normalizedBatch,
+        lines: [],
+      };
+      partialByBatch.set(normalizedBatch, accumulator);
+      ordered.push(accumulator);
+    }
+    accumulator.lines.push(line);
+  }
+
+  return ordered.flatMap((entry) => {
+    if (entry.kind === 'single') return [entry.group];
+
+    let expectedRemaining = entry.lines.reduce(
+      (sum, line) => sum + tallyDisplayCount(line).expectedBags,
+      0
+    );
+    let actualRemaining = entry.lines.reduce(
+      (sum, line) => sum + tallyDisplayCount(line).actualBags,
+      0
+    );
+    const groups: TallyLineGroup[] = [];
+    let part = 0;
+
+    while (expectedRemaining > 0) {
+      const expected = Math.min(BAGS_PER_PALLET, expectedRemaining);
+      const isLast = expectedRemaining <= BAGS_PER_PALLET;
+      const actual = isLast ? actualRemaining : Math.min(expected, actualRemaining);
+      groups.push({
+        id: `${entry.lines.map((line) => line.id).join(':')}:${part}`,
+        batchCode: entry.batchCode,
+        lines: entry.lines,
+        display: {
+          unit: 'BG',
+          actual,
+          expected,
+          actualBags: actual,
+          expectedBags: expected,
+        },
+      });
+      expectedRemaining -= expected;
+      actualRemaining -= actual;
+      part += 1;
+    }
+
+    return groups;
+  });
 }
 
 export function formatTallyQuantity(value: number): string {
