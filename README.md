@@ -26,7 +26,6 @@ A React-based single-page application built with Vite and TypeScript for capturi
 ---
 
 ## Features
-- **Load readiness**: Workspace and review screens list missing paperwork, unverified fields, required pallet photos, quantity discrepancies, failed inspections, and staging issues. Each item links to its correction screen. This is an operational checklist; the existing final inspector sign-off remains in place.
 - **Product reconciliation**: Expected and actual quantities are shown by SKU, batch, unit, and delivery grouping. Bags, Seedpaks, and Minibulks are kept separate. Inbound records do not contain expected quantities, so their expected column is explicitly unknown rather than inferred.
 - **Repeat pallet**: “Add another like the last pallet” copies product details and delivery, with fresh section IDs. Counts, LPNs, photos, findings, and completion timestamps are not copied. The inspector confirms the carried-forward details on the new pallet.
 - **Document recovery**: Verify screens pair captured pages with editable extracted fields and explicit OCR-row confirmation. Failed picklist extraction can retain the image for manual entry, and barcode capture includes manual entry as a fallback.

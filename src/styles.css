@@ -2386,7 +2386,6 @@ kbd {
 .operations-panel summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
 .operations-panel textarea, .document-row input:not([type=checkbox]), .document-row select { width: 100%; }
 .operations-panel label, .document-row label { display: block; margin: 10px 0; }
-.readiness-list li { padding: 6px 0; }
 .operations-table { overflow-x: auto; }
 .reconciliation-alert { background: #fff5e3; }
 .operations-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin: 16px 0; }
