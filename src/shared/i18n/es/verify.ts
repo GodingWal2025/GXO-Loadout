@@ -272,8 +272,8 @@ export const verify: Record<string, string> = {
   'review.errNotConfirmed': 'Debe verificar la carga y marcar la casilla de confirmación.',
   'review.backToLoad': '← Volver a la carga',
   'review.continueEditing': '← Seguir editando',
-  'review.completeFlagged': '⚑ Completar (marcada)',
-  'review.complete': '✓ Completar inspección',
+  'review.completeFlagged': '⚑ Finalizar inspección (marcada)',
+  'review.complete': '✓ Finalizar inspección',
 
   // ---- InspectionProgressModal ----
   'progress.titleLead': 'Progreso',

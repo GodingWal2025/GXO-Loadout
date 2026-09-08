@@ -1,21 +1,15 @@
-import { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState } from 'react';
 import type { Inspection } from '../shared/types/inspection';
-import { reconcileInspection } from '../shared/rules/operations';
 import { useT } from '../shared/i18n/LanguageContext';
 import { generateId } from '../shared/utils/uuid';
 import { downloadInspectionEvidence } from '../lib/inspectionEvidence';
 
-export function InspectionOperationsPanel({ inspection, onNote }: {
+export function InspectionOperationsPanel({ inspection, onNote, showEvidenceDownload = false }: {
   inspection: Inspection;
   onNote?: (note: NonNullable<Inspection['operationalNotes']>[number]) => void;
+  showEvidenceDownload?: boolean;
 }) {
   const t = useT();
-  const location = useLocation();
-  useEffect(() => {
-    if (location.hash === '#reconciliation') document.getElementById('reconciliation')?.scrollIntoView({ block: 'start' });
-  }, [location.hash]);
-  const rows = reconcileInspection(inspection);
   const [text, setText] = useState('');
   const [kind, setKind] = useState<'handoff' | 'resolution'>('handoff');
   const [exporting, setExporting] = useState(false);
@@ -29,18 +23,12 @@ export function InspectionOperationsPanel({ inspection, onNote }: {
     finally { setExporting(false); }
   }
   return <section className="section operations-panel">
-    <div className="section__head">
-      <button className="btn btn--sm" disabled={exporting} onClick={() => void exportEvidence()}>{exporting ? t('ops.exporting', 'Preparing evidence…') : t('ops.export', 'Download evidence package')}</button>
-    </div>
-    {message && <p role="status">{message}</p>}
-    <details id="reconciliation" open={location.hash === '#reconciliation'}><summary>{t('ops.reconciliation', 'Expected versus actual')}</summary>
-      <p className="small soft">{t('ops.unitsHint', 'Each row keeps its own unit. A dash means no expected quantity was recorded.')}</p>
-      <div className="operations-table"><table className="data"><thead><tr>
-        <th>{t('ops.delivery', 'Delivery')}</th><th>SKU</th><th>{t('ops.batch', 'Batch')}</th><th>{t('ops.product', 'Product')}</th><th>{t('ops.expected', 'Expected')}</th><th>{t('ops.actual', 'Actual')}</th><th>{t('ops.unit', 'Unit')}</th><th>{t('ops.difference', 'Difference')}</th>
-      </tr></thead><tbody>{rows.map(row => <tr key={row.id} className={row.unexpected || (!row.unknownExpected && Math.abs(row.actual - row.expected) > 0.001) ? 'reconciliation-alert' : ''}>
-        <td>{row.delivery || '—'}</td><td>{row.sku || '—'}</td><td>{row.batch || '—'}</td><td>{row.description}</td><td>{row.unknownExpected ? '—' : row.expected.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td>{row.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td><td>{row.unit}</td><td>{row.unexpected ? t('ops.unexpected', 'Unexpected product') : row.unknownExpected ? '—' : (row.actual - row.expected).toLocaleString(undefined, { maximumFractionDigits: 2, signDisplay: 'exceptZero' })}</td>
-      </tr>)}</tbody></table></div>
-    </details>
+    {showEvidenceDownload && <>
+      <div className="section__head">
+        <button className="btn btn--sm" disabled={exporting} onClick={() => void exportEvidence()}>{exporting ? t('ops.exporting', 'Preparing evidence…') : t('ops.export', 'Download evidence package')}</button>
+      </div>
+      {message && <p role="status">{message}</p>}
+    </>}
     <details><summary>{t('ops.notes', 'Handoff and resolution notes')}</summary>
       <ul>{(inspection.handoffLog || []).filter(entry => entry.note).map((entry, index) => <li key={`handoff-${index}`}><strong>{entry.fromInspector} → {entry.toInspector}</strong> · {new Date(entry.at).toLocaleString()}<p>{entry.note}</p></li>)}
         {(inspection.operationalNotes || []).map(note => <li key={note.id}><strong>{note.by}</strong> · {new Date(note.at).toLocaleString()} · {note.kind === 'handoff' ? t('ops.handoffNote', 'Handoff note') : t('ops.resolutionNote', 'Resolution note')}<p style={{ whiteSpace: 'pre-wrap' }}>{note.text}</p></li>)}</ul>

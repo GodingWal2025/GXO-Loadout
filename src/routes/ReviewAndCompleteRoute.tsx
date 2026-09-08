@@ -153,7 +153,11 @@ function ReviewInner({ initial }: { initial: Inspection }) {
 
   return (
     <main>
-      <InspectionOperationsPanel inspection={inspection} onNote={readOnly ? undefined : note => dispatch({ type: 'ADD_OPERATIONAL_NOTE', note })} />
+      <InspectionOperationsPanel
+        inspection={inspection}
+        onNote={readOnly ? undefined : note => dispatch({ type: 'ADD_OPERATIONAL_NOTE', note })}
+        showEvidenceDownload
+      />
       <div className="page-head">
         <div>
           <h1 className="page-head__title">
@@ -1063,8 +1067,8 @@ function ReviewInner({ initial }: { initial: Inspection }) {
               onClick={complete}
             >
               {inspection.flaggedItemsCount > 0
-                ? t('review.completeFlagged', '⚑ Complete (flagged)')
-                : t('review.complete', '✓ Complete inspection')}
+                ? t('review.completeFlagged', '⚑ Finalize Inspection (flagged)')
+                : t('review.complete', '✓ Finalize Inspection')}
             </button>
           )}
         </div>

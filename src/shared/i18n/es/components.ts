@@ -41,7 +41,7 @@ export const components: Record<string, string> = {
   // SuggestableField
   'suggest.mlHint': 'Autocompletado de un documento escaneado. Confirme o corrija.',
   'suggest.aiConfirm': '✨ IA{pct} · confirmar',
-  'suggest.scanBarcode': 'Escanear código de barras',
+  'suggest.scanBarcode': 'Tomar una foto de la etiqueta',
 
   // PhotoLightbox
   'lightbox.photoAlt': 'Foto',

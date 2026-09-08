@@ -108,13 +108,8 @@ export const capture: Record<string, string> = {
   'photoChecklist.capturedCount': '{done} de {total} capturadas',
 
   // ---- Barcode scanner ----
-  'scanner.title': 'Escanear código de barras / QR',
-  'scanner.close': 'Cerrar',
-  'scanner.photoHint': 'Tome una foto clara con el código de barras completo dentro del encuadre.',
   'scanner.notFound':
     'No se encontró ningún código de barras en esa foto. Acérquese, mantenga el código enfocado e inténtelo de nuevo.',
-  'scanner.reading': 'Leyendo código de barras…',
-  'scanner.takePicture': '📷 Tomar foto del código de barras',
 
   // CapturedPageThumb
   'pageThumb.rotate': 'Girar esta página 90°',

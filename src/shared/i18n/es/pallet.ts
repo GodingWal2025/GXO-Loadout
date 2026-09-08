@@ -198,7 +198,7 @@ export const pallet: Record<string, string> = {
     'El lote "{batch}" está dividido en varias tarimas parciales (Tarimas #{pallets}). Se requiere solo una tarima parcial por código de lote.',
   'workspace.attentionRequired': 'Atención requerida',
   'workspace.viewSummary': 'Ver resumen →',
-  'workspace.completeInspection': 'Completar inspección →',
+  'workspace.completeInspection': 'Finalizar inspección →',
   'workspace.moreBagsOne': '{count} bolsa más por escanear',
   'workspace.moreBagsMany': '{count} bolsas más por escanear',
 };

@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { Suggestable } from '../types/inspection';
 import { BarcodeScanner } from '../../components/BarcodeScanner';
 import { useT } from '../i18n/LanguageContext';
@@ -30,7 +29,6 @@ export function SuggestableField<T extends string | number>({
   onChange,
 }: Props<T>) {
   const t = useT();
-  const [scanning, setScanning] = useState(false);
 
   const handleChange = (rawInput: string) => {
     const raw = uppercase && type === 'text' ? rawInput.toUpperCase() : rawInput;
@@ -45,7 +43,6 @@ export function SuggestableField<T extends string | number>({
   };
 
   const handleScan = (decodedText: string) => {
-    setScanning(false);
     const finalValue = scanMode === 'gs1Batch'
       ? extractGs1BatchCode(decodedText)
       : decodedText.trim().replace(/^\]C1/, '');
@@ -107,26 +104,8 @@ export function SuggestableField<T extends string | number>({
             style={{ flex: 1 }}
           />
         )}
-        {!hideCamera && (
-          <button
-            type="button"
-            className="btn btn--outline" 
-            onClick={() => setScanning(true)}
-            style={{ padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            title={t('suggest.scanBarcode', 'Scan Barcode')}
-            aria-label={t('suggest.scanBarcode', 'Scan Barcode')}
-          >
-            📷
-          </button>
-        )}
+        {!hideCamera && <BarcodeScanner onResult={handleScan} />}
       </div>
-
-      {!hideCamera && scanning && (
-        <BarcodeScanner 
-          onResult={handleScan}
-          onClose={() => setScanning(false)}
-        />
-      )}
     </div>
   );
 }
