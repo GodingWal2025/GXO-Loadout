@@ -110,7 +110,7 @@ export type Action =
   | { type: 'SET_STARTED_BY'; name: string }
   | { type: 'SET_PICKER_NAME'; name: string }
   | { type: 'SET_STAGING_LOCATION'; name: string }
-  | { type: 'SET_CURRENT_INSPECTOR'; name: string; previousName?: string }
+  | { type: 'SET_CURRENT_INSPECTOR'; name: string; previousName?: string; note?: string }
   | { type: 'SET_COMPLETED_BY'; name: string }
   | { type: 'SET_PICKLIST'; patch: Partial<Picklist> }
   | { type: 'ADD_PICKLIST_PHOTO'; photo: InspectionPhoto }
@@ -149,6 +149,7 @@ export type Action =
       batchCount: 1 | 2 | 3;
       scannedBy?: string;
     }
+  | { type: 'ADD_OPERATIONAL_NOTE'; note: NonNullable<Inspection['operationalNotes']>[number] }
   | { type: 'REMOVE_PALLET'; index: number }
   | { type: 'RESTORE_PALLET'; pallet: PalletInspection; atIndex?: number }
   | { type: 'UPDATE_PALLET'; index: number; patch: Partial<PalletInspection> }
@@ -348,6 +349,10 @@ function reducer(state: Inspection, action: Action): Inspection {
       next = { ...state, stagingLocation: action.name };
       break;
 
+    case 'ADD_OPERATIONAL_NOTE':
+      next = { ...state, operationalNotes: [...(state.operationalNotes || []), action.note] };
+      break;
+
     case 'SET_CURRENT_INSPECTOR': {
       const completedByPrev: number[] = [];
       const prevName = state.currentInspector;
@@ -360,6 +365,7 @@ function reducer(state: Inspection, action: Action): Inspection {
       }
       const newEntry = {
         at: new Date().toISOString(),
+        note: action.note?.trim() || undefined,
         fromInspector: prevName,
         toInspector: action.name,
         palletsCompletedByPrevious: completedByPrev,
@@ -390,11 +396,11 @@ function reducer(state: Inspection, action: Action): Inspection {
 
     case 'UPDATE_PICKLIST_LINE': {
       const lineItems = state.picklist.lineItems.map((li, i) =>
-        i === action.index ? { ...li, ...action.patch } : li
+        i === action.index ? { ...li, ...action.patch, reviewedAt: action.patch.reviewedAt } : li
       );
       next = {
         ...state,
-        picklist: { ...state.picklist, lineItems },
+        picklist: { ...state.picklist, lineItems, verifiedAt: undefined },
         // `deliveryId` on the line is the source of truth for which delivery a
         // product belongs to; the delivery's own list is rebuilt from it so
         // reassigning a line can't leave the two disagreeing.

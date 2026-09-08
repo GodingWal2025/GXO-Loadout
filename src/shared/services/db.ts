@@ -1,3 +1,4 @@
+import { trackLocalSave } from './localSave';
 // Local offline cache and durable retry queue. Shared Azure storage is the
 // source of truth; IndexedDB keeps capture working when warehouse Wi-Fi drops.
 
@@ -102,15 +103,17 @@ export function getDB(): Promise<IDBPDatabase<InspectionDB>> {
 }
 
 export async function dbSaveInspection(inspection: Inspection): Promise<void> {
-  const db = await getDB();
-  const now = new Date().toISOString();
-  const saved = { ...inspection, lastEditedAt: now };
-  const tx = db.transaction(['inspections', 'syncQueue'], 'readwrite');
-  await tx.objectStore('inspections').put(saved);
-  await tx.objectStore('syncQueue').put(recordQueueItem('inspections', saved));
-  await tx.done;
-  requestSync();
-  window.dispatchEvent(new CustomEvent('loadout-data-updated'));
+  return trackLocalSave(`inspection:${inspection.id}`, async () => {
+    const db = await getDB();
+    const now = new Date().toISOString();
+    const saved = { ...inspection, lastEditedAt: now };
+    const tx = db.transaction(['inspections', 'syncQueue'], 'readwrite');
+    await tx.objectStore('inspections').put(saved);
+    await tx.objectStore('syncQueue').put(recordQueueItem('inspections', saved));
+    await tx.done;
+    requestSync();
+    window.dispatchEvent(new CustomEvent('loadout-data-updated'));
+  });
 }
 
 function migrateInspection(inspection: Inspection | undefined): Inspection | undefined {
@@ -201,24 +204,26 @@ export async function dbSavePhotoBlob(
   inspectionId: string,
   blob: Blob
 ): Promise<void> {
-  const db = await getDB();
-  const tx = db.transaction(['photoBlobs', 'syncQueue'], 'readwrite');
-  await tx.objectStore('photoBlobs').put({
-    photoId,
-    inspectionId,
-    blob,
-    capturedAt: new Date().toISOString(),
-    uploaded: false,
+  return trackLocalSave(`photo:${photoId}`, async () => {
+    const db = await getDB();
+    const tx = db.transaction(['photoBlobs', 'syncQueue'], 'readwrite');
+    await tx.objectStore('photoBlobs').put({
+      photoId,
+      inspectionId,
+      blob,
+      capturedAt: new Date().toISOString(),
+      uploaded: false,
+    });
+    await tx.objectStore('syncQueue').put({
+      id: `photo:${photoId}`,
+      operation: 'upload-photo',
+      photoId,
+      createdAt: new Date().toISOString(),
+      attempts: 0,
+    });
+    await tx.done;
+    requestSync();
   });
-  await tx.objectStore('syncQueue').put({
-    id: `photo:${photoId}`,
-    operation: 'upload-photo',
-    photoId,
-    createdAt: new Date().toISOString(),
-    attempts: 0,
-  });
-  await tx.done;
-  requestSync();
 }
 
 export async function dbGetPhotoBlob(photoId: string): Promise<Blob | undefined> {

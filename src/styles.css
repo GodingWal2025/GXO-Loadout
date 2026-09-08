@@ -2379,3 +2379,24 @@ kbd {
 }
 
 
+/* Operational tools share the existing design tokens and stack on handhelds. */
+.save-status { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 10px; padding: 10px 20px; background: var(--surface-tint); border-bottom: 1px solid var(--rule-soft); font-size: 13px; }
+.save-status--error { background: #fff0ec; color: #8b1f1f; }
+.operations-panel details { padding: 12px 0; border-top: 1px solid var(--rule-soft); }
+.operations-panel summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.operations-panel textarea, .document-row input:not([type=checkbox]), .document-row select { width: 100%; }
+.operations-panel label, .document-row label { display: block; margin: 10px 0; }
+.readiness-list li { padding: 6px 0; }
+.operations-table { overflow-x: auto; }
+.reconciliation-alert { background: #fff5e3; }
+.operations-filters { display: flex; flex-wrap: wrap; gap: 16px; align-items: end; margin: 16px 0; }
+.operations-filters label { display: flex; flex-direction: column; gap: 6px; }
+.operations-queue { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 16px; }
+.operations-queue .card { margin: 0; padding: 18px; }
+.document-review { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+.document-review__image { position: sticky; top: 12px; }
+.document-review__image img { width: 100%; max-height: 75vh; object-fit: contain; margin-top: 12px; }
+.document-row { padding: 16px; margin-bottom: 16px; border: 1px solid var(--rule-soft); }
+.document-row--review { border: 2px solid #a56900; background: #fff8eb; }
+@media (max-width: 680px) { .document-review { grid-template-columns: 1fr; } .document-review__image { position: static; } .document-review__image img { max-height: 45vh; } }
+@media print { .save-status { display: none; } }

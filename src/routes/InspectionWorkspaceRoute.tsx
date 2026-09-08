@@ -1,3 +1,6 @@
+import { repeatPallet } from '../shared/rules/operations';
+import { generateId, dbSaveInspection } from '../shared';
+import { InspectionOperationsPanel } from '../components/InspectionOperationsPanel';
 import { useEffect, useState, useMemo } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbArchiveInspection } from '../shared';
@@ -57,6 +60,7 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [repeating, setRepeating] = useState(false);
   const [showHandoffModal, setShowHandoffModal] = useState(false);
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [showAdjustModal, setShowAdjustModal] = useState(false);
@@ -191,8 +195,8 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
     }, 50);
   };
 
-  const performHandoff = (newInspectorName: string) => {
-    dispatch({ type: 'SET_CURRENT_INSPECTOR', name: newInspectorName });
+  const performHandoff = (newInspectorName: string, note: string) => {
+    dispatch({ type: 'SET_CURRENT_INSPECTOR', name: newInspectorName, note });
     setShowHandoffModal(false);
   };
 
@@ -261,6 +265,21 @@ function WorkspaceInner({ initial }: { initial: Inspection }) {
         />
       )}
       <main>
+      {!readOnly && inspection.pallets.length > 0 && <button className="btn" disabled={repeating} onClick={async () => {
+        setRepeating(true);
+        const pallet = repeatPallet(inspection.pallets[inspection.pallets.length - 1], inspection.pallets.length + 1, generateId);
+        pallet.scannedBy = inspection.currentInspector || inspection.startedBy;
+        pallet.scannedAt = new Date().toISOString();
+        const updated = { ...inspection, pallets: [...inspection.pallets, pallet] };
+        try {
+          // The destination screen reads IndexedDB, so await the commit first.
+          await dbSaveInspection(updated);
+          dispatch({ type: 'LOAD', inspection: updated });
+          navigate('/inspection/' + inspection.id + '/pallet/' + inspection.pallets.length);
+        } catch { /* The persistent save banner provides the retry action. */ }
+        finally { setRepeating(false); }
+      }}>{t('ops.repeatPallet', 'Add another like the last pallet')}</button>}
+      <InspectionOperationsPanel inspection={inspection} onNote={readOnly ? undefined : note => dispatch({ type: 'ADD_OPERATIONAL_NOTE', note })} />
         <div className="page-head">
           <div>
             <h1 className="page-head__title mono">#{loadNum}</h1>
@@ -1052,11 +1071,12 @@ function HandoffModal({
 }: {
   currentInspector: string;
   siteId: string;
-  onSubmit: (name: string) => void;
+  onSubmit: (name: string, note: string) => void;
   onClose: () => void;
 }) {
   const t = useT();
   const [newName, setNewName] = useState('');
+  const [note, setNote] = useState('');
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -1082,6 +1102,7 @@ function HandoffModal({
           />
         </div>
 
+        <label>{t('ops.handoffNote', 'Handoff note')}<textarea rows={3} maxLength={2000} value={note} onChange={event => setNote(event.target.value)} /></label>
         <div className="modal__actions">
           <button className="btn btn--ghost" onClick={onClose}>
             {t('workspace.cancel', 'Cancel')}
@@ -1089,7 +1110,7 @@ function HandoffModal({
           <button
             className="btn btn--accent"
             disabled={!newName || newName === currentInspector}
-            onClick={() => onSubmit(newName)}
+            onClick={() => onSubmit(newName, note)}
           >
             {t('workspace.confirmHandoff', 'Confirm handoff')}
           </button>

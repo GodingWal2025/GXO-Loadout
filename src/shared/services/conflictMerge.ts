@@ -128,6 +128,9 @@ export function mergeInspection(local: Inspection, remote: Inspection): Inspecti
     siteId: local.siteId || remote.siteId,
     status: resolveStatus(local.status, remote.status),
     startedAt: local.startedAt || remote.startedAt || new Date().toISOString(),
+    // Notes are append-only: simultaneous shift notes must both survive a sync.
+    operationalNotes: [...new Map([...(remote.operationalNotes || []), ...(local.operationalNotes || [])].map(note => [note.id, note])).values()].sort((a, b) => a.at.localeCompare(b.at)),
+    handoffLog: [...new Map([...(remote.handoffLog || []), ...(local.handoffLog || [])].map(entry => [JSON.stringify([entry.at, entry.fromInspector, entry.toInspector]), entry])).values()].sort((a, b) => a.at.localeCompare(b.at)),
     pallets: mergePallets(local.pallets, remote.pallets),
     picklist: mergePicklists(local.picklist, remote.picklist),
     bol: local.bol || remote.bol,

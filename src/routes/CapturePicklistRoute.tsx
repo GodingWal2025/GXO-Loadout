@@ -33,6 +33,7 @@ export function CapturePicklistRoute() {
   const [ocrFailure, setOcrFailure] = useState<{
     previewUrl: string;
     reason: 'failed' | 'empty';
+    blob: Blob;
   } | null>(null);
 
   useEffect(() => {
@@ -70,6 +71,7 @@ export function CapturePicklistRoute() {
         setOcrFailure({
           previewUrl: URL.createObjectURL(compressed),
           reason: 'failed',
+          blob: compressed,
         });
         return;
       }
@@ -81,6 +83,7 @@ export function CapturePicklistRoute() {
         setOcrFailure({
           previewUrl: URL.createObjectURL(compressed),
           reason: 'empty',
+          blob: compressed,
         });
         return;
       }
@@ -208,6 +211,22 @@ export function CapturePicklistRoute() {
     URL.revokeObjectURL(previewUrl);
     setPending(null);
     await addPage(blob);
+  };
+
+  const keepForManualEntry = async () => {
+    if (!inspection || !ocrFailure || analyzing) return;
+    setAnalyzing(true);
+    try {
+      const photoId = generateId();
+      await dbSavePhotoBlob(photoId, inspection.id, ocrFailure.blob);
+      const updated = { ...inspection, picklist: { ...inspection.picklist, verifiedAt: undefined, photoIds: [...inspection.picklist.photoIds, photoId] } };
+      await dbSaveInspection(updated);
+      URL.revokeObjectURL(ocrFailure.previewUrl);
+      setOcrFailure(null);
+      navigate('/inspection/' + inspection.id + '/verify');
+    } catch {
+      // Keep the pending image available; the save banner exposes the failure.
+    } finally { setAnalyzing(false); }
   };
 
   const handleOcrRetake = () => {
@@ -375,7 +394,8 @@ export function CapturePicklistRoute() {
               />
             </div>
             <div className="modal__actions">
-              <button className="btn btn--accent" onClick={handleOcrRetake} autoFocus>
+              <button className="btn" disabled={analyzing} onClick={() => void keepForManualEntry()}>{t('ops.manualOcr', 'Keep image and enter fields manually')}</button>
+              <button className="btn btn--accent" disabled={analyzing} onClick={handleOcrRetake} autoFocus>
                 {t('picklist.ocrRetake', '📷 Retake photo')}
               </button>
             </div>

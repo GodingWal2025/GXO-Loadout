@@ -1,3 +1,4 @@
+import { InspectionOperationsPanel } from '../components/InspectionOperationsPanel';
 import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -263,6 +264,7 @@ function VerifyInboundInner({
 
   return (
     <main style={{ maxWidth: 960 }}>
+      <InspectionOperationsPanel inspection={inspection} onNote={inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED' ? undefined : note => dispatch({ type: 'ADD_OPERATIONAL_NOTE', note })} />
       <StepBackLink to={`/inspection/${inspection.id}/capture-inbound-bol`} />
 
       <div className="page-head">

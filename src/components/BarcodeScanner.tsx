@@ -13,6 +13,7 @@ export function BarcodeScanner({ onResult, onClose }: Props) {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [isReading, setIsReading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState('');
 
   useLayoutEffect(() => {
     scannerRef.current = new Html5Qrcode('barcode-photo-reader', {
@@ -114,6 +115,10 @@ export function BarcodeScanner({ onResult, onClose }: Props) {
           </div>
         )}
 
+        <form onSubmit={event => { event.preventDefault(); if (manualCode.trim()) onResult(manualCode.trim()); }} style={{ maxWidth: 600, margin: '16px auto' }}>
+          <label>{t('ops.manualBarcode', 'Or enter the barcode manually')}<input value={manualCode} onChange={event => setManualCode(event.target.value)} autoCapitalize="characters" autoComplete="off" /></label>
+          <button className="btn" disabled={!manualCode.trim() || isReading}>{t('ops.useCode', 'Use entered code')}</button>
+        </form>
         <button
           type="button"
           className="btn btn--accent"

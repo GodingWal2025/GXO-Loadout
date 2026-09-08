@@ -43,6 +43,15 @@ export const RETURNS_PALLET_PHOTO_REQUIREMENTS: PhotoRequirement[] = [
     'SIDE_VIEW_2'
 ];
 
+/** Keep the readiness checklist and camera slots on the same photo policy. */
+export function requiredPalletPhotos(type: PalletType, batchCount = 1, isReturns = false): PhotoRequirement[] {
+    if (type === 'Mixed Bag Pallet') {
+        const flaps: PhotoRequirement[] = ['BAG_FLAP_1', 'BAG_FLAP_2', 'BAG_FLAP_3'];
+        return [...flaps.slice(0, batchCount), 'FRONT_VIEW', 'SIDE_VIEW_1', 'BACK_VIEW', 'SIDE_VIEW_2'];
+    }
+    return isReturns && type !== 'Seedpak' ? RETURNS_PALLET_PHOTO_REQUIREMENTS : PALLET_PHOTO_REQUIREMENTS[type];
+}
+
 // Helper function to get readable labels for the UI
 export const getPhotoLabel = (req: PhotoRequirement): string => {
     const labels: Record<PhotoRequirement, string> = {

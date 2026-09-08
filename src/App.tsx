@@ -1,3 +1,4 @@
+import { SaveStatusBanner } from './components/SaveStatusBanner';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -36,6 +37,7 @@ export default function App() {
     <LanguageProvider>
       <BrowserRouter>
         <Shell>
+          <SaveStatusBanner />
           <Suspense fallback={<main className="page"><div className="soft">Loading…</div></main>}>
             <Routes>
               <Route path="/" element={<HomeRoute />} />

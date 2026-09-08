@@ -1,3 +1,4 @@
+import { OperationsBoard } from '../components/OperationsBoard';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Chart from 'chart.js/auto';
@@ -208,6 +209,7 @@ export function DashboardRoute() {
 
   return (
     <main className="dashboard-print-container" style={{ maxWidth: 1200, margin: '0 auto', padding: '0 20px' }}>
+      <OperationsBoard siteId={selectedSite} supervisor />
       <div className="page-head">
         <div className="row-between">
           <div>

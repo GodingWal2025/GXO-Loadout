@@ -40,6 +40,7 @@
 // Keep strings short — these render on a tablet held at arm's length.
 
 import { admin } from './admin';
+import { operations } from './operations';
 import { capture } from './capture';
 import { components } from './components';
 import { pallet } from './pallet';
@@ -47,6 +48,7 @@ import { shell } from './shell';
 import { verify } from './verify';
 
 export const es: Record<string, string> = {
+  ...operations,
   ...shell,
   ...capture,
   ...pallet,

@@ -1,3 +1,4 @@
+import { InspectionOperationsPanel } from '../components/InspectionOperationsPanel';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { dbGetInspection, dbGetPhotoBlob, computeCrossReference, PhotoLightbox } from '../shared';
@@ -152,6 +153,7 @@ function ReviewInner({ initial }: { initial: Inspection }) {
 
   return (
     <main>
+      <InspectionOperationsPanel inspection={inspection} onNote={readOnly ? undefined : note => dispatch({ type: 'ADD_OPERATIONAL_NOTE', note })} />
       <div className="page-head">
         <div>
           <h1 className="page-head__title">

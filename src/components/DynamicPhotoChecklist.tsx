@@ -1,4 +1,5 @@
-import { PALLET_PHOTO_REQUIREMENTS, RETURNS_PALLET_PHOTO_REQUIREMENTS, getPhotoLabel, type PalletType, type InspectionPhoto, type QualityFlag } from '../shared';
+import { getPhotoLabel, type PalletType, type InspectionPhoto, type QualityFlag } from '../shared';
+import { requiredPalletPhotos } from '../shared/rules/photoRequirements';
 import { SlotPhotoCapture } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
 
@@ -30,22 +31,7 @@ export function DynamicPhotoChecklist({
   batchCount
 }: Props) {
   const t = useT();
-  // 1. Instantly pull the correct group of requirements from the SDK
-  let requiredShots = PALLET_PHOTO_REQUIREMENTS[palletType];
-  
-  if (palletType === 'Mixed Bag Pallet') {
-    requiredShots = [];
-    if ((batchCount || 1) >= 1) requiredShots.push('BAG_FLAP_1');
-    if ((batchCount || 1) >= 2) requiredShots.push('BAG_FLAP_2');
-    if ((batchCount || 1) >= 3) requiredShots.push('BAG_FLAP_3');
-    requiredShots.push('FRONT_VIEW', 'SIDE_VIEW_1', 'BACK_VIEW', 'SIDE_VIEW_2');
-  } else if (isReturns && palletType !== 'Seedpak') {
-    requiredShots = RETURNS_PALLET_PHOTO_REQUIREMENTS;
-  }
-
-  if (!requiredShots) {
-    return null; // Safety fallback
-  }
+  const requiredShots = requiredPalletPhotos(palletType, batchCount, isReturns);
 
   const findSlotPhoto = (slotKey: string) => photos.find((p) => p.slotKey === slotKey);
   const capturedCount = photos.filter((p) => p.slotKey && requiredShots.includes(p.slotKey as any)).length;

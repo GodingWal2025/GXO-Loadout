@@ -231,6 +231,9 @@ export interface BatchSection {
 }
 
 export interface PalletInspection {
+  /** Repeated product details require explicit confirmation on the new pallet. */
+  repeatSourcePallet?: number;
+  repeatConfirmedAt?: string;
   palletNumber: number;
   palletType: PalletType;
   deliveryId: string; // which delivery this pallet belongs to
@@ -263,6 +266,7 @@ export interface PalletInspection {
 }
 
 export interface HandoffEntry {
+  note?: string;
   at: string;
   fromInspector?: string;
   toInspector: string;
@@ -287,6 +291,8 @@ export interface Picklist {
 }
 
 export interface PicklistLineItemEntry {
+  /** Human confirmation of extracted fields; cleared when the row is edited. */
+  reviewedAt?: string;
   id: string;
   batchCode: Suggestable<string>;
   /**
@@ -450,6 +456,8 @@ export interface LineItemDiscrepancy {
 export type InspectionStatus = 'PENDING' | 'IN_PROGRESS' | 'COMPLETED' | 'FLAGGED' | 'CANCELLED';
 
 export interface Inspection {
+  /** Append-only notes preserve shift context and exception-resolution evidence. */
+  operationalNotes?: { id: string; at: string; by: string; kind: 'handoff' | 'resolution'; text: string }[];
   id: string;
   type: InspectionType; // outbound / returns / retag
   siteId: string;

@@ -152,6 +152,10 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       );
       return;
     }
+    if (pallet.repeatSourcePallet != null && !pallet.repeatConfirmedAt) {
+      setValidationError(t('ops.repeatRequired', 'Confirm the carried-forward details before continuing.'));
+      return;
+    }
     setValidationError('');
     navigate(isFromInvestigation ? '/investigation' : `/inspection/${inspection.id}`);
   };
@@ -415,6 +419,10 @@ function PalletInner({ initial, palletIndex }: { initial: Inspection; palletInde
       </section>
       </fieldset>
 
+      {pallet.repeatSourcePallet != null && !readOnly && <section className="section">
+        <p>{t('ops.repeatExplanation', 'Product details were copied from pallet {n}. Check them against this pallet, enter its quantity, and take new photos.', { n: pallet.repeatSourcePallet })}</p>
+        <label><input type="checkbox" checked={Boolean(pallet.repeatConfirmedAt)} onChange={event => dispatch({ type: 'UPDATE_PALLET', index: palletIndex, patch: { repeatConfirmedAt: event.target.checked ? new Date().toISOString() : undefined } })} /> {t('ops.repeatConfirm', 'I checked the product, batch, and delivery for this pallet.')}</label>
+      </section>}
       {/* Photo slots — handled by Semantic Photo Dictionary */}
       <section className="section">
         <DynamicPhotoChecklist 

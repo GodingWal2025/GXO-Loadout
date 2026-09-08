@@ -1,3 +1,4 @@
+import { DocumentReview, needsDocumentReview } from '../components/DocumentReview';
 import { generateId, emptySuggestable, normalizeBatchCode, PICKLIST_UOM_OPTIONS, parsePackInfo, dbListInventoryItems } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -82,7 +83,8 @@ function VerifyInner({
 
   const canConfirm =
     Boolean(sharedLoadNumber) &&
-    inspection.bol.deliveries.length > 0;
+    inspection.bol.deliveries.length > 0 &&
+    !inspection.picklist.lineItems.some(needsDocumentReview);
 
   return (
     <main>
@@ -121,6 +123,7 @@ function VerifyInner({
         </div>
       )}
 
+      <DocumentReview inspection={inspection} onChange={(index, patch) => dispatch({ type: 'UPDATE_PICKLIST_LINE', index, patch })} />
       {/* ===== Load header ===== */}
       <section className="section">
         <div className="section__head">
