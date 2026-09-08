@@ -1,4 +1,3 @@
-import { OperationsBoard } from '../components/OperationsBoard';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { getDeviceConfig } from '../lib/deviceConfig';
@@ -60,8 +59,6 @@ export function HomeRoute() {
           </div>
         </div>
       </div>
-
-      <OperationsBoard siteId={config.siteId} />
 
       <section className="section">
         <div className="section__head">
