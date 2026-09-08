@@ -25,6 +25,9 @@ import { normalizeBatchCode } from '../rules/batchCodeMatching';
 import { countInspectionFlags } from '../rules/inspectionFlags';
 import { dbSaveInspection } from '../services/db';
 
+// Central state owner for an open inspection. Routes dispatch business events;
+// this module applies them, recomputes derived tallies/flags, and persists the
+// resulting snapshot through the local-first database service.
 export function emptyInspection(siteId: string, type: InspectionType = 'outbound'): Inspection {
   return {
     id: generateId(),
@@ -326,6 +329,8 @@ export function recomputeFlags(state: Inspection): Inspection {
 }
 
 function reducer(state: Inspection, action: Action): Inspection {
+  // Derived quantities are recomputed inside the reducer so every caller sees a
+  // consistent inspection regardless of which route dispatched the edit.
   let next: Inspection;
 
   switch (action.type) {

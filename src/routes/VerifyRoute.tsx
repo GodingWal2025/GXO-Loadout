@@ -1,4 +1,3 @@
-import { DocumentReview, needsDocumentReview } from '../components/DocumentReview';
 import { generateId, emptySuggestable, normalizeBatchCode, PICKLIST_UOM_OPTIONS, parsePackInfo, dbListInventoryItems } from '../shared';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -9,6 +8,10 @@ import type { InventoryItem } from '../shared/types/inventory';
 import { AlphanumericInput, SuggestableField } from '../shared';
 import { StepBackLink } from '../shared';
 import { useT } from '../shared/i18n/LanguageContext';
+
+// Outbound document-verification step. Operators correct the structured fields
+// needed by later pallet scanning; OCR source-image review is intentionally not
+// part of this screen.
 
 export function VerifyRoute() {
   const { id } = useParams<{ id: string }>();
@@ -83,8 +86,7 @@ function VerifyInner({
 
   const canConfirm =
     Boolean(sharedLoadNumber) &&
-    inspection.bol.deliveries.length > 0 &&
-    !inspection.picklist.lineItems.some(needsDocumentReview);
+    inspection.bol.deliveries.length > 0;
 
   return (
     <main>
@@ -123,7 +125,6 @@ function VerifyInner({
         </div>
       )}
 
-      <DocumentReview inspection={inspection} onChange={(index, patch) => dispatch({ type: 'UPDATE_PICKLIST_LINE', index, patch })} />
       {/* ===== Load header ===== */}
       <section className="section">
         <div className="section__head">
@@ -622,5 +623,3 @@ function ShipDateField({
     </div>
   );
 }
-
-

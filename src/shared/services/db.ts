@@ -1,7 +1,6 @@
-import { trackLocalSave } from './localSave';
 // Local offline cache and durable retry queue. Shared Azure storage is the
 // source of truth; IndexedDB keeps capture working when warehouse Wi-Fi drops.
-
+import { trackLocalSave } from './localSave';
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { Inspection } from '../types/inspection';
 import { emptySuggestable } from '../types/inspection';
@@ -107,6 +106,8 @@ export async function dbSaveInspection(inspection: Inspection): Promise<void> {
     const db = await getDB();
     const now = new Date().toISOString();
     const saved = { ...inspection, lastEditedAt: now };
+    // The record and its upload job commit atomically: a browser crash cannot
+    // leave saved work with no way to reach shared storage.
     const tx = db.transaction(['inspections', 'syncQueue'], 'readwrite');
     await tx.objectStore('inspections').put(saved);
     await tx.objectStore('syncQueue').put(recordQueueItem('inspections', saved));
@@ -119,6 +120,8 @@ export async function dbSaveInspection(inspection: Inspection): Promise<void> {
 function migrateInspection(inspection: Inspection | undefined): Inspection | undefined {
   if (!inspection) return inspection;
 
+  // Migrate at the read boundary so devices can open records created by older
+  // releases without a destructive one-time database migration.
   if (inspection.bol && !Array.isArray(inspection.bol.lineItems)) {
     inspection = { ...inspection, bol: { ...inspection.bol, lineItems: [] } };
   }
@@ -183,6 +186,8 @@ export async function dbHardDeleteInspection(id: string): Promise<void> {
   const inspection = await db.get('inspections', id);
   if (!inspection) return;
   const now = new Date().toISOString();
+  // "Hard delete" removes the item from user-facing lists but retains a
+  // tombstone long enough to propagate the deletion to every device.
   const tombstone: Inspection = { ...inspection, deleted: true, deletedAt: now, lastEditedAt: now };
   const tx = db.transaction(['inspections', 'syncQueue'], 'readwrite');
   await tx.objectStore('inspections').put(tombstone);
@@ -205,6 +210,8 @@ export async function dbSavePhotoBlob(
   blob: Blob
 ): Promise<void> {
   return trackLocalSave(`photo:${photoId}`, async () => {
+    // Photo bytes live outside the inspection JSON so frequent inspection edits
+    // do not duplicate large blobs. The inspection stores only photo metadata.
     const db = await getDB();
     const tx = db.transaction(['photoBlobs', 'syncQueue'], 'readwrite');
     await tx.objectStore('photoBlobs').put({
@@ -287,6 +294,8 @@ function recordQueueItem<T extends { id: string }>(
   kind: SharedRecordKind,
   record: T
 ): SyncQueueItem {
+  // A stable id coalesces repeated edits into the newest unsynced record rather
+  // than uploading every intermediate keystroke.
   return {
     id: `record:${kind}:${record.id}`,
     operation: 'put-record',
@@ -331,6 +340,8 @@ export async function dbDeleteSyncQueueItem(id: string, expectedItem?: SyncQueue
 export async function dbRetrySyncQueueItem(item: SyncQueueItem): Promise<void> {
   const db = await getDB();
   const attempts = item.attempts + 1;
+  // Exponential backoff avoids hammering an unavailable API while keeping the
+  // maximum wait short enough for warehouse operators to recover quickly.
   const delay = Math.min(5 * 60_000, 2 ** Math.min(attempts, 8) * 1_000);
   await db.put('syncQueue', {
     ...item,

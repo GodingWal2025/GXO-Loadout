@@ -1,3 +1,5 @@
+// All browser/model boxes use normalized coordinates unless a type explicitly
+// says Pixel. Normalization keeps annotations valid when the canvas is resized.
 export type NormalizedXyxy = readonly [number, number, number, number];
 export type NormalizedXywh = readonly [number, number, number, number];
 export type PixelXywh = readonly [number, number, number, number];
@@ -6,6 +8,7 @@ export type NormalizedYxyx = readonly [number, number, number, number];
 const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
 
 export function normalizeXyxy(box: NormalizedXyxy): NormalizedXyxy {
+  // Users may drag in any direction; always return ordered, image-bounded edges.
   const [ax, ay, bx, by] = box.map(clamp01) as [number, number, number, number];
   return [Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx), Math.max(ay, by)];
 }

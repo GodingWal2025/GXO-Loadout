@@ -11,6 +11,8 @@ import { SyncRefreshButton } from './components/SyncRefreshButton';
 import { SyncDetailsModal } from './components/SyncDetailsModal';
 import { getSyncState, type SyncState } from './shared/services/sync';
 
+// App.tsx owns only global concerns: routing, localization, navigation, admin
+// access, and sync status. Inspection workflow state stays inside route/hooks.
 // Load each screen on demand so warehouse devices download only the code they need.
 const HomeRoute = lazy(() => import('./routes/HomeRoute').then((m) => ({ default: m.HomeRoute })));
 const NewInspectionRoute = lazy(() => import('./routes/NewInspectionRoute').then((m) => ({ default: m.NewInspectionRoute })));
@@ -98,6 +100,8 @@ function Shell({ children }: { children: ReactNode }) {
   const [showSyncModal, setShowSyncModal] = useState(false);
 
   useEffect(() => {
+    // The sync service is framework-agnostic and reports state through a browser
+    // event; the shell converts that event into the top-bar status indicator.
     const update = (event: Event) => setSyncState((event as CustomEvent<SyncState>).detail);
     window.addEventListener('loadout-sync-status', update);
     return () => window.removeEventListener('loadout-sync-status', update);

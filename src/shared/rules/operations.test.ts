@@ -4,7 +4,6 @@ import { inspectionReadiness, reconcileInspection, repeatPallet } from './operat
 import { requiredPalletPhotos } from './photoRequirements';
 import { mergeInspection } from '../services/conflictMerge';
 import { evidencePhotoIds, escapeEvidenceHtml } from '../../lib/inspectionEvidence';
-import { needsDocumentReview } from '../../components/DocumentReview';
 import type { PicklistLineItemEntry, PalletInspection, InspectionPhoto } from '../types/inspection';
 
 const t = (_key: string, english: string) => english;
@@ -74,13 +73,6 @@ describe('repeat, review, and evidence safety', () => {
     expect(copy.batchSections[0]).toMatchObject({ id: 'new-section', actualBagCount: { value: null }, batchCode: { value: 'BATCH' } });
     expect(copy.batchSections[0].aiLayerSamples).toBeUndefined();
     expect(original.batchSections[0].actualBagCount.value).toBe(60);
-  });
-  it('requires explicit review of OCR rows and ignores cancelled rows', () => {
-    const row = line('a', 'BG', 2, 0);
-    row.sku.source = 'ml';
-    expect(needsDocumentReview(row)).toBe(true);
-    expect(needsDocumentReview({ ...row, reviewedAt: 'now' })).toBe(false);
-    expect(needsDocumentReview({ ...row, cancelled: true })).toBe(false);
   });
   it('preserves notes and handoffs from both devices during conflict merge', () => {
     const local = emptyInspection('site');

@@ -4,6 +4,11 @@ import { useT } from '../shared/i18n/LanguageContext';
 import { generateId } from '../shared/utils/uuid';
 import { downloadInspectionEvidence } from '../lib/inspectionEvidence';
 
+/**
+ * Shared audit-history panel for handoffs and resolution notes. Notes are
+ * append-only from this component; the route that renders it remains responsible
+ * for persisting the new entry on the inspection record.
+ */
 export function InspectionOperationsPanel({ inspection, onNote, showEvidenceDownload = false }: {
   inspection: Inspection;
   onNote?: (note: NonNullable<Inspection['operationalNotes']>[number]) => void;
@@ -14,6 +19,9 @@ export function InspectionOperationsPanel({ inspection, onNote, showEvidenceDown
   const [kind, setKind] = useState<'handoff' | 'resolution'>('handoff');
   const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState('');
+
+  // Evidence export is optional because it belongs on the final review page,
+  // while the note history is useful during the entire workflow.
   async function exportEvidence() {
     setExporting(true); setMessage('');
     try {

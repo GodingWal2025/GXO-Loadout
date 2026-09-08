@@ -1,6 +1,8 @@
 import type { NormalizedXyxy } from '../../features/bag-labeling/coordinates';
 import type { CocoRle } from '../../features/bag-labeling/types';
 
+// Browser-side adapter for the optional pallet-vision service. Keeping the HTTP
+// contract here prevents labeling UI components from depending on API details.
 export interface Sam3Proposal {
   id: string;
   score: number;
@@ -46,6 +48,8 @@ async function blobToDataUrl(blob: Blob): Promise<string> {
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
   const body = JSON.stringify(payload);
   let response: Response;
+  // Retry only transient capacity/gateway responses. Validation and auth errors
+  // should reach the operator immediately instead of being repeated.
   for (let attempt = 0; ; attempt++) {
     response = await fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body,

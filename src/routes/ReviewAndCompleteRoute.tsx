@@ -11,6 +11,10 @@ import { CapturedPageThumb } from '../components/CapturedPageThumb';
 import { downloadInspectionPdf } from '../lib/inspectionPdf';
 import { useT } from '../shared/i18n/LanguageContext';
 
+// Final inspection checkpoint. It recomputes readiness from persisted evidence,
+// presents any blocking issues, and is the only workflow page that completes the
+// inspection or exposes the evidence-package download.
+
 export function ReviewAndCompleteRoute() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();

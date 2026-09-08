@@ -11,6 +11,9 @@ export interface StagingLocation {
 
 const KEY = 'loadout.stagingLocations';
 
+// Staging locations are small site-scoped reference records. localStorage makes
+// selectors instant/offline; queue entries replicate changes to other devices.
+
 function loadAll(): StagingLocation[] {
   try {
     return JSON.parse(localStorage.getItem(KEY) || '[]');
@@ -21,6 +24,7 @@ function loadAll(): StagingLocation[] {
 
 function saveAll(locations: StagingLocation[]): void {
   localStorage.setItem(KEY, JSON.stringify(locations));
+  // Consumers refresh themselves when reference data changes.
   window.dispatchEvent(new CustomEvent('loadout-staging-locations-updated'));
 }
 
@@ -66,6 +70,8 @@ export function deleteStagingLocation(id: string): void {
   const location = locations.find((item) => item.id === id);
   saveAll(locations.filter((item) => item.id !== id));
   if (location) {
+    // Send a tombstone after removing the local option so cloud peers delete it
+    // instead of restoring it during their next pull.
     const now = new Date().toISOString();
     void dbEnqueueRecord('staging', { ...location, deleted: true, deletedAt: now, updatedAt: now });
   }

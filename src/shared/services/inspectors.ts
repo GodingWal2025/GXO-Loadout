@@ -2,6 +2,8 @@
 import type { Inspector } from '../types/inspection';
 import { dbEnqueueRecord } from './db';
 
+// Inspector reference data stays immediately available in localStorage and is
+// mirrored to shared storage so devices at the same site converge over time.
 const KEY = 'loadout.inspectors';
 
 function loadAll(): Inspector[] {
@@ -14,6 +16,8 @@ function loadAll(): Inspector[] {
 
 function saveAll(inspectors: Inspector[]): void {
   localStorage.setItem(KEY, JSON.stringify(inspectors));
+  // Admin pickers subscribe to this event instead of sharing React state with
+  // the persistence layer.
   window.dispatchEvent(new CustomEvent('loadout-inspectors-updated'));
 }
 
@@ -56,11 +60,13 @@ export function updateInspector(id: string, patch: Partial<Inspector>): void {
 }
 
 export function deactivateInspector(id: string): void {
+  // Deactivation preserves historical inspector references on old inspections.
   updateInspector(id, { active: false });
 }
 
 
 export function deleteInspector(id: string): void {
+  // Hard deletion is intended for unsynced setup mistakes only.
   saveAll(loadAll().filter((inspector) => inspector.id !== id));
 }
 

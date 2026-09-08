@@ -6,6 +6,11 @@ interface Props {
   onResult: (decodedText: string) => void;
 }
 
+/**
+ * Photo-based barcode reader. Mobile devices open the rear camera for one tag
+ * picture; desktop browsers fall back to a normal image picker. No live camera
+ * stream is kept open.
+ */
 export function BarcodeScanner({ onResult }: Props) {
   const t = useT();
   const readerId = `barcode-photo-reader-${useId().replace(/:/g, '')}`;
@@ -68,6 +73,8 @@ export function BarcodeScanner({ onResult }: Props) {
           style={{ display: 'none' }}
         />
       </label>
+      {/* html5-qrcode requires a mounted container even when decoding a file.
+          Keep it off-screen; the selected tag photo is the only operator UI. */}
       <div
         id={readerId}
         aria-hidden="true"

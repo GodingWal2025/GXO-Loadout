@@ -1,5 +1,7 @@
 import type { Inspection, Site } from '../types/inspection';
 
+// This module is the reporting boundary: routes pass raw records and receive
+// display-ready KPIs, table rows, and chart series with identical filtering.
 const dayKey = (value: string) => value.slice(0, 10);
 const percent = (part: number, total: number) => `${total ? Math.round((part / total) * 100) : 0}%`;
 
@@ -16,6 +18,8 @@ export function buildDashboardStats(
     return date >= startDate && date <= endDate && (selectedSite === 'all' || inspection.siteId === selectedSite);
   });
 
+  // Noon avoids a daylight-saving boundary turning a calendar day into the
+  // previous/next date while iterating. The cap protects against bad UI input.
   const dateKeys: string[] = [];
   const cursor = new Date(`${startDate}T12:00:00`);
   const end = new Date(`${endDate}T12:00:00`);
@@ -33,6 +37,7 @@ export function buildDashboardStats(
       const minutes = (Date.parse(inspection.completedAt) - Date.parse(inspection.startedAt)) / 60_000;
       return Number.isFinite(minutes) && minutes >= 0 ? [minutes] : [];
     });
+    // Count both starters and completers because a load may be handed off.
     const inspectors = new Set(rows.flatMap((inspection) => [inspection.startedBy, inspection.completedBy].filter(Boolean)));
     return {
       id: site.id,
