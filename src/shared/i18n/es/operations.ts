@@ -46,7 +46,6 @@ export const operations: Record<string, string> = {
   'ops.savedPending': 'Guardado en el dispositivo • {count} cargas pendientes',
   'ops.syncUnconfirmed': 'Guardado local completo • confirmación de la nube pendiente',
   'ops.savedCloud': 'Guardado en el dispositivo y sincronizado con la nube',
-  'ops.uploadDetails': 'Detalles de carga',
   'ops.retrySaves': 'Reintentar guardados fallidos',
   'ops.evidenceTitle': 'Paquete de evidencia de inspección',
   'ops.evidenceMissing': 'Imagen no disponible — reconecte y exporte de nuevo',
