@@ -1,6 +1,8 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import type { PalletLabelGroup } from './types';
 
+// Labeling projects use a separate IndexedDB database from live inspections so
+// clearing training work cannot affect operational records (and vice versa).
 interface BagLabelingDb extends DBSchema {
   groups: {
     key: string;
@@ -28,6 +30,7 @@ function getDatabase(): Promise<IDBPDatabase<BagLabelingDb>> {
 export async function listPalletGroups(): Promise<PalletLabelGroup[]> {
   const db = await getDatabase();
   const groups = await db.getAllFromIndex('groups', 'by-updated');
+  // IndexedDB returns an ascending index; the console shows recent work first.
   return groups.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 

@@ -10,6 +10,11 @@ interface Props {
   inspection: Inspection;
 }
 
+/**
+ * Read-only summary used by both in-progress and completed inspection lists.
+ * Derived totals and status live in the model/rules modules; this component owns
+ * only navigation and presentation.
+ */
 export function InspectionListCard({ inspection }: Props) {
   const t = useT();
   const [showFlags, setShowFlags] = useState(false);
@@ -29,6 +34,9 @@ export function InspectionListCard({ inspection }: Props) {
   const lastEdited = inspection.lastEditedAt ? timeAgo(inspection.lastEditedAt, t) : '';
 
   const isFinished = inspection.status === 'COMPLETED' || inspection.status === 'FLAGGED';
+  // Finished work opens the audit/review view. Active inbound loads have a
+  // dedicated verification route; every other active workflow resumes in the
+  // common inspection workspace.
   const linkTarget = isFinished
     ? `/inspection/${inspection.id}/review`
     : isInbound

@@ -10,6 +10,10 @@ import { PALLET_TYPES, BAGS_PER_PALLET, ConfirmModal, actualCountInUom, actualCo
 import { DynamicPhotoChecklist } from '../components/DynamicPhotoChecklist';
 import { useT } from '../shared/i18n/LanguageContext';
 
+// Captures one pallet's identity, quantities, photos, and quality findings. All
+// edits are dispatched through useInspection so totals and completion rules stay
+// consistent with the workspace and final review screens.
+
 const FINDINGS_OPTIONS = [
   'Picked Short',
   'Picked Long',

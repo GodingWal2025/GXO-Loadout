@@ -1,3 +1,5 @@
+// Tracks only in-flight/failed local persistence. Cloud upload state is owned by
+// the sync queue and must not be mixed with this device-safety signal.
 type SaveState = { pending: number; failed: number };
 const writes = new Map<string, { token: symbol; retry: () => Promise<void>; failed: boolean }>();
 
@@ -16,6 +18,8 @@ export async function trackLocalSave(key: string, save: () => Promise<void>): Pr
   publish();
   try {
     await save();
+    // A second save for the same record can start before the first finishes.
+    // Tokens prevent the older completion from clearing the newer write.
     if (writes.get(key)?.token === token) writes.delete(key);
   } catch (error) {
     const current = writes.get(key);

@@ -8,6 +8,7 @@ import { useT } from '../shared/i18n/LanguageContext';
 
 type Tab = 'inProgress' | 'completed';
 
+/** Inspection landing page and workflow launcher for the configured device site. */
 export function HomeRoute() {
   const navigate = useNavigate();
   const t = useT();
@@ -37,6 +38,8 @@ export function HomeRoute() {
 
     fetchInspections();
 
+    // Database and sync services publish this event after local or remote
+    // changes, keeping the list current without coupling the page to either one.
     window.addEventListener('loadout-data-updated', fetchInspections);
     return () => window.removeEventListener('loadout-data-updated', fetchInspections);
   }, [config, navigate]);

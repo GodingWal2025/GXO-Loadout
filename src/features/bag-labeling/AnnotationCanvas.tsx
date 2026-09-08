@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { normalizeXyxy, type NormalizedXyxy } from './coordinates';
 import type { PalletLabelPhoto } from './types';
 
+// The canvas is a projection of normalized annotation data. It never mutates a
+// photo directly; completed boxes are returned to the route for persistence.
 export type AnnotationMode = 'pallet' | 'prompt';
 
 interface Props {
@@ -44,6 +46,8 @@ export function AnnotationCanvas({ photo, mode, busy, onDrawBox }: Props) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas || !image) return;
+    // Render at a responsive display size while keeping every stored coordinate
+    // normalized against the source image.
     const maxWidth = Math.max(320, Math.min(1000, canvas.parentElement?.clientWidth || 1000));
     const scale = Math.min(1, maxWidth / photo.width);
     canvas.width = Math.round(photo.width * scale);
@@ -54,6 +58,8 @@ export function AnnotationCanvas({ photo, mode, busy, onDrawBox }: Props) {
 
     if (photo.targetPalletBox) {
       const [x1, y1, x2, y2] = photo.targetPalletBox;
+      // Dim everything outside the selected pallet so proposals from neighboring
+      // pallets are visually obvious during review.
       context.fillStyle = 'rgba(12, 18, 24, 0.5)';
       context.fillRect(0, 0, canvas.width, y1 * canvas.height);
       context.fillRect(0, y2 * canvas.height, canvas.width, (1 - y2) * canvas.height);
@@ -118,6 +124,7 @@ export function AnnotationCanvas({ photo, mode, busy, onDrawBox }: Props) {
           const point = position(event);
           const box = normalizeXyxy([drag.x, drag.y, point.x, point.y]);
           setDrag(null);
+          // Ignore taps and accidental micro-drags; they are unusable model prompts.
           if ((box[2] - box[0]) * (box[3] - box[1]) >= 0.0001) onDrawBox(box);
         }}
       />

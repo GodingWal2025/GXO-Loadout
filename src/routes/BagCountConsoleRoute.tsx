@@ -10,6 +10,8 @@ import type { BagFlapAnnotation, PalletLabelGroup, PalletLabelPhoto, PalletView 
 import type { NormalizedXyxy } from '../features/bag-labeling/coordinates';
 import { locateTargetPallet, proposeBagFlaps } from '../shared/services/sam3Vision';
 
+// Admin-only labeling workspace for building reviewed bag-flap training data.
+// Operational inspection photos and records are intentionally not modified here.
 function replaceGroup(groups: readonly PalletLabelGroup[], group: PalletLabelGroup): PalletLabelGroup[] {
   return groups.map((candidate) => candidate.id === group.id ? group : candidate);
 }
@@ -41,6 +43,7 @@ export function BagCountConsoleRoute() {
   const updateSelectedGroup = async (transform: (value: PalletLabelGroup) => PalletLabelGroup) => {
     if (!group) return;
     const updated = { ...transform(group), updatedAt: new Date().toISOString() };
+    // Update the screen first, then persist the same immutable snapshot locally.
     setGroups((current) => replaceGroup(current, updated));
     await savePalletGroup(updated);
   };
@@ -78,6 +81,8 @@ export function BagCountConsoleRoute() {
     try {
       const next: PalletLabelPhoto[] = [];
       for (const file of Array.from(files)) {
+        // Canonicalization fixes EXIF rotation, standardizes JPEG bytes, and
+        // computes the stable hash used for duplicate detection.
         const canonical = await canonicalizeImage(file);
         if (groups.some((existing) => existing.photos.some((item) => item.sha256 === canonical.sha256))) {
           setMessage(`Skipped duplicate image: ${file.name}`);
@@ -120,6 +125,8 @@ export function BagCountConsoleRoute() {
         promptBox: promptBoxes[0],
         status: 'proposed',
       }));
+      // Keep accepted human decisions, but replace stale machine proposals each
+      // time the pallet box or prompt changes.
       await updatePhoto(photo.id, (current) => ({
         ...current,
         reviewed: false,
@@ -135,6 +142,8 @@ export function BagCountConsoleRoute() {
 
   const onDrawBox = async (box: NormalizedXyxy) => {
     if (!photo) return;
+    // The first box isolates the pallet; later boxes are positive prompts for
+    // missed bag flaps inside that pallet.
     if (mode === 'pallet') {
       await updatePhoto(photo.id, (current) => ({ ...current, targetPalletBox: box, reviewed: false, flaps: [] }));
       setMode('prompt');

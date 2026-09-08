@@ -1,5 +1,7 @@
 import type { NormalizedXyxy } from './coordinates';
 
+// Shared data contract between the labeling console, dataset exporter, and the
+// detector training pipeline. Coordinate arrays are normalized to 0..1.
 export type PalletView = 'front' | 'side_1' | 'back' | 'side_2' | 'other';
 export type DatasetSplit = 'train' | 'valid' | 'test';
 
@@ -15,6 +17,7 @@ export interface BagFlapAnnotation {
   segmentationRle: CocoRle;
   displayPolygon: number[][];
   score?: number;
+  // Proposals never enter training data until a person accepts them.
   status: 'proposed' | 'accepted' | 'rejected';
 }
 
@@ -42,6 +45,7 @@ export interface PalletLabelGroup {
 }
 
 export interface DatasetManifest {
+  // Increment when a breaking export shape requires trainer changes.
   schemaVersion: 1;
   createdAt: string;
   splitSalt: string;

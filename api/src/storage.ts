@@ -1,3 +1,6 @@
+// Shared-storage HTTP boundary. Structured records use Azure Table Storage;
+// photo and dataset bytes use Blob Storage. The browser remains local-first and
+// calls these endpoints through its retrying sync queue.
 import { app, HttpRequest, HttpResponseInit, InvocationContext } from '@azure/functions';
 import { TableClient, TableEntity } from '@azure/data-tables';
 import {

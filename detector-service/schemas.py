@@ -1,3 +1,9 @@
+"""Validated HTTP contracts shared by the pallet-vision endpoints.
+
+All boxes and points are normalized to 0..1 so browser overlays remain correct
+regardless of the source image resolution.
+"""
+
 from __future__ import annotations
 
 from pydantic import BaseModel, Field, field_validator
@@ -9,6 +15,7 @@ NormalizedQuad = tuple[NormalizedPoint, NormalizedPoint, NormalizedPoint, Normal
 
 
 def validate_xyxy(value: NormalizedBox) -> NormalizedBox:
+    """Reject inverted, empty, or out-of-image xyxy boxes at the API boundary."""
     if len(value) != 4:
         raise ValueError("box must contain four coordinates")
     x1, y1, x2, y2 = (float(item) for item in value)

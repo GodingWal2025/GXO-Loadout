@@ -12,6 +12,11 @@ interface Props {
   onClose: () => void;
 }
 
+/**
+ * Presents every reason an inspection needs attention in one place. Flag data is
+ * assembled by `listInspectionFlags`; this component only translates and renders
+ * it so business rules stay out of the modal.
+ */
 export function InspectionFlagsModal({ loadNumber, flags, onClose }: Props) {
   const t = useT();
 
@@ -31,6 +36,8 @@ export function InspectionFlagsModal({ loadNumber, flags, onClose }: Props) {
     other: t('quality.reasonOther', QUALITY_FLAG_REASONS.other),
   };
 
+  // Keep source-to-label mapping exhaustive so a new flag source causes a
+  // TypeScript error instead of silently appearing without a useful heading.
   const titleFor = (flag: InspectionFlagItem): string => {
     switch (flag.source) {
       case 'inspection':

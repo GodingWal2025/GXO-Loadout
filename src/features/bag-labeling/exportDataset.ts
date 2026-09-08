@@ -3,6 +3,8 @@ import { xyxyToPixelXywh } from './coordinates';
 import { DATASET_SPLIT_SALT } from './split';
 import type { DatasetManifest, PalletLabelGroup } from './types';
 
+// Produces a self-contained COCO dataset. The manifest carries GXO-specific
+// grouping/view metadata that standard COCO fields cannot represent.
 interface CocoImage {
   id: number;
   file_name: string;
@@ -41,6 +43,8 @@ export function validateDataset(groups: readonly PalletLabelGroup[]): string[] {
     for (const photo of group.photos) {
       if (!photo.reviewed) errors.push(`${group.displayName}/${photo.fileName}: not reviewed`);
       if (!photo.targetPalletBox) errors.push(`${group.displayName}/${photo.fileName}: missing pallet box`);
+      // The same image in different pallet groups would leak near-identical data
+      // across train/validation/test splits and inflate evaluation scores.
       const duplicate = hashes.get(photo.sha256);
       if (duplicate && duplicate !== group.id) {
         errors.push(`${photo.fileName}: duplicate image appears in pallet groups ${duplicate} and ${group.id}`);
@@ -88,6 +92,8 @@ export async function buildDatasetZip(groups: readonly PalletLabelGroup[]): Prom
         view: photo.view,
         target_pallet_box: photo.targetPalletBox!,
       });
+      // Rejected and unreviewed proposals are retained in the local project for
+      // correction but intentionally excluded from model training.
       for (const flap of photo.flaps.filter((item) => item.status === 'accepted')) {
         const bbox = xyxyToPixelXywh(flap.bbox, photo.width, photo.height);
         annotations.push({
@@ -157,6 +163,8 @@ export async function publishDataset(blob: Blob): Promise<{ blobName: string }> 
   if (!sasResponse.ok) throw new Error(`Could not create dataset upload (${sasResponse.status})`);
   const { uploadUrl, blobName } = await sasResponse.json() as { uploadUrl: string; blobName: string };
 
+  // Upload blocks directly to Blob Storage using the short-lived SAS returned by
+  // our API. This avoids routing a potentially large dataset through Functions.
   const blockIds: string[] = [];
   const blockSize = 4 * 1024 * 1024;
   for (let offset = 0, index = 0; offset < blob.size; offset += blockSize, index++) {
@@ -179,6 +187,8 @@ export async function publishDataset(blob: Blob): Promise<{ blobName: string }> 
   });
   if (!commit.ok) throw new Error(`Dataset commit failed (${commit.status})`);
 
+  // Finalization verifies size/hash server-side and records the upload only after
+  // every block has been committed.
   const finalize = await fetch('/api/datasets/finalize', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

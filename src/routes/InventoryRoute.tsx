@@ -8,6 +8,10 @@ import {
 import type { InventoryItem } from '../shared/types/inventory';
 import { AlphanumericInput, parsePackInfo } from '../shared';
 
+/**
+ * Local-first inventory editor. Changes are written to IndexedDB and queued for
+ * shared-storage synchronization by the database service.
+ */
 export function InventoryRoute() {
   const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +43,8 @@ export function InventoryRoute() {
       const worksheet = workbook.worksheets[0];
       if (!worksheet) throw new Error('The workbook has no worksheets.');
 
+      // Resolve columns by business header instead of fixed position so exports
+      // from different warehouse systems can reorder the spreadsheet safely.
       const headers = new Map<string, number>();
       worksheet.getRow(1).eachCell((cell, column) => {
         headers.set(cell.text.trim().toLowerCase(), column);
@@ -56,6 +62,7 @@ export function InventoryRoute() {
         const batch = batchColumn ? row.getCell(batchColumn).text.trim() : '';
         const description = descriptionColumn ? row.getCell(descriptionColumn).text.trim() : '';
         if (!sku || !batch) return;
+        // SKU + batch is the natural key used by lookups and cloud upserts.
         newItems.push({
           id: `${sku}_${batch}`,
           sku,
