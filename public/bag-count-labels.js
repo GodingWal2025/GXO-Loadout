@@ -31,13 +31,13 @@ export function faceRecord(image) {
     boxes: image.boxes.map(({ x, y, w, h }) => ({ x, y, w, h, cls: 0 })) };
 }
 export function reviewed(image) {
-  return image.status === 'reviewed' && !!image.verifier?.trim() && !!image.reason?.trim()
+  return image.status === 'reviewed' && !!image.reason?.trim()
     && Number.isInteger(image.humanCount) && image.humanCount === image.boxes.length
     && SIDE_NAMES.includes(image.role) && !!image.palletId && !!image.imageHash;
 }
 export function exportLabels(images) {
   const eligible = images.filter(reviewed);
-  if (!eligible.length) throw new Error('No reviewed side images. Confirm the visible count, verifier, and reason first.');
+  if (!eligible.length) throw new Error('No reviewed side images. Confirm the visible count and reason first.');
   const coco = { info: { description: 'GXO reviewed four-side bag-flap boxes', schemaVersion: 1,
     annotationType: 'boxes', exportVersion: LABEL_VERSION, date_created: new Date().toISOString(),
     excludedImages: images.length - eligible.length },

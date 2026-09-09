@@ -29,7 +29,8 @@ const ctx = { error: vi.fn() } as any;
 describe('shared training reviews', () => {
   beforeEach(() => { storage.payload = ''; storage.revision = 0; });
   it('stores and reloads reviewed zero-count annotations without changing sample totals', async () => {
-    expect(validateReview(review(), sample)).toBeNull();
+    const withoutVerifier = review(); withoutVerifier.faces[0].verifier = '';
+    expect(validateReview(withoutVerifier, sample)).toBeNull();
     expect((await trainingReview(req('PUT', review(), { 'if-none-match': '*' }), ctx)).status).toBe(200);
     const result: any = await trainingReview(req('GET'), ctx);
     expect(result.jsonBody.review.faces[0].humanCount).toBe(0);
