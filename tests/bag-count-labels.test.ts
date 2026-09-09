@@ -18,7 +18,7 @@ describe('persistent four-face labels', () => {
     expect(restored.physicalPalletGroup).toBe('physical_12345');
   });
   it('exports a reviewed zero-flap face while excluding unresolved, top, and unreviewed images', () => {
-    const data = exportLabels([image(), image({ status: 'unreviewed' }), image({ status: 'unresolved' }), image({ role: 'TOP' })]);
+    const data = exportLabels([image({ verifier: '' }), image({ status: 'unreviewed' }), image({ status: 'unresolved' }), image({ role: 'TOP' })]);
     expect(data.images).toHaveLength(1);
     expect(data.annotations).toEqual([]);
     expect(data.images[0]).toMatchObject({ pallet_group_id: 'physical_12345', sha256: 'a'.repeat(64), visible_count: 0 });

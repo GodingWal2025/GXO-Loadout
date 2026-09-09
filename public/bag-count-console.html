@@ -207,7 +207,7 @@
   /* label tab */
   .labgrid { display: grid; grid-template-columns: 1fr 272px; gap: 18px; align-items: start; }
   @media (max-width: 860px) { .labgrid { grid-template-columns: 1fr; } }
-  .stage { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  .stage { position: relative; border: 1px solid var(--border); border-radius: 12px; overflow: auto; padding: 12px;
     background: repeating-conic-gradient(var(--surface-2) 0 25%, var(--surface) 0 50%) 0 0 / 22px 22px; }
   .stage canvas { display: block; width: 100%; cursor: crosshair; touch-action: none; }
   .stage .empty { padding: 60px 20px; text-align: center; color: var(--muted); }
@@ -675,7 +675,6 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <label>Pallet audit reason<textarea id="labSampleReason" rows="2"></textarea></label>
             <label>Face review status<select id="labStatus"><option>unreviewed</option><option>reviewed</option><option>unresolved</option><option>excluded</option></select></label>
             <label>Visible flaps counted by hand<input id="labHumanCount" type="number" min="0" step="1"></label>
-            <label>Verifier<input id="labVerifier" placeholder="Who checked this face"></label>
             <label>Face review reason<textarea id="labReason" rows="2" placeholder="Visibility, uncertainty, or confirmation notes"></textarea></label>
             <p class="hint">Count only the assigned face. A checked face with no visible flaps may be reviewed with a count of 0. An unreadable face is unresolved.</p>
             <button class="btn" id="labSync">Save shared review</button>
@@ -1814,15 +1813,15 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
 
   function showLabelFields(im) {
     const fields = { labGroup: im.physicalPalletGroup || im.palletId || '', labStatus: im.status || 'unreviewed',
-      labHumanCount: im.humanCount ?? '', labVerifier: im.verifier || '', labReason: im.reason || '',
+      labHumanCount: im.humanCount ?? '', labReason: im.reason || '',
       labSampleStatus: im.sampleStatus || 'unreviewed', labMethod: im.verificationMethod || '', labSampleReason: im.sampleReason || '' };
     for (const [id, value] of Object.entries(fields)) $('#' + id).value = value;
   }
-  for (const id of ['labGroup', 'labStatus', 'labHumanCount', 'labVerifier', 'labReason', 'labSampleStatus', 'labMethod', 'labSampleReason']) {
+  for (const id of ['labGroup', 'labStatus', 'labHumanCount', 'labReason', 'labSampleStatus', 'labMethod', 'labSampleReason']) {
     $('#' + id).addEventListener('change', () => {
       const im = labImgs[curImg]; if (!im) return;
       Object.assign(im, { status: $('#labStatus').value, humanCount: $('#labHumanCount').value === '' ? null : Number($('#labHumanCount').value),
-        verifier: $('#labVerifier').value.trim(), reason: $('#labReason').value.trim() });
+        reason: $('#labReason').value.trim() });
       for (const peer of labImgs.filter(p => p.palletId === im.palletId)) {
         Object.assign(peer, { physicalPalletGroup: $('#labGroup').value.trim() || im.palletId,
           sampleStatus: $('#labSampleStatus').value, verificationMethod: $('#labMethod').value.trim(), sampleReason: $('#labSampleReason').value.trim() });
@@ -2042,7 +2041,8 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
     if (canvas) canvas.hidden = false;
     const im = labImgs[curImg];
     showLabelFields(im);
-    const stageW = $("#stage").clientWidth || 760;
+    const stageStyle = getComputedStyle($("#stage"));
+    const stageW = ($("#stage").clientWidth - parseFloat(stageStyle.paddingLeft) - parseFloat(stageStyle.paddingRight)) || 760;
     dispScale = stageW / im.w;
     canvas.width = Math.round(im.w * dispScale); canvas.height = Math.round(im.h * dispScale);
     ctx.drawImage(im.img, 0, 0, canvas.width, canvas.height);
@@ -2130,7 +2130,7 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
         $("#datasetCheck").className = ready ? "banner ok" : "banner";
         $("#datasetCheck").innerHTML = ready
           ? `<b>${labeled} reviewed images ready.</b> Export includes reviewed side images only; other drafts are preserved.`
-          : `<b>Dataset not ready.</b> Review a side photo, including its visible count (0 is valid), verifier, and reason.`;
+          : `<b>Dataset not ready.</b> Review a side photo, including its visible count (0 is valid) and reason.`;
     }
   }
 

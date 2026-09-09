@@ -12,7 +12,7 @@ export function validateReview(body: any, sample: any): string | null {
   if (typeof body.physicalPalletGroup !== 'string' || !ID.test(body.physicalPalletGroup)) return 'Physical pallet group must be a sample ID or an 8–64 character identifier';
   if (!STATES.includes(body.status)) return 'Invalid review status';
   if (typeof body.reason !== 'string' || body.reason.length > 2000 || typeof body.verifier !== 'string' || body.verifier.length > 120 || typeof body.verificationMethod !== 'string' || body.verificationMethod.length > 500) return 'Invalid review details';
-  if (body.status !== 'unreviewed' && (!body.verifier.trim() || !body.reason.trim())) return 'A verifier and reason are required';
+  if (body.status !== 'unreviewed' && !body.reason.trim()) return 'A review reason is required';
   if (body.status === 'reviewed' && !body.verificationMethod.trim()) return 'Record the physical count verification method';
   if (!Array.isArray(body.faces) || body.faces.length > 4) return 'Expected up to four side annotations';
   const seen = new Set();
@@ -24,7 +24,7 @@ export function validateReview(body: any, sample: any): string | null {
     if (!/^[a-f0-9]{64}$/.test(face.imageHash)) return 'Image checksum required';
     if (!Number.isInteger(face.width) || !Number.isInteger(face.height) || face.width < 1 || face.height < 1 || face.width > 16000 || face.height > 16000) return 'Invalid image size';
     if (!STATES.includes(face.status) || typeof face.reason !== 'string' || face.reason.length > 2000 || typeof face.verifier !== 'string' || face.verifier.length > 120) return 'Invalid face review';
-    if (face.status !== 'unreviewed' && (!face.verifier.trim() || !face.reason.trim())) return 'Face review requires verifier and reason';
+    if (face.status !== 'unreviewed' && !face.reason.trim()) return 'Face review requires a reason';
     if (!Array.isArray(face.boxes) || face.boxes.length > 1000) return 'Invalid boxes';
     if (face.status === 'reviewed' && (!Number.isInteger(face.humanCount) || face.humanCount !== face.boxes.length)) return 'Reviewed face count must match annotated boxes (zero is allowed)';
     for (const box of face.boxes) {
