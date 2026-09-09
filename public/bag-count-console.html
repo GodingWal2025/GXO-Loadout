@@ -674,6 +674,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <label>Face review reason<textarea id="labReason" rows="2" placeholder="Visibility, uncertainty, or confirmation notes"></textarea></label>
             <p class="hint">Count only the assigned face. A checked face with no visible flaps may be reviewed with a count of 0. An unreadable face is unresolved.</p>
             <button class="btn" id="labSync">Save shared review</button>
+            <button class="btn ghost" id="labReloadShared">Reload shared labels (keep local backup)</button>
             <span class="status" id="labSaveState" role="status">Labels restore from this device automatically.</span>
             <button class="btn" id="exportBtn">Export reviewed boxes</button>
             <button class="btn ghost" id="labBackup">Backup all local labels</button>
@@ -1793,12 +1794,12 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
       const stored = await loadLabels();
       const last = store.get('bcc-label-last-pallet');
       restoringLabels = true;
-      const restore = stored.filter(r => r.blob && (last ? r.palletId === last : !r.palletId));
+      const restore = stored.filter(r => r.blob && !r.archived && (last ? r.palletId === last : !r.palletId));
       restore.sort((a, b) => SIDE_NAMES.indexOf(a.role) - SIDE_NAMES.indexOf(b.role));
       for (const record of restore) labImgs.push(await decodeLabel(record));
       restoringLabels = false;
       if (labImgs.length) { curImg = 0; drawLab(); updateProgress(); }
-      labelMessage(`${stored.filter(r => r.blob).length} local photo drafts saved; ${labImgs.length} restored. Load a pallet to check shared labels.`);
+      labelMessage(`${stored.filter(r => r.blob && !r.archived).length} local photo drafts saved; ${labImgs.length} restored. Load a pallet to check shared labels.`);
       const databases = indexedDB.databases ? await indexedDB.databases() : [];
       const legacy = databases.some(d => d.name === 'gxo-bag-labeling');
       $('#labInventory').textContent = legacy ? 'Legacy labeling database detected and preserved. Export it before any migration; this console does not overwrite it.' : 'Collector queue is preserved separately. Import any box exports from other devices before relabeling.';
@@ -1899,7 +1900,9 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
   $("#labFileIn2")?.addEventListener("change", e => addLabFiles(e.target.files));
 
   let pulling = false;
-  async function pullCollected() {
+  async function pullCollected(preferShared = false) {
+    // DOM click listeners pass an Event; only the explicit recovery action opts in.
+    preferShared = preferShared === true;
     if (pulling) return;
     pulling = true;
     const state = $("#labPullState");
@@ -1925,6 +1928,7 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
         if (!response.ok) throw new Error('Shared review unavailable');
         shared = await response.json(); sharedReviews.set(chosen.id, shared);
       } catch { sharedReviews.delete(chosen.id); }
+      if (preferShared && !shared) throw new Error('Shared labels could not be loaded. Local work is unchanged.');
       labImgs = []; curImg = -1; selBox = -1;
       store.set('bcc-label-last-pallet', chosen.id);
       const already = new Set();
@@ -1949,16 +1953,17 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
             const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url;
           });
           const hash = await imageHash(blob);
-          const saved = local.find(l => l.imageHash === hash && l.palletId === s.id && l.photoId === p.id);
+          const saved = local.find(l => !l.archived && l.imageHash === hash && l.palletId === s.id && l.photoId === p.id);
           const remote = shared?.review?.faces?.find(f => f.photoId === p.id && f.imageHash === hash);
           const record = { name, img, blob, imageHash: hash, photoId: p.id, role: p.role, w: img.naturalWidth, h: img.naturalHeight,
             boxes: [], palletId: s.id, sourceTotal: s.totalBags, status: 'unreviewed', physicalPalletGroup: shared?.review?.physicalPalletGroup || s.id,
             sampleStatus: shared?.review?.status || 'unreviewed', sampleReason: shared?.review?.reason || '', verificationMethod: shared?.review?.verificationMethod || '' };
           if (remote) Object.assign(record, { boxes: remote.boxes, status: remote.status, humanCount: remote.humanCount, reason: remote.reason, verifier: remote.verifier });
-          if (saved?.dirty || (!remote && saved)) Object.assign(record, { ...saved, img, blob });
+          if (preferShared && saved) await saveLabel({ ...saved, key: 'archive:' + Date.now() + ':' + saved.key, archived: true });
+          if (!preferShared && (saved?.dirty || (!remote && saved))) Object.assign(record, { ...saved, img, blob });
           // Preserve the revision the local draft was based on so a stale draft cannot overwrite newer remote work.
-          if (saved?.dirty && saved.remoteEtag !== shared?.etag && shared?.review) sharedReviews.delete(s.id);
-          record.remoteEtag = saved?.dirty ? saved.remoteEtag : shared?.etag;
+          if (!preferShared && saved?.dirty && saved.remoteEtag !== shared?.etag && shared?.review) sharedReviews.delete(s.id);
+          record.remoteEtag = !preferShared && saved?.dirty ? saved.remoteEtag : shared?.etag;
           labImgs.push(record);
           const { img: ignored, ...stored } = record;
           await saveLabel({ ...stored, key: hash + ':' + s.id + ':' + p.id });
@@ -1978,6 +1983,14 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
     }
   }
   [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && b.addEventListener("click", pullCollected));
+  $('#labReloadShared').addEventListener('click', async () => {
+    try {
+      await labelSaveChain;
+      const saved = await loadLabels();
+      downloadJson({ schemaVersion: 1, drafts: saved.map(({ blob, ...record }) => record) }, 'gxo-labels-before-shared-reload.json');
+      await pullCollected(true);
+    } catch (error) { labelMessage('Could not reload shared labels: ' + error.message); }
+  });
 
   function drawLab() {
     const empty = $("#stageEmpty");
