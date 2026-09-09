@@ -1,6 +1,14 @@
 {
   "routes": [
     {
+      "route": "/bag-count-console.html",
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
+      "route": "/bag-count-labels.js",
+      "headers": { "Cache-Control": "no-store" }
+    },
+    {
       "route": "/admin/bag-count-console",
       "redirect": "/bag-count-console.html",
       "statusCode": 302

@@ -1,0 +1,282 @@
+[
+  {
+    "sampleA": "smp10b8b741cbbbd52530199c24",
+    "photoA": "ph285bfce959a43c66a4c21d49",
+    "sampleB": "smp7c4630999d333998e060f734",
+    "photoB": "ph77ac6629b37cdc1704e4955f",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp10b8b741cbbbd52530199c24",
+    "photoA": "ph82b85595149151ef9367f892",
+    "sampleB": "smp7c4630999d333998e060f734",
+    "photoB": "ph41880feb1646954efa5475b9",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp10b8b741cbbbd52530199c24",
+    "photoA": "ph95e86d6f5484b919d9475616",
+    "sampleB": "smp7c4630999d333998e060f734",
+    "photoB": "ph52b3f03c6c744fd6de8cde4b",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp10b8b741cbbbd52530199c24",
+    "photoA": "ph643bb42087d07fff7d1f0bd8",
+    "sampleB": "smp7c4630999d333998e060f734",
+    "photoB": "ph7d93e87739c258f19ab8fe5e",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp10b8b741cbbbd52530199c24",
+    "photoA": "ph2296292518a7a9a1b5a0a63c",
+    "sampleB": "smp7c4630999d333998e060f734",
+    "photoB": "phb73632dc705841836aeb2be5",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp2f059ea922ed0aec2e343d39",
+    "photoA": "ph3ba2a1fcc07b8e0024507c22",
+    "sampleB": "smpdf37976d6cbffc2628fb9b24",
+    "photoB": "phb158fbd0b2055f5248899659",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp2f059ea922ed0aec2e343d39",
+    "photoA": "pha935b760fc3322dc71a240f0",
+    "sampleB": "smpdf37976d6cbffc2628fb9b24",
+    "photoB": "phf1f75dfc51d4b325fdafd782",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp2f059ea922ed0aec2e343d39",
+    "photoA": "ph954942ec31773791435787c4",
+    "sampleB": "smpdf37976d6cbffc2628fb9b24",
+    "photoB": "ph75c935b666e87a4a3d19f632",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp2f059ea922ed0aec2e343d39",
+    "photoA": "ph2f862d23676ab77d8444430e",
+    "sampleB": "smpdf37976d6cbffc2628fb9b24",
+    "photoB": "ph00ccc283e56f58520cf552e6",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp2f059ea922ed0aec2e343d39",
+    "photoA": "ph87eb33d944c9f1a1d7fb9aaf",
+    "sampleB": "smpdf37976d6cbffc2628fb9b24",
+    "photoB": "ph18871f0300957c2c8e7b4842",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp346ab0542cec57b8fda07498",
+    "photoA": "phe4cdcc04f3099ad0bfe92805",
+    "sampleB": "smpe7a0c85a3d0b0c181307cb42",
+    "photoB": "ph8a57b46362d5864dd2126e27",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp346ab0542cec57b8fda07498",
+    "photoA": "phc9bc7e3de40e34492eb283fb",
+    "sampleB": "smpe7a0c85a3d0b0c181307cb42",
+    "photoB": "ph84a27ad3e8e57b01f0945249",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp346ab0542cec57b8fda07498",
+    "photoA": "ph3e56d0f32ebeaa9823125460",
+    "sampleB": "smpe7a0c85a3d0b0c181307cb42",
+    "photoB": "phb787aaaeafbf2b9dc5b47799",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp346ab0542cec57b8fda07498",
+    "photoA": "ph3609fea6452664f09bad4d49",
+    "sampleB": "smpe7a0c85a3d0b0c181307cb42",
+    "photoB": "ph76e5f99f0f3a7eb515cd2bde",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp346ab0542cec57b8fda07498",
+    "photoA": "phc89c9eb762bf65b5a646b87f",
+    "sampleB": "smpe7a0c85a3d0b0c181307cb42",
+    "photoB": "ph1c744a3de309b72341ba8727",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp393a42c119b0069d40bbe5e2",
+    "photoA": "ph42d2ae6237864f9dcfc5e600",
+    "sampleB": "smpffd94f9178d7f8dd92e02a96",
+    "photoB": "ph4afc38e94aaad405a6dfe11f",
+    "distance": 1,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp393a42c119b0069d40bbe5e2",
+    "photoA": "ph53dfd3fb6b6c502a4e033b16",
+    "sampleB": "smpffd94f9178d7f8dd92e02a96",
+    "photoB": "pha336dac6c091c30503be60cd",
+    "distance": 0,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp393a42c119b0069d40bbe5e2",
+    "photoA": "phca18e09f79f04003b3f46b46",
+    "sampleB": "smpffd94f9178d7f8dd92e02a96",
+    "photoB": "ph4a9708024899fa2bebba74d3",
+    "distance": 0,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp393a42c119b0069d40bbe5e2",
+    "photoA": "ph84848b50f417945bc09562cf",
+    "sampleB": "smpffd94f9178d7f8dd92e02a96",
+    "photoB": "ph8b503858a9c1daff3e9fcc10",
+    "distance": 1,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp5f210d0be884e7f7833dc782",
+    "photoA": "ph16ed5a540befa8cb4f47ed26",
+    "sampleB": "smpea942d2ac3e7aced99000039",
+    "photoB": "ph3ad1c9eaacd84a50ab89179c",
+    "distance": 1,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp5f210d0be884e7f7833dc782",
+    "photoA": "ph730135be0ce6608fad007227",
+    "sampleB": "smpea942d2ac3e7aced99000039",
+    "photoB": "ph31f1086ac6a4b0a6422f3084",
+    "distance": 0,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp5f210d0be884e7f7833dc782",
+    "photoA": "ph25657737ca60908428a769bb",
+    "sampleB": "smpea942d2ac3e7aced99000039",
+    "photoB": "ph92afc954075a4e832bc89bd3",
+    "distance": 1,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp5f210d0be884e7f7833dc782",
+    "photoA": "ph8f0816216a93c87bc3dfaeb4",
+    "sampleB": "smpea942d2ac3e7aced99000039",
+    "photoB": "phfbfd37b5fea29658e8dfd1e6",
+    "distance": 0,
+    "exact": false,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp64320ae7b846f94b58d8ce7a",
+    "photoA": "ph6dce7614ec21888b4efc45d9",
+    "sampleB": "smpec857a9dcaf4b1fcdcde2281",
+    "photoB": "phe1d95553f548a30d8eec82a4",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp64320ae7b846f94b58d8ce7a",
+    "photoA": "ph9106075e6f7c2d15c0d3f255",
+    "sampleB": "smpec857a9dcaf4b1fcdcde2281",
+    "photoB": "ph3592395dd212a999ea544048",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp64320ae7b846f94b58d8ce7a",
+    "photoA": "phf8a89d22ef361c0864b69008",
+    "sampleB": "smpec857a9dcaf4b1fcdcde2281",
+    "photoB": "ph9706a477a7390acc723c5a78",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp64320ae7b846f94b58d8ce7a",
+    "photoA": "ph7e555b0b3d0e0f956cbff777",
+    "sampleB": "smpec857a9dcaf4b1fcdcde2281",
+    "photoB": "ph748923d80c130cc02310a82f",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  },
+  {
+    "sampleA": "smp64320ae7b846f94b58d8ce7a",
+    "photoA": "ph73cc728488e8588e623043b7",
+    "sampleB": "smpec857a9dcaf4b1fcdcde2281",
+    "photoB": "ph1cff93482e9ee13bda4cce8c",
+    "distance": 0,
+    "exact": true,
+    "disposition": "unresolved",
+    "reason": "Human comparison required"
+  }
+]

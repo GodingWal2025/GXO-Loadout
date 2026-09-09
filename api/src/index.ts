@@ -5,6 +5,7 @@ import { checkRateLimit } from './middleware/rateLimit';
 import { validateMediaSignature, MAX_PHOTO_SIZE_BYTES } from './middleware/mediaValidation';
 import { extractDeviceAuth, logAudit } from './middleware/auth';
 import './training';
+import './trainingReview';
 import { timingSafeEqual } from 'node:crypto';
 
 // Azure AI Document Intelligence (OCR). The endpoint + key live in the Function
