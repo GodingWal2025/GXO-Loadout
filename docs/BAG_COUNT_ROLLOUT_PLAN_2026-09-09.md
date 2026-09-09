@@ -1,6 +1,6 @@
 # Four-face bag counting: rollout plan
 
-Prepared September 9, 2026. Status: proposed implementation plan; no production changes or model training performed by this review.
+Prepared September 9, 2026. Phase 1 engineering and data audit are implemented; independent warehouse verification remains pending. See [Phase 1 evidence and remaining checks](phase1-2026-09-09/STATUS.md). Later phases remain planned; no model training has been performed.
 
 ## Decision
 

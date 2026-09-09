@@ -24,7 +24,7 @@ export default defineConfig({
         ],
         // Excel import is a rarely used admin feature and is almost 1 MB by
         // itself. Load it on demand instead of slowing every PWA install.
-        globIgnores: ['**/exceljs*.js'],
+        globIgnores: ['**/exceljs*.js', '**/bag-count-console.html', '**/bag-count-labels.js'],
       },
       includeAssets: ['favicon.ico', 'apple-touch-icon.png'],
       manifest: {

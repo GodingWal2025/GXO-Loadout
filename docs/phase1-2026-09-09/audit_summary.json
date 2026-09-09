@@ -1,0 +1,18 @@
+{
+  "snapshot": {
+    "source": "https://white-meadow-0dc31e50f.7.azurestaticapps.net",
+    "capturedAt": "2026-09-09T16:50:27.273557+00:00",
+    "manifestSha256": "1a5c3846b19af5b32baedeb390e1062b26c2b0a3d192bf1c7d8357b6829f3dd6"
+  },
+  "pallets": 145,
+  "photosExpected": 743,
+  "photosReadable": 743,
+  "photosFailed": 0,
+  "restoreVerified": 743,
+  "exactDuplicatePairs": 20,
+  "nearDuplicateCandidatePairs": 8,
+  "unusualPartialRecords": 15,
+  "arithmeticMismatches": 0,
+  "verificationPallets": 20,
+  "physicalVerification": "pending independent warehouse counts"
+}

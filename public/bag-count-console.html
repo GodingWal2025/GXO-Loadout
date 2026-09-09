@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Bag-Count Console · GXO Loadout</title>
 <style>
+  #panel-label label { display: block; }
+  #panel-label label input:not([type=file]), #panel-label label textarea, #panel-label label select { width: 100%; box-sizing: border-box; }
   /* ---- tokens: graphite instrument, signal-teal accent ---------------- */
   :root {
     --bg: #eef0f3;        /* cool graphite ground */
@@ -661,7 +663,23 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
               <button class="btn ghost" id="labPullBtn2" style="flex:1">Pull collected</button>
               <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
             </div>
-            <button class="btn" id="exportBtn">Export COCO JSON</button>
+            <label>Uploaded pallet<select id="labSamplePick"><option value="">Load the pallet list first</option></select></label>
+            <label>Physical pallet group<input id="labGroup" placeholder="Defaults to sample ID; reuse for repeat photos"></label>
+            <label>Pallet audit status<select id="labSampleStatus"><option>unreviewed</option><option>reviewed</option><option>unresolved</option><option>excluded</option></select></label>
+            <label>Physical count verification method<input id="labMethod" placeholder="How the actual pallet total was checked"></label>
+            <label>Pallet audit reason<textarea id="labSampleReason" rows="2"></textarea></label>
+            <label>Face review status<select id="labStatus"><option>unreviewed</option><option>reviewed</option><option>unresolved</option><option>excluded</option></select></label>
+            <label>Visible flaps counted by hand<input id="labHumanCount" type="number" min="0" step="1"></label>
+            <label>Verifier<input id="labVerifier" placeholder="Who checked this face"></label>
+            <label>Face review reason<textarea id="labReason" rows="2" placeholder="Visibility, uncertainty, or confirmation notes"></textarea></label>
+            <p class="hint">Count only the assigned face. A checked face with no visible flaps may be reviewed with a count of 0. An unreadable face is unresolved.</p>
+            <button class="btn" id="labSync">Save shared review</button>
+            <span class="status" id="labSaveState" role="status">Labels restore from this device automatically.</span>
+            <button class="btn" id="exportBtn">Export reviewed boxes</button>
+            <button class="btn ghost" id="labBackup">Backup all local labels</button>
+            <label class="btn ghost">Import box labels<input type="file" id="labImport" accept="application/json,.json" hidden></label>
+            <p class="hint" id="labInventory"></p>
+            <p class="hint">Local image additions are saved as drafts. Load an uploaded pallet to attach side roles and export reviewed training labels.</p>
             <span class="status" id="labPullState" hidden></span>
             <p class="hint" style="margin:0">Drag on empty space to draw. Click a box to select it, drag inside to move, drag a handle to resize.</p>
             <p class="hint" style="margin:0"><span class="kbd">1</span> bag flap · <span class="kbd">Del</span> remove selected · <span class="kbd">Esc</span> deselect · <span class="kbd">↑↓←→</span> nudge (<span class="kbd">Shift</span> resize) · <span class="kbd">[</span> <span class="kbd">]</span> prev/next</p>
@@ -711,7 +729,8 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     </div>
   </div>
 
-<script>
+<script type="module">
+import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exportLabels } from './bag-count-labels.js?v=phase1-20260909';
 (function () {
   "use strict";
   const $ = (s, r=document) => r.querySelector(s);
@@ -1286,7 +1305,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
 
   const photoUrl = (sampleId, photoId) =>
     `/api/training/photos/${encodeURIComponent(sampleId)}/${encodeURIComponent(photoId)}`;
-  const roleLabel = r => ({ FRONT:"Front", RIGHT:"Right", BACK:"Back", LEFT:"Left", TOP:"Top (Elevated)",
+  const roleLabel = r => ({ FRONT:"Front", RIGHT:"Right", BACK:"Back", LEFT:"Left", TOP:"Archived extra photo",
                             FLAP_1:"Flap 1", FLAP_2:"Flap 2", FLAP_3:"Flap 3" }[r] || r);
 
   function auditSample(s) {
@@ -1294,7 +1313,8 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     const missingSides = SIDE_ROLES.filter(d => !roles.has(d.role)).map(d => d.label);
     const flaps = FLAP_ROLES.filter(d => roles.has(d.role)).length;
     const computed = (s.bagsPerLayer || 0) * (s.fullLayers || 0) + (s.partialBags || 0);
-    return { missingSides, flaps, computed, countsAgree: computed === s.totalBags };
+    return { missingSides, flaps, computed, countsAgree: computed === s.totalBags,
+      unusualPartial: s.partialBags > 0 && s.partialBags >= s.bagsPerLayer };
   }
 
   let reviewSamples = [];
@@ -1320,7 +1340,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
 
     const audits = reviewSamples.map(auditSample);
     const bags = reviewSamples.reduce((n, s) => n + (s.totalBags || 0), 0);
-    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree).length;
+    const flagged = audits.filter(a => a.missingSides.length || !a.flaps || !a.countsAgree || a.unusualPartial).length;
     const labelable = reviewSamples.reduce((n, s, i) => n + (4 - audits[i].missingSides.length), 0);
 
     tiles.innerHTML = `
@@ -1332,8 +1352,8 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     note.innerHTML = !reviewSamples.length
       ? `<div class="banner">Nothing uploaded yet. Collected pallets appear here once they leave a collector's device.</div>`
       : flagged
-        ? `<div class="banner"><b>${flagged} pallet${flagged>1?"s":""} worth checking.</b> Flagged for a missing photo or a count that does not match its layers.</div>`
-        : `<div class="banner ok"><b>All ${reviewSamples.length} look complete.</b> Four sides, a flap photo, and counts that add up.</div>`;
+        ? `<div class="banner"><b>${flagged} pallet${flagged>1?"s":""} worth checking.</b> Missing side/identification photos, arithmetic mismatch, or unusual partial-count metadata. No top photo is required. Physical counts still need review.</div>`
+        : `<div class="banner ok"><b>Records are complete.</b> Four sides and identification photos are present, and arithmetic matches. Physical counts still need independent review.</div>`;
 
     list.innerHTML = "";
     reviewSamples.forEach((s, i) => list.appendChild(reviewCard(s, audits[i])));
@@ -1344,11 +1364,12 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     card.className = "card";
     card.style.marginTop = "14px";
     const flags = [
-      chip(s.quality === "bad" ? "bad photo model" : "good count model", s.quality === "bad" ? "warn" : "ok"),
+      chip(s.quality === "bad" ? "bad photo model" : s.quality === "good" ? "collector marked good" : "quality unspecified", s.quality === "bad" ? "warn" : ""),
       s.sku ? chip("SKU " + s.sku, "acc") : "",
       a.missingSides.length ? chip("missing " + a.missingSides.join(", ").toLowerCase(), "crit") : "",
       !a.flaps ? chip("no flap photo", "crit") : "",
       !a.countsAgree ? chip(`total ${s.totalBags} ≠ layers ${a.computed}`, "warn") : "",
+      a.unusualPartial ? chip('clarify partial-count metadata', 'warn') : '',
     ].filter(Boolean).join("");
 
     const when = String(s.capturedAt || "").slice(0, 16).replace("T", " ");
@@ -1464,7 +1485,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       const comp = per * layers + partial, tot = s.totalBags || 0;
       return [
         s.id, `"${(s.batchCode||'').replace(/"/g,'""')}"`, `"${(s.sku||'').replace(/"/g,'""')}"`,
-        s.collector || "", s.quality || "good", s.capturedAt || "",
+        s.collector || "", s.quality || "unspecified", s.capturedAt || "",
         per, layers, partial, tot, comp, comp === tot ? "YES" : "NO",
         (s.photos || []).map(p => p.role).join(";"),
         `"${(s.notes||'').replace(/"/g,'""')}"`
@@ -1545,7 +1566,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     
     Object.keys(testPhotos).forEach(k => delete testPhotos[k]);
     for (const p of (s.photos || [])) {
-      if (["FRONT", "RIGHT", "BACK", "LEFT", "TOP"].includes(p.role)) {
+      if (SIDE_NAMES.includes(p.role)) {
         try {
           const resp = await fetch(photoUrl(s.id, p.id));
           if (resp.ok) {
@@ -1724,6 +1745,9 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
   const CLASSES = [ {id:1,name:"bag_flap",color:"#1a7f37"} ];
   let curClass = 0;
   let labImgs = [];
+  const sharedReviews = new Map();
+  let labelSaveChain = Promise.resolve();
+  let restoringLabels = false;
   let curImg = -1, selBox = -1;
   const canvas = $("#labCanvas"), ctx = canvas.getContext("2d");
   let dispScale = 1, dragging = null;
@@ -1741,12 +1765,132 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
   }
   const syncClass = () => $$("#classPick button").forEach((b,i)=>b.setAttribute("aria-pressed",String(i===curClass)));
 
+  const labelMessage = message => { $("#labSaveState").textContent = message; };
+  function downloadJson(value, name) {
+    const url = URL.createObjectURL(new Blob([JSON.stringify(value, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+  function persistImage(im) {
+    if (!im || restoringLabels) return labelSaveChain;
+    im.dirty = true;
+    const { img, ...record } = im;
+    const value = structuredClone({ ...record, key: im.imageHash + ':' + (im.palletId || 'local') + ':' + (im.photoId || im.name), schemaVersion: 1 });
+    labelMessage('Saving on this device…');
+    labelSaveChain = labelSaveChain.catch(() => {}).then(() => saveLabel(value));
+    labelSaveChain.then(() => labelMessage('Saved on this device • shared save pending'), () => labelMessage('Local save failed. Export a label backup before leaving.'));
+    return labelSaveChain;
+  }
+  async function decodeLabel(record) {
+    const url = URL.createObjectURL(record.blob);
+    try {
+      const img = await new Promise((resolve, reject) => { const im = new Image(); im.onload = () => resolve(im); im.onerror = reject; im.src = url; });
+      return { ...record, img };
+    } finally { URL.revokeObjectURL(url); }
+  }
+  const labelsReady = (async () => {
+    try {
+      const stored = await loadLabels();
+      const last = store.get('bcc-label-last-pallet');
+      restoringLabels = true;
+      const restore = stored.filter(r => r.blob && (last ? r.palletId === last : !r.palletId));
+      restore.sort((a, b) => SIDE_NAMES.indexOf(a.role) - SIDE_NAMES.indexOf(b.role));
+      for (const record of restore) labImgs.push(await decodeLabel(record));
+      restoringLabels = false;
+      if (labImgs.length) { curImg = 0; drawLab(); updateProgress(); }
+      labelMessage(`${stored.filter(r => r.blob).length} local photo drafts saved; ${labImgs.length} restored. Load a pallet to check shared labels.`);
+      const databases = indexedDB.databases ? await indexedDB.databases() : [];
+      const legacy = databases.some(d => d.name === 'gxo-bag-labeling');
+      $('#labInventory').textContent = legacy ? 'Legacy labeling database detected and preserved. Export it before any migration; this console does not overwrite it.' : 'Collector queue is preserved separately. Import any box exports from other devices before relabeling.';
+    } catch (error) { restoringLabels = false; labelMessage('Could not restore labels: ' + error.message); }
+  })();
+
+  function showLabelFields(im) {
+    const fields = { labGroup: im.physicalPalletGroup || im.palletId || '', labStatus: im.status || 'unreviewed',
+      labHumanCount: im.humanCount ?? '', labVerifier: im.verifier || '', labReason: im.reason || '',
+      labSampleStatus: im.sampleStatus || 'unreviewed', labMethod: im.verificationMethod || '', labSampleReason: im.sampleReason || '' };
+    for (const [id, value] of Object.entries(fields)) $('#' + id).value = value;
+  }
+  for (const id of ['labGroup', 'labStatus', 'labHumanCount', 'labVerifier', 'labReason', 'labSampleStatus', 'labMethod', 'labSampleReason']) {
+    $('#' + id).addEventListener('change', () => {
+      const im = labImgs[curImg]; if (!im) return;
+      Object.assign(im, { status: $('#labStatus').value, humanCount: $('#labHumanCount').value === '' ? null : Number($('#labHumanCount').value),
+        verifier: $('#labVerifier').value.trim(), reason: $('#labReason').value.trim() });
+      for (const peer of labImgs.filter(p => p.palletId === im.palletId)) {
+        Object.assign(peer, { physicalPalletGroup: $('#labGroup').value.trim() || im.palletId,
+          sampleStatus: $('#labSampleStatus').value, verificationMethod: $('#labMethod').value.trim(), sampleReason: $('#labSampleReason').value.trim() });
+        persistImage(peer);
+      }
+      updateProgress();
+    });
+  }
+  $('#labBackup').addEventListener('click', async () => {
+    try {
+      await labelSaveChain;
+      const stored = await loadLabels();
+      downloadJson({ schemaVersion: 1, exportVersion: 'four-sides-v1', drafts: stored.map(({ blob, ...record }) => record) }, 'gxo-label-backup.json');
+    } catch (error) {
+      downloadJson({ schemaVersion: 1, drafts: labImgs.map(({ img, blob, ...record }) => record) }, 'gxo-label-emergency-backup.json');
+      labelMessage('Exported in-memory labels; local storage could not be read.');
+    }
+  });
+  $('#labSync').addEventListener('click', async () => {
+    const im = labImgs[curImg];
+    if (!im?.palletId || !sharedReviews.has(im.palletId)) { labelMessage('Load an uploaded pallet before saving shared labels.'); return; }
+    $('#labSync').disabled = true;
+    const lockedControls = $$('#panel-label input, #panel-label select, #panel-label textarea, #panel-label button').map(el => [el, el.disabled]);
+    lockedControls.forEach(([el]) => { el.disabled = true; });
+    canvas.style.pointerEvents = 'none';
+    try {
+      await labelSaveChain;
+      const state = sharedReviews.get(im.palletId);
+      const faces = new Map((state.review?.faces || []).map(f => [f.photoId, f]));
+      const peers = labImgs.filter(p => p.palletId === im.palletId);
+      for (const p of peers) faces.set(p.photoId, faceRecord(p));
+      const review = { schemaVersion: 1, sampleId: im.palletId, sourceTotal: im.sourceTotal, physicalPalletGroup: im.physicalPalletGroup || im.palletId,
+        status: im.sampleStatus || 'unreviewed', reason: im.sampleReason || '', verifier: im.verifier || '',
+        verificationMethod: im.verificationMethod || '', faces: [...faces.values()] };
+      const response = await fetch('/api/training/reviews/' + encodeURIComponent(im.palletId), {
+        method: 'PUT', headers: { 'content-type': 'application/json', ...(state.etag ? { 'if-match': state.etag } : { 'if-none-match': '*' }) }, body: JSON.stringify(review) });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Shared save failed');
+      sharedReviews.set(im.palletId, data);
+      for (const p of peers) { p.dirty = false; p.remoteEtag = data.etag; const { img, ...record } = p; await saveLabel({ ...record, key: p.imageHash + ':' + p.palletId + ':' + p.photoId }); }
+      labelMessage('Saved on this device and shared with other sessions.');
+    } catch (error) { labelMessage(error.message + ' Local labels retained.'); }
+    finally { lockedControls.forEach(([el, disabled]) => { el.disabled = disabled; }); canvas.style.pointerEvents = ''; $('#labSync').disabled = false; }
+  });
+  $('#labImport').addEventListener('change', async event => {
+    try {
+      const data = JSON.parse(await event.target.files[0].text());
+      if (!labImgs.length) throw new Error('Load the matching pallet photos first.');
+      const pending = [];
+      for (const im of labImgs) {
+        const draft = data.drafts?.find(d => d.imageHash === im.imageHash && d.palletId === im.palletId);
+        const image = data.images?.find(d => d.file_name === im.name && d.width === im.w && d.height === im.h);
+        if (!draft && !image) continue;
+        if (im.boxes.length) throw new Error('Existing labels are preserved. Import into an unlabeled photo or recover from its original device.');
+        const anns = image ? data.annotations.filter(a => a.image_id === image.id) : [];
+        if (anns.some(a => !['bag_flap', 'bag flap'].includes(data.categories?.find(c => c.id === a.category_id)?.name))) throw new Error('Only bag-flap annotations may be imported.');
+        if (anns.some(a => a.segmentation && (!Array.isArray(a.segmentation) || a.segmentation.length))) throw new Error('Mask export detected. Preserve it for the mask workflow; this importer handles boxes only.');
+        const boxes = draft ? draft.boxes : anns.map(a => ({ x: a.bbox[0], y: a.bbox[1], w: a.bbox[2], h: a.bbox[3], cls: 0 }));
+        if (!Array.isArray(boxes) || boxes.some(b => ![b.x,b.y,b.w,b.h].every(Number.isFinite) || b.x < 0 || b.y < 0 || b.w <= 0 || b.h <= 0 || b.x+b.w > im.w || b.y+b.h > im.h)) throw new Error('Imported box is outside its image.');
+        pending.push({ im, boxes });
+      }
+      for (const { im, boxes } of pending) { im.boxes = boxes; im.status = 'unreviewed'; im.reason = 'Imported labels require review'; await persistImage(im); }
+      drawLab(); updateProgress(); labelMessage(`Imported ${pending.length} photos; originals retained. Review before training export.`);
+    } catch (error) { labelMessage('Import: ' + error.message); }
+    event.target.value = '';
+  });
+
   async function addLabFiles(files) {
+    await labelsReady;
     for (const f of files) {
       if (!f.type.startsWith("image/")) continue;
       const url = URL.createObjectURL(f);
       const img = await new Promise((res,rej)=>{ const im=new Image(); im.onload=()=>res(im); im.onerror=rej; im.src=url; });
-      labImgs.push({ name: f.name, img, w: img.naturalWidth, h: img.naturalHeight, boxes: [] });
+      const record = { name: f.name, img, blob: f, imageHash: await imageHash(f), w: img.naturalWidth, h: img.naturalHeight, boxes: [], status: 'unreviewed' };
+      labImgs.push(record); await persistImage(record);
     }
     if (curImg < 0 && labImgs.length) curImg = 0;
     drawLab(); updateProgress();
@@ -1763,15 +1907,30 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && (b.disabled = true));
     setState("loading list…");
     try {
+      await labelsReady; await labelSaveChain;
       const r = await fetch("/api/training/samples");
       if (!r.ok) throw new Error("Server returned HTTP " + r.status);
       const { samples = [] } = await r.json();
       if (!samples.length) { setState("nothing uploaded yet"); return; }
 
-      const already = new Set(labImgs.map(i => i.name));
+      const picker = $('#labSamplePick');
+      const selected = picker.value;
+      picker.innerHTML = samples.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.slice(-6))} · ${s.totalBags} bags</option>`).join('');
+      picker.value = samples.some(s => s.id === selected) ? selected : samples[0].id;
+      const chosen = samples.find(s => s.id === picker.value);
+      const local = await loadLabels();
+      let shared = null;
+      try {
+        const response = await fetch('/api/training/reviews/' + encodeURIComponent(chosen.id), { cache: 'no-store' });
+        if (!response.ok) throw new Error('Shared review unavailable');
+        shared = await response.json(); sharedReviews.set(chosen.id, shared);
+      } catch { sharedReviews.delete(chosen.id); }
+      labImgs = []; curImg = -1; selBox = -1;
+      store.set('bcc-label-last-pallet', chosen.id);
+      const already = new Set();
       let added = 0, failed = 0, skipped = 0, done = 0;
-      const wanted = samples.flatMap(s => (s.photos || [])
-        .filter(p => PALLET_ROLES.some(d => d.role === p.role))
+      const wanted = [chosen].flatMap(s => (s.photos || [])
+        .filter(p => SIDE_NAMES.includes(p.role))
         .map(p => ({ s, p })));
 
       for (const { s, p } of wanted) {
@@ -1789,7 +1948,20 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
           const img = await new Promise((res, rej) => {
             const im = new Image(); im.onload = () => res(im); im.onerror = rej; im.src = url;
           });
-          labImgs.push({ name, img, w: img.naturalWidth, h: img.naturalHeight, boxes: [], palletId: s.id });
+          const hash = await imageHash(blob);
+          const saved = local.find(l => l.imageHash === hash && l.palletId === s.id && l.photoId === p.id);
+          const remote = shared?.review?.faces?.find(f => f.photoId === p.id && f.imageHash === hash);
+          const record = { name, img, blob, imageHash: hash, photoId: p.id, role: p.role, w: img.naturalWidth, h: img.naturalHeight,
+            boxes: [], palletId: s.id, sourceTotal: s.totalBags, status: 'unreviewed', physicalPalletGroup: shared?.review?.physicalPalletGroup || s.id,
+            sampleStatus: shared?.review?.status || 'unreviewed', sampleReason: shared?.review?.reason || '', verificationMethod: shared?.review?.verificationMethod || '' };
+          if (remote) Object.assign(record, { boxes: remote.boxes, status: remote.status, humanCount: remote.humanCount, reason: remote.reason, verifier: remote.verifier });
+          if (saved?.dirty || (!remote && saved)) Object.assign(record, { ...saved, img, blob });
+          // Preserve the revision the local draft was based on so a stale draft cannot overwrite newer remote work.
+          if (saved?.dirty && saved.remoteEtag !== shared?.etag && shared?.review) sharedReviews.delete(s.id);
+          record.remoteEtag = saved?.dirty ? saved.remoteEtag : shared?.etag;
+          labImgs.push(record);
+          const { img: ignored, ...stored } = record;
+          await saveLabel({ ...stored, key: hash + ':' + s.id + ':' + p.id });
           added++;
         } catch { failed++; }
       }
@@ -1797,6 +1969,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       if (curImg < 0 && labImgs.length) curImg = 0;
       drawLab(); updateProgress();
       setState(`+${added} loaded` + (skipped ? ` · ${skipped} already here` : "") + (failed ? ` · ${failed} failed` : ""));
+      labelMessage(sharedReviews.has(chosen.id) ? 'Loaded local drafts and current shared review.' : 'Local drafts retained. Shared review unavailable or changed; export your backup before resolving shared changes.');
     } catch (err) {
       setState("could not load: " + String(err && err.message ? err.message : err));
     } finally {
@@ -1819,6 +1992,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
     if (empty) empty.hidden = true;
     if (canvas) canvas.hidden = false;
     const im = labImgs[curImg];
+    showLabelFields(im);
     const stageW = $("#stage").clientWidth || 760;
     dispScale = stageW / im.w;
     canvas.width = Math.round(im.w * dispScale); canvas.height = Math.round(im.h * dispScale);
@@ -1891,22 +2065,23 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       const row = document.createElement("div"); row.className = "boxrow";
       row.innerHTML = `<span class="dot" style="background:${c.color}"></span>${c.name}<span class="co">${Math.round(b.w)}×${Math.round(b.h)}</span><button title="delete">×</button>`;
       row.addEventListener("click", () => { selBox = i; drawLab(); });
-      row.querySelector("button").addEventListener("click", (e)=>{ e.stopPropagation(); im.boxes.splice(i,1); selBox=-1; drawLab(); updateProgress(); });
+      row.querySelector("button").addEventListener("click", (e)=>{ e.stopPropagation(); im.boxes.splice(i,1); selBox=-1; updateProgress(true); drawLab(); });
       list.appendChild(row);
     });
   }
-  function updateProgress() {
-    const labeled = labImgs.filter(i => i.boxes.length).length;
+  function updateProgress(changed = false) {
+    if (changed && labImgs[curImg]) { labImgs[curImg].status = 'unreviewed'; persistImage(labImgs[curImg]); }
+    const labeled = labImgs.filter(reviewed).length;
     const total = labImgs.reduce((s,i)=>s+i.boxes.length,0);
     if ($("#pLabeled")) $("#pLabeled").innerHTML = `${labeled}<small>/${labImgs.length}</small>`;
     if ($("#pBoxes")) $("#pBoxes").textContent = total;
-    const ready = labImgs.length > 0 && labeled === labImgs.length;
+    const ready = labeled > 0;
     if ($("#exportBtn")) $("#exportBtn").disabled = !ready;
     if ($("#datasetCheck")) {
         $("#datasetCheck").className = ready ? "banner ok" : "banner";
         $("#datasetCheck").innerHTML = ready
-          ? `<b>Annotations complete.</b> ${labImgs.length} images · ${total} bag flaps. Export COCO, then split by pallet into train/valid/test.`
-          : `<b>Dataset not ready.</b> ${labImgs.length - labeled} image(s) still need at least one bag-flap box.`;
+          ? `<b>${labeled} reviewed images ready.</b> Export includes reviewed side images only; other drafts are preserved.`
+          : `<b>Dataset not ready.</b> Review a side photo, including its visible count (0 is valid), verifier, and reason.`;
     }
   }
 
@@ -1990,7 +2165,7 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
       const b = im.boxes[d.index];
       if (b && (b.w < 4 || b.h < 4)) Object.assign(b, d.orig);
     }
-    updateProgress();
+    updateProgress(true);
     drawLab();
   }
 
@@ -2017,9 +2192,10 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
   $("#nextImg")?.addEventListener("click", ()=>{ if (curImg<labImgs.length-1){curImg++;selBox=-1;drawLab();} });
   window.addEventListener("keydown", e => {
     if (!$("#panel-label").classList.contains("active")) return;
+    if (canvas.style.pointerEvents === 'none') return;
     if (e.target.tagName === "TEXTAREA" || e.target.tagName === "INPUT") return;
     if (e.key === "1") { curClass = 0; syncClass(); }
-    else if (e.key === "Delete" || e.key === "Backspace") { if (selBox>=0 && labImgs[curImg]) { labImgs[curImg].boxes.splice(selBox,1); selBox=-1; drawLab(); updateProgress(); e.preventDefault(); } }
+    else if (e.key === "Delete" || e.key === "Backspace") { if (selBox>=0 && labImgs[curImg]) { labImgs[curImg].boxes.splice(selBox,1); selBox=-1; updateProgress(true); drawLab(); e.preventDefault(); } }
     else if (e.key === "Escape") { if (selBox>=0) { selBox=-1; drawLab(); } }
     else if (e.key === "[") $("#prevImg")?.click();
     else if (e.key === "]") $("#nextImg")?.click();
@@ -2035,25 +2211,13 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
         b.x = clamp(b.x + dx, 0, im.w - b.w);
         b.y = clamp(b.y + dy, 0, im.h - b.h);
       }
-      drawLab(); e.preventDefault();
+      updateProgress(true); drawLab(); e.preventDefault();
     }
   });
 
   $("#exportBtn")?.addEventListener("click", () => {
-    if (!labImgs.length || labImgs.some(image => !image.boxes.length)) return;
-    const coco = { info:{description:"GXO pallet bag flaps", date_created:new Date().toISOString()},
-      images: [], annotations: [], categories: CLASSES.map(c=>({id:c.id,name:c.name,supercategory:"pallet"})) };
-    let annId = 1;
-    labImgs.forEach((im, idx) => {
-      const imageId = idx + 1;
-      coco.images.push({ id: imageId, file_name: im.name, width: im.w, height: im.h });
-      im.boxes.forEach(b => coco.annotations.push({
-        id: annId++, image_id: imageId, category_id: CLASSES[b.cls].id,
-        bbox: [b.x, b.y, b.w, b.h], area: b.w*b.h, iscrowd: 0, segmentation: [] }));
-    });
-    const blob = new Blob([JSON.stringify(coco, null, 2)], { type: "application/json" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = "_annotations.coco.json"; a.click();
+    try { downloadJson(exportLabels(labImgs), 'gxo-reviewed-boxes.coco.json'); }
+    catch (error) { labelMessage(error.message); }
   });
 
   initCollect();
