@@ -1917,7 +1917,7 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
       if (!samples.length) { setState("nothing uploaded yet"); return; }
 
       const picker = $('#labSamplePick');
-      const selected = picker.value;
+      const selected = picker.value || labImgs[curImg]?.palletId || store.get('bcc-label-last-pallet');
       picker.innerHTML = samples.map(s => `<option value="${escapeHtml(s.id)}">${escapeHtml(s.id.slice(-6))} · ${s.totalBags} bags</option>`).join('');
       picker.value = samples.some(s => s.id === selected) ? selected : samples[0].id;
       const chosen = samples.find(s => s.id === picker.value);
