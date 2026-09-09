@@ -640,9 +640,9 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
             <canvas id="labCanvas" hidden></canvas>
           </div>
           <div class="navbtns">
-            <button class="btn ghost" id="prevImg">‹ Prev</button>
+            <button class="btn ghost" id="prevImg">‹ Previous side</button>
             <span class="pos" id="imgPos">—</span>
-            <button class="btn ghost" id="nextImg">Next ›</button>
+            <button class="btn ghost" id="nextImg">Next side ›</button>
           </div>
         </div>
 
@@ -664,6 +664,11 @@ python sync_training_data.py --api https://white-meadow-0dc31e50f.7.azurestatica
               <label class="btn ghost" style="flex:1;text-align:center">Add images<input type="file" id="labFileIn2" accept="image/*" multiple hidden></label>
             </div>
             <label>Uploaded pallet<select id="labSamplePick"><option value="">Load the pallet list first</option></select></label>
+            <div class="row" style="gap:8px">
+              <button class="btn ghost" id="labPrevPallet" style="flex:1" disabled>‹ Previous pallet</button>
+              <button class="btn" id="labNextPallet" style="flex:1" disabled>Next pallet ›</button>
+            </div>
+            <span class="hint" id="labPalletPosition" role="status">Pull collected to start. Labels save on this device before switching pallets.</span>
             <label>Physical pallet group<input id="labGroup" placeholder="Defaults to sample ID; reuse for repeat photos"></label>
             <label>Pallet audit status<select id="labSampleStatus"><option>unreviewed</option><option>reviewed</option><option>unresolved</option><option>excluded</option></select></label>
             <label>Physical count verification method<input id="labMethod" placeholder="How the actual pallet total was checked"></label>
@@ -1746,6 +1751,7 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
   const CLASSES = [ {id:1,name:"bag_flap",color:"#1a7f37"} ];
   let curClass = 0;
   let labImgs = [];
+  let collectedSamples = [];
   const sharedReviews = new Map();
   let labelSaveChain = Promise.resolve();
   let restoringLabels = false;
@@ -1900,11 +1906,36 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
   $("#labFileIn2")?.addEventListener("change", e => addLabFiles(e.target.files));
 
   let pulling = false;
+  function updateLabelNavigation() {
+    const index = collectedSamples.findIndex(s => s.id === $('#labSamplePick').value);
+    $('#labPrevPallet').disabled = pulling || index <= 0;
+    $('#labNextPallet').disabled = pulling || index < 0 || index >= collectedSamples.length - 1;
+    $('#labSamplePick').disabled = pulling;
+    $('#labPalletPosition').textContent = index >= 0
+      ? `Pallet ${index + 1} of ${collectedSamples.length} · labels save on this device before switching`
+      : 'Pull collected to start. Labels save on this device before switching pallets.';
+    $('#prevImg').disabled = pulling || curImg <= 0;
+    $('#nextImg').disabled = pulling || curImg < 0 || curImg >= labImgs.length - 1;
+  }
+  async function movePallet(offset) {
+    if (pulling) return;
+    const index = collectedSamples.findIndex(s => s.id === $('#labSamplePick').value);
+    const next = collectedSamples[index + offset];
+    if (index < 0 || !next) return;
+    $('#labSamplePick').value = next.id;
+    await pullCollected();
+  }
+  $('#labPrevPallet').addEventListener('click', () => movePallet(-1));
+  $('#labNextPallet').addEventListener('click', () => movePallet(1));
+  $('#labSamplePick').addEventListener('change', () => pullCollected());
   async function pullCollected(preferShared = false) {
     // DOM click listeners pass an Event; only the explicit recovery action opts in.
     preferShared = preferShared === true;
     if (pulling) return;
     pulling = true;
+    const lockedControls = $$('#panel-label input, #panel-label select, #panel-label textarea, #panel-label button').map(el => [el, el.disabled]);
+    lockedControls.forEach(([el]) => { el.disabled = true; });
+    canvas.style.pointerEvents = 'none';
     const state = $("#labPullState");
     const setState = (msg, show=true) => { if (state) { state.hidden = !show; state.textContent = msg; } };
     [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && (b.disabled = true));
@@ -1914,6 +1945,7 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
       const r = await fetch("/api/training/samples");
       if (!r.ok) throw new Error("Server returned HTTP " + r.status);
       const { samples = [] } = await r.json();
+      collectedSamples = samples;
       if (!samples.length) { setState("nothing uploaded yet"); return; }
 
       const picker = $('#labSamplePick');
@@ -1977,9 +2009,12 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
       labelMessage(sharedReviews.has(chosen.id) ? 'Loaded local drafts and current shared review.' : 'Local drafts retained. Shared review unavailable or changed; export your backup before resolving shared changes.');
     } catch (err) {
       setState("could not load: " + String(err && err.message ? err.message : err));
+      if (labImgs[curImg]?.palletId) $('#labSamplePick').value = labImgs[curImg].palletId;
     } finally {
       pulling = false;
-      [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && (b.disabled = false));
+      lockedControls.forEach(([el, disabled]) => { el.disabled = disabled; });
+      canvas.style.pointerEvents = '';
+      updateProgress(); updateLabelNavigation();
     }
   }
   [$("#labPullBtn"), $("#labPullBtn2")].forEach(b => b && b.addEventListener("click", pullCollected));
@@ -1993,6 +2028,7 @@ import { SIDE_NAMES, saveLabel, loadLabels, imageHash, faceRecord, reviewed, exp
   });
 
   function drawLab() {
+    updateLabelNavigation();
     const empty = $("#stageEmpty");
     if (curImg < 0 || !labImgs[curImg]) {
       if (empty) empty.hidden = false;
