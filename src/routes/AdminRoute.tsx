@@ -626,13 +626,6 @@ function ReportsPanel() {
       >
         {t('admin.openDashboard', 'Open dashboard →')}
       </Link>
-      <a
-        href="/bag-count-console.html"
-        className="btn btn--accent btn--lg"
-        style={{ marginTop: 12, marginLeft: 8 }}
-      >
-        Bag-count vision console →
-      </a>
     </section>
   );
 }
